@@ -1,3 +1,4 @@
+import { isFootballAction } from "./studio/footballActionTypes";
 import { emptyStudio, isStudioDocument } from "./studio/types";
 import type {
   Board,
@@ -439,7 +440,7 @@ export function isBoard(value: unknown): value is Board {
         s.duration <= 60 &&
         validPlayers(s.players) &&
         validDrawings(s.drawings) &&
-        point(s.ball),
+        point(s.ball) && (s.ballAction === undefined || isFootballAction(s.ballAction)),
     ) &&
     !!b.settings &&
     ["studio", "grass", "light"].includes(b.settings.theme) &&

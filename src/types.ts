@@ -1,3 +1,4 @@
+import type { FootballAction } from "./studio/footballActionTypes";
 import type { StudioDocument } from "./studio/types";
 export type Side = "home" | "away";
 export type Tool =
@@ -180,6 +181,7 @@ export interface Frame {
   ball: { x: number; y: number };
 }
 export interface Scene extends Frame {
+  ballAction?: FootballAction;
   source?: { assetId: string; time: number; review: boolean };
   id: string;
   title: string;

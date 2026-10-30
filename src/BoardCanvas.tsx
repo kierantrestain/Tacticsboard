@@ -608,6 +608,7 @@ const BoardCanvas = forwardRef<
     if (program || playing) return;
     const p = pos();
     if (!p) return;
+    if(useRuntime.getState().ballTargetPicking){useRuntime.setState({ballTarget:p,ballTargetPicking:false});return;}
     if (tool === "select") {
       if (e.target === e.target.getStage() || e.target.name() === "board-hit")
         studio.set({ selected: [], selectedShape: null });
@@ -861,7 +862,7 @@ const BoardCanvas = forwardRef<
                       Math.min(1.6, board.settings.markerScale || 1),
                     )}
                     opacity={p.opacity ?? 1}
-                    draggable={!program && tool === "select" && !playing}
+                    draggable={!program && tool === "select" && !playing && !useRuntime.getState().ballTargetPicking}
                     onClick={(e) => {
                       e.cancelBubble = true;
                       if (tool === "select")
@@ -1037,7 +1038,7 @@ const BoardCanvas = forwardRef<
               visible={board.settings.ballVisible !== false}
               x={sx(frame.ball.x)}
               y={sy(frame.ball.y)}
-              draggable={!program && tool === "select" && !playing}
+              draggable={!program && tool === "select" && !playing && !useRuntime.getState().ballTargetPicking}
               onDragStart={() => studio.begin()}
               onDragMove={(e) => {
                 const x = clamp((e.target.x() - PX) / PW),

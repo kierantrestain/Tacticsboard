@@ -3,12 +3,14 @@ import type { Board, Drawing } from '../../types';
 import { useStudio } from '../../store';
 import { editDesk, useRuntime } from '../runtime';
 import { recallCue, saveCue, updateCue } from '../showControl';
+import { addFootballAction } from '../footballActions';
 import type { HostCommand } from './protocol';
 import { availableHostViews, explanationPause } from './tabletModel';
 
 export function createMovement(board: Board): Board {
   const next = copy(board), index = next.scenes.findIndex(s => s.id === next.activeScene);
   const start = next.scenes[index];
+  if(start?.ballAction)throw Error('Select the action’s finish step before adding a move.');
   if (!start || next.scenes.length >= 80) throw Error('This sequence is full. Start another analysis.');
   Object.assign(start, { players: copy(next.players), ball: copy(next.ball), drawings: copy(next.drawings) });
   const end = { ...copy(start), id: uid(), title: `Move ${next.scenes.length}`, duration: 1 };
@@ -32,7 +34,7 @@ export function executeHostCommand(command: HostCommand) {
   const s = useStudio.getState(), r = useRuntime.getState(), b = s.board;
   if (!b || r.busy || s.loading) throw Error('The producer is preparing the next view.');
   if (command.type === 'cancel-gesture') { cancelHostGesture(); return; }
-  const boardTools = ['move', 'highlight', 'link', 'focus', 'start-move', 'finish-move', 'cancel-move'];
+  const boardTools = ['move', 'highlight', 'link', 'focus', 'start-move', 'finish-move', 'cancel-move','ball-action'];
   if (boardTools.includes(command.type) && r.view !== 'board') throw Error('Open the tactical board to move or select players.');
   if (command.type === 'move') {
     if (typeof command.gesture !== 'string' || command.gesture.length > 80 || !Array.isArray(command.positions) || command.positions.length > 45 || command.positions.some(p => !Number.isFinite(p.x) || !Number.isFinite(p.y) || !b.players.some(q => q.uid === p.id) && p.id !== 'ball')) throw Error('That player movement is invalid.');
@@ -69,7 +71,8 @@ export function executeHostCommand(command: HostCommand) {
   }
   if (command.type === 'finish-move') { if (!r.movementDraft) return; r.set({ movementDraft: null }); s.save(); s.notify('Move saved. Play the sequence or add the next move.'); return; }
   if (command.type === 'cancel-move') { if (r.movementDraft) s.commit(board => Object.assign(board, r.movementDraft!.before)); r.set({ movementDraft: null }); return; }
-  if (r.movementDraft && ['scene', 'cue', 'view', 'undo', 'redo', 'save-shot', 'update-shot', 'play', 'restart'].includes(command.type)) throw Error('Finish or cancel the move first.');
+  if (r.movementDraft && ['scene', 'cue', 'view', 'undo', 'redo', 'save-shot', 'update-shot', 'ball-action', 'play', 'restart'].includes(command.type)) throw Error('Finish or cancel the move first.');
+  if (command.type === 'ball-action') { stopAtEditableFrame(); const next=addFootballAction(useStudio.getState().board!,command.action);s.commit(board=>Object.assign(board,next));s.set({playing:false,previewTime:null,selected:[],selectedShape:null});s.notify?.('Action added. Preview the sequence to play it.');return; }
   if (command.type === 'scene') { if (!b.scenes.some(scene => scene.id === command.id)) throw Error('That step is no longer in this sequence.'); s.selectScene(command.id); return; }
   if (command.type === 'cue') { if (!b.studio?.cues?.some(cue => cue.id === command.id)) throw Error('That moment is no longer in this show.'); recallCue(command.id); return; }
   if (command.type === 'view') { if (!availableHostViews(b,r.assets,r.assetAvailability).includes(command.view)) throw Error('Prepare that view on the show computer first.'); editDesk(d => { d.view = command.view; }); r.set({ view: command.view, mediaPlaying: false, mediaHolding:false, ...(command.view==='footage'?{time:b.studio?.trim.start||0}:{}) }); s.set({ playing: false, previewTime: null }); return; }

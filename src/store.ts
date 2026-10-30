@@ -1,3 +1,4 @@
+import { removeFootballActionLinks } from "./studio/footballActions";
 import { loadReport } from "./football/data";
 import { saveProject, loadProject } from "./studio/assetStore";
 import { create } from "zustand";
@@ -585,6 +586,7 @@ export const useStudio = create<Studio>((set, get) => ({
       return;
     }
     get().commit((b) => {
+      removeFootballActionLinks(b,id);
       b.scenes = b.scenes.filter((s) => s.id !== id);
       if (b.activeScene === id) {
         const s = b.scenes[0];

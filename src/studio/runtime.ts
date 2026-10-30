@@ -10,6 +10,9 @@ import { emptyStudio } from "./types";
 import { useStudio } from "../store";
 import type { Board } from "../types";
 interface Runtime {
+  ballActionKind: import("./footballActionTypes").BallActionKind | null;
+  ballTargetPicking: boolean;
+  ballTarget: {x:number;y:number} | null;
   simple: boolean;
   tabletPanel: boolean;
   movementDraft: { before: Board; sceneId: string } | null;
@@ -57,6 +60,9 @@ interface Runtime {
 }
 export const useRuntime = create<Runtime>((set) => ({
   simple: localStorage.getItem('touchline.workspace') !== 'advanced',
+  ballActionKind:null,
+  ballTargetPicking:false,
+  ballTarget:null,
   tabletPanel: false,
   movementDraft: null,
   view: "board",

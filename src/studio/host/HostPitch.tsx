@@ -14,7 +14,7 @@ function Shape({ d }: { d: Drawing }) {
   const points = p.reduce<number[]>((all, n, i) => [...all, i % 2 ? y(n) : x(n)], []).join(' ');
   return <g data-mark={d.id}><polyline points={points} {...common} strokeDasharray={d.type === 'run' ? '12 9' : undefined}/>{['arrow', 'run'].includes(d.type) && <path d="M-16 -8 0 0 -16 8" transform={`translate(${c},${e}) rotate(${Math.atan2(e - b, c - a) * 180 / Math.PI})`} {...common}/>}<polyline points={points} stroke="transparent" strokeWidth={24} fill="none"/></g>;
 }
-export default function HostPitch({ board, frame, tool, selected, setSelected, send, disabled, image, footage = false, aspect = 16/9, ink = [] }: { board: Board; frame: Frame; tool: TouchTool; selected: string[]; setSelected: (ids: string[]) => void; send: (c: HostCommand) => void; disabled: boolean; image?: string; footage?: boolean; aspect?:number; ink?:Drawing[] }) {
+export default function HostPitch({ board, frame, tool, selected, setSelected, send, disabled, image, footage = false, aspect = 16/9, ink = [], pickingTarget=false,onTarget }: { board: Board; frame: Frame; tool: TouchTool; selected: string[]; setSelected: (ids: string[]) => void; send: (c: HostCommand) => void; disabled: boolean; image?: string; footage?: boolean; aspect?:number; ink?:Drawing[];pickingTarget?:boolean;onTarget?:(p:{x:number;y:number})=>void }) {
   const mediaHeight = 1200/Math.max(.25,Math.min(4,aspect));
   const svg = useRef<SVGSVGElement>(null), lastSend = useRef(0);
   const gesture = useRef<{ id: string; origin: { x: number; y: number }; positions: { id: string; x: number; y: number }[]; drawing?: Drawing; moved: boolean } | null>(null);
@@ -31,6 +31,7 @@ export default function HostPitch({ board, frame, tool, selected, setSelected, s
     if (disabled || !e.isPrimary) return;
     e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId);
     const target = e.target as Element, id = target.closest('[data-player]')?.getAttribute('data-player'), p = point(e);
+    if(pickingTarget&&!footage){onTarget?.(p);return;}
     if (tool === 'erase') { const mark = target.closest('[data-mark]')?.getAttribute('data-mark'); if (mark) send({ type: 'erase', id: mark }); return; }
     if (tool === 'move' && !footage) {
       const ids = id ? selected.includes(id) ? selected : [id] : selected;

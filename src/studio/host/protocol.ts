@@ -1,3 +1,4 @@
+import type { BallActionRequest } from "../footballActionTypes";
 import type { Board, Drawing, Frame } from '../../types';
 import type { CameraPreset, ViewMode } from '../types';
 export type HostRole = 'host1' | 'host2';
@@ -30,6 +31,7 @@ export interface HostState {
   canRedo: boolean;
 }
 export type HostCommand =
+  | { type: "ball-action"; action: BallActionRequest }
   | { type: 'move'; gesture: string; positions: { id: string; x: number; y: number }[]; final: boolean }
   | { type: 'draw'; drawing: Drawing }
   | { type: 'erase'; id: string }

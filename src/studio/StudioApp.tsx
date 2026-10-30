@@ -415,7 +415,7 @@ function Operator() {
     }
   }, [r.time, r.mediaPlaying, r.mediaHolding, r.rate, s.previewTime, r.follow, r.busy]);
   useEffect(() => {
-    r.set({ activeCueId: null, movementDraft: null });
+    r.set({ activeCueId: null, movementDraft: null,ballActionKind:null,ballTargetPicking:false,ballTarget:null });
   }, [b?.id]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
