@@ -4,12 +4,13 @@ import { connectRoom, studioRequest } from './connection';
 import { roleName } from './protocol';
 import type { HostCommand, HostState, RoomPresence, RoomSession } from './protocol';
 import HostPitch from './HostPitch';
+import { HostCommandQueue } from './commandQueue';
 import type { TouchTool } from './HostPitch';
 
 function initialSession(): RoomSession | null { try { const s = JSON.parse(sessionStorage.getItem('touchline.host-session') || 'null'); return ['host1','host2'].includes(s?.role) ? s : null; } catch { return null; } }
 export default function HostTablet() {
   const [session, setSession] = useState<RoomSession | null>(initialSession), [state, setState] = useState<HostState | null>(null), [presence, setPresence] = useState<RoomPresence | null>(null), [status, setStatus] = useState('connecting'), [error, setError] = useState(''), [code, setCode] = useState(''), [joining, setJoining] = useState(false), [tool, setTool] = useState<TouchTool>('move'), [selected, setSelected] = useState<string[]>([]), [panel, setPanel] = useState<'moments' | 'pitch'>('moments');
-  const seq = useRef(0), queue = useRef(Promise.resolve()), generation = useRef(0), current = useRef({ state, presence, status, session });
+  const seq = useRef(0), queue = useRef(new HostCommandQueue()), generation = useRef(0), current = useRef({ state, presence, status, session });
   current.current = { state, presence, status, session };
   const canControl = !!session && status === 'connected' && !!presence?.connected.producer && presence.armed && presence.owner === session.role && !!state && !state.busy;
   useEffect(() => {
@@ -21,7 +22,7 @@ export default function HostTablet() {
       if (type === 'state' && data.revision >= revision) { revision = data.revision; setState(old => ({ ...data.state, previewImage: data.state.previewImage || (old?.view === data.state.view ? old?.previewImage : undefined), previewAspect:data.state.previewAspect || (old?.view===data.state.view?old?.previewAspect:undefined) })); }
       if (type === 'feedback') setError(data.message);
       if (type === 'ended' || type === 'replaced') { sessionStorage.removeItem('touchline.host-session'); setError(type === 'replaced' ? 'This host slot was opened on another tablet. Pair again to return.' : 'The producer ended this session.'); setSession(null); setState(null); }
-    }, next => { setStatus(next); if (next !== 'connected') generation.current++;if(next==='ended'){sessionStorage.removeItem('touchline.host-session');setSession(null);setState(null);setError('This studio session has ended. Ask the producer for a new code.');} });
+    }, next => { setStatus(next); if (next !== 'connected') { generation.current++; queue.current.clear(); }if(next==='ended'){sessionStorage.removeItem('touchline.host-session');setSession(null);setState(null);setError('This studio session has ended. Ask the producer for a new code.');} });
   }, [session?.room, session?.token]);
   useEffect(() => { setSelected([]); setTool('move'); }, [state?.board.id, state?.board.activeScene, state?.view]);
   useEffect(() => { if (!error) return; const t = setTimeout(() => setError(''), 6500); return () => clearTimeout(t); }, [error]);
@@ -35,11 +36,11 @@ export default function HostTablet() {
     if (!canControl || !state || !session || !presence) return;
     const epoch = presence.epoch, expected = generation.current;
     const envelope = { seq: ++seq.current, epoch, boardId: state.board.id, sceneId: state.board.activeScene, command };
-    queue.current = queue.current.then(async () => {
+    queue.current.enqueue(async () => {
       if (current.current.status !== 'connected' || generation.current !== expected || current.current.presence?.epoch !== epoch) return;
       try { await studioRequest('command', session, envelope, AbortSignal.timeout(3500)); }
-      catch (e) { setError((e as Error).name === 'TimeoutError' ? 'Connection slow. Check the studio before continuing.' : (e as Error).message); }
-    });
+      catch (e) { queue.current.clear(); setError((e as Error).name === 'TimeoutError' ? 'Connection slow. Check the studio before continuing.' : (e as Error).message); }
+    }, command.type === 'move' ? `move:${epoch}:${command.gesture}` : command.type === 'seek' ? `seek:${epoch}` : undefined);
   };
   async function control(data: object) { if (!session) return; try { await studioRequest('control', session, data); } catch (e) { setError((e as Error).message); } }
   async function join(e: React.FormEvent) {

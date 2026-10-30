@@ -77,8 +77,8 @@ export function useProducerRoom() {
     }, status => { useStudioLink.setState({ status }); if(status === 'ended'){sessionStorage.removeItem('touchline.producer-room');useStudioLink.setState({session:null,presence:null});setLiveFollow(false);} if (status !== 'connected') { cancelHostGesture(); if (status === 'offline') setLiveFollow(false); } });
     const unStudio = useStudio.subscribe(() => { dirty = true; }), unRuntime = useRuntime.subscribe(() => { dirty = true; });
     const tick = setInterval(async () => {
-      if (!dirty || sending || closed || useStudioLink.getState().status !== 'connected') return;
-      const picture = Date.now() - lastImage > 240;
+      const picture = useRuntime.getState().view !== 'board' && Date.now() - lastImage > 240;
+      if ((!dirty && !picture) || sending || closed || useStudioLink.getState().status !== 'connected') return;
       const state = hostSnapshot(picture); if (!state) return;
       if (picture) lastImage = Date.now();
       dirty = false; sending = true;
