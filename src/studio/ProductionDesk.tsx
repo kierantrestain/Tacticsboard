@@ -43,7 +43,7 @@ export default function ProductionDesk() {
         </strong>
         <span>
           {!r.outputConnected
-            ? "Output closed"
+            ? "No receiver signal"
             : !p
               ? "Standby"
               : acknowledged
@@ -64,15 +64,21 @@ export default function ProductionDesk() {
         {p?.black ? (
           <div className="director-monitor-empty">
             <Square size={20} />
-            <strong>OUTPUT BLACK</strong>
+            <strong>{acknowledged ? "OUTPUT BLACK" : "BLACK REQUESTED"}</strong>
             <span>Held: {p.title || p.board.title}</span>
           </div>
         ) : p ? (
           <>
             {image ? (
               <img src={image} alt={`Programme: ${p.title || p.board.title}`} />
-            ) : (
+            ) : p.view === "board" ? (
               <MiniPitch frame={p.board} colors={p.board.colors} />
+            ) : (
+              <div className="director-monitor-empty">
+                <Monitor size={22} />
+                <strong>{viewLabels[p.view]}</strong>
+                <span>Waiting for a frame from the output window.</span>
+              </div>
             )}
             <span className="director-monitor-caption">
               {viewLabels[p.view]} · {p.title || p.board.title}
