@@ -1,5 +1,12 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import type { BoardHandle } from "../BoardCanvas";
+import type { ReplayHandle } from "./Pitch3D";
+import type { StatsHandle } from "./StatsStage";
+import type { SourceHandle } from "./types";
+import { isProgramSnapshot, transportProgram } from "./productionModel";
+import { thumbnail } from "./capture";
+import { productionFrame } from "./exports";
 import BoardCanvas from "../BoardCanvas";
 import MediaStage from "./MediaStage";
 import { useStudio } from "../store";
@@ -37,6 +44,7 @@ export function reconstructedFrame(
       players: points
         .filter(
           (p) =>
+            sequence.targets.some((t) => t.id === p.id) &&
             p.pitch.x >= 0 &&
             p.pitch.x <= 1 &&
             p.pitch.y >= 0 &&
@@ -65,36 +73,83 @@ export default function ProgramOutput() {
       readProgram(),
     ),
     [assets, setAssets] = useState<MediaAsset[]>([]),
-    [phaseTime, setPhaseTime] = useState<number | null>(null);
+    boardRef = useRef<BoardHandle>(null),
+    sourceRef = useRef<SourceHandle>(null),
+    statsRef = useRef<StatsHandle>(null),
+    replayRef = useRef<ReplayHandle>(null),
+    current = useRef(snapshot);
+  current.current = snapshot;
   useEffect(() => {
     void listAssets().then(setAssets);
     const onMessage = (e: MessageEvent) => {
-      if (e.data.type === "take" && isBoard(e.data.snapshot?.board)) {
+      if (e.data.type === "take" && isProgramSnapshot(e.data.snapshot)) {
         setSnapshot(e.data.snapshot);
-        setPhaseTime(e.data.phaseTime ?? null);
         useStudio.setState({ board: e.data.snapshot.board });
       }
       if (e.data.type === "transport") {
-        setSnapshot((old) =>
-          old && old.board.id === e.data.id
-            ? {
-                ...old,
-                time: e.data.time,
-                playing: e.data.playing,
-                rate: e.data.rate,
-              }
-            : old,
-        );
-        setPhaseTime(e.data.phaseTime ?? null);
+        setSnapshot((old) => transportProgram(old, e.data));
       }
     };
     productionChannel?.addEventListener("message", onMessage);
     productionChannel?.postMessage({ type: "request-program" });
-    productionChannel?.postMessage({ type: "output-alive" });
-    const heartbeat = setInterval(
-      () => productionChannel?.postMessage({ type: "output-alive" }),
-      2000,
-    );
+    const acknowledge = () => {
+      const shot = current.current;
+      let raw: HTMLCanvasElement | null = null;
+      if (shot && !shot.black) {
+        if (shot.view === "stats") raw = statsRef.current?.capture() || null;
+        else if (shot.view === "replay")
+          raw = replayRef.current?.capture() || null;
+        else if (shot.view === "footage")
+          raw = sourceRef.current?.composite() || null;
+        else
+          raw =
+            boardRef.current?.stage()?.toCanvas({ pixelRatio: 0.6 }) || null;
+        if (shot.view === "split" && raw) {
+          const source = sourceRef.current?.composite();
+          if (source) {
+            const out = document.createElement("canvas");
+            out.width = 960;
+            out.height = 360;
+            const c = out.getContext("2d")!;
+            [source, raw].forEach((canvas, i) => {
+              const scale = Math.min(480 / canvas.width, 360 / canvas.height);
+              c.drawImage(
+                canvas,
+                i * 480 + (480 - canvas.width * scale) / 2,
+                (360 - canvas.height * scale) / 2,
+                canvas.width * scale,
+                canvas.height * scale,
+              );
+            });
+            raw = out;
+          }
+        }
+        if (raw)
+          raw = productionFrame(
+            raw,
+            960,
+            540,
+            raw.width,
+            raw.height,
+            shot.board.studio?.lowerThird || shot.board.title,
+            "ANALYSIS",
+            { ...defaultBroadcast(), ...shot.board.studio?.broadcast },
+            {
+              home: shot.teams?.home || "HOME",
+              away: shot.teams?.away || "AWAY",
+              ...shot.board.match,
+            },
+          );
+      }
+      productionChannel?.postMessage({
+        type: "output-alive",
+        id: shot?.id,
+        black: shot?.black,
+        thumbnail: thumbnail(raw),
+      });
+    };
+    const heartbeat = setInterval(acknowledge, 1500);
+    acknowledge();
     const key = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === "f")
         document.documentElement.requestFullscreen?.().catch(() => {});
@@ -122,7 +177,7 @@ export default function ProgramOutput() {
     );
   const b = snapshot.board,
     asset = assets.find((a) => a.id === b.studio?.assetId),
-    frame = reconstructedFrame(snapshot, phaseTime),
+    frame = reconstructedFrame(snapshot, snapshot.phaseTime ?? null),
     style = { ...defaultBroadcast(), ...b.studio?.broadcast };
   return (
     <main
@@ -149,10 +204,11 @@ export default function ProgramOutput() {
                           ? "VIRTUAL REPLAY"
                           : "TACTICAL ANALYSIS"}{" "}
                     <i />
-                    {asset && snapshot.view !== "board"
+                    {asset &&
+                    ["footage", "split", "replay"].includes(snapshot.view)
                       ? timecode(snapshot.time, b.studio?.fps)
                       : b.match?.completed
-                        ? `${b.match.homeScore} — ${b.match.awayScore}`
+                        ? "FULL TIME"
                         : "ANALYST RECONSTRUCTION"}
                   </span>
                 </>
@@ -179,6 +235,7 @@ export default function ProgramOutput() {
           >
             {["footage", "split"].includes(snapshot.view) && (
               <MediaStage
+                ref={sourceRef}
                 asset={asset}
                 board={b}
                 program
@@ -193,16 +250,22 @@ export default function ProgramOutput() {
               }
             >
               {snapshot.view === "stats" ? (
-                <StatsStage board={b} report={snapshot.report} program />
+                <StatsStage
+                  ref={statsRef}
+                  board={b}
+                  report={snapshot.report}
+                  program
+                />
               ) : snapshot.view === "replay" ? (
                 <Pitch3D
+                  ref={replayRef}
                   board={b}
                   frame={frame}
                   camera={snapshot.camera}
                   program
                 />
               ) : snapshot.view !== "footage" ? (
-                <BoardCanvas program externalFrame={frame} />
+                <BoardCanvas ref={boardRef} program externalFrame={frame} />
               ) : null}
             </Suspense>
           </div>

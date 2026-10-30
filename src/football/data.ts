@@ -421,7 +421,8 @@ export async function refreshTeam(teamId: string, league: string) {
 }
 export const checkedTime = (v?: string) =>
   v
-    ? new Date(v).toLocaleTimeString("en-GB", {
+    ? new Date(v).toLocaleString("en-GB", {
+        day: "2-digit", month: "short", year: "numeric",
         hour: "2-digit",
         minute: "2-digit",
         timeZone: "UTC",

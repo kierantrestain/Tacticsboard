@@ -26,17 +26,17 @@ Use **Present match numbers on TV** or a player's TV button to create a team or 
 ## Present
 
 - Open the clean output in the same browser profile on this computer. Move it to the studio display, or capture the window in OBS. The desk reports when it has received a heartbeat from the output.
-- **Live follow is on by default.** Drawing, player movement, view changes and cue recalls update the programme. Switch it off to hold the programme while preparing the next view; press **Enter** or Take to send the current view.
+- **Preview is private by default.** Press **Enter** or **Take preview** to send a prepared view. Explicitly enable **Live follow** for drawing, movement and cue recall to follow the desk. Switching it off holds the received programme frame.
 - **[ / ]** selects the previous/next rundown shot. **1–9** directly recalls that numbered shot. Cue recalls pause playback and reset source zoom/pan.
-- **P** enters presenter mode. The large controls include previous/next shots, play/pause, save, undo and exit. The title and presenter note stay on the desk; they are not in the clean output.
-- **B** blacks/restores the output. Blackout stays engaged while the desk is edited, including with live follow enabled.
+- **P** enters presenter mode. The large controls include previous/next shots, play/pause, take, live follow, blackout/restore and exit. Entering presenter mode does not take the preview. The title and presenter note stay on the desk; they are not in the clean output.
+- **B** blacks/restores the output. Blackout disables live follow and stays engaged during editing. Restore returns the same held shot, caption, report and phase. Opening output never changes it.
 - The rundown timer is a manual presenter cue. It resets on a different shot and never advances the programme automatically.
 
 ## Save and transfer
 
 Projects and cues autosave on the device. Portable ZIP packs include sources referenced only by saved shots, and remap cue and annotation media IDs on import. JSON does not contain source bytes. Exported stills/films use the configured channel identity, score bug and lower third. Missing source bytes block a portable export rather than silently dropping footage.
 
-A cue stores a frame, never a nested project. The shared media library, tracking sequences, show branding and other saved cues remain available when recalling a shot. Recall is undoable; restoring a shot updates the active phase. Camera presets are saved; an arbitrary orbit/zoom of the 3D camera is not captured as a custom camera pose.
+A cue stores a frame, never a nested project. Each new cue freezes its caption/branding, selected metrics, report snapshot and source tracking. Shared media and other saved cues remain available when recalling a shot. **Update shot** replaces the saved content while preserving its title, notes, planned time and place; the shot must be reviewed again. Recall is undoable; restoring a shot updates the active phase. Camera presets are saved; an arbitrary orbit/zoom of the 3D camera is not captured as a custom camera pose.
 
 ## Engineering and verification
 
@@ -45,3 +45,11 @@ Live updates use a coalesced animation-frame send instead of a debounce that wai
 The test suite covers cue isolation, correct phase/time and cross-match recall, malformed cues, all six setups for both teams, bounded unit movement, moving guides, spotlighting, portable cue media remapping, historical season/source guards, paired career table parsing, sparse stats, CSV safety, reviewed still identities and saved-data recovery alongside the existing football, API, reconstruction and export checks.
 
 The local environment cannot reach the Google model host. TypeScript and the Vite build can be checked independently; the unchanged full prebuild still prepares and verifies the pinned detector models in Vercel. The new show workflow does not require detection. Vision, the physical touchscreen and the final studio capture chain still need rehearsal on the production computer.
+
+## Production desk checks (3.1)
+
+Open **Show** for match/source/tactical preparation and a per-shot readiness list. The programme monitor displays the last acknowledged take and a sampled frame returned by the output window. This confirms the browser receiver, not a downstream OBS/SDI broadcast. Missing source bytes, missing or mismatched reports, empty cards and unreviewed/invalid tracking block a take. Presenter notes and a manual shot review are preparation checks.
+
+The selected shot exposes its on-screen caption and presenter script. The preview footer also shows the current caption. **Choose metrics** limits a data card to eight supplied values; an empty selection cannot be taken. A recalled card uses its saved report until Refresh explicitly loads a newer one. Refresh changes the preview, and **Update shot** saves that change.
+
+Video exports temporarily hold live follow. Emergency B blackout remains available. Source trims survive source switching; the presenter timer survives changing workspace panels. Reconstructed phases append to the storyboard and become independent editable board positions.

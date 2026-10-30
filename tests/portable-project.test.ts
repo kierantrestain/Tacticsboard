@@ -40,6 +40,7 @@ describe("portable analysis handoff", () => {
     media.set(id, new Blob(["source"]));
     const d = board.studio!;
     d.assetId = id;
+    d.sourceRanges = { [id]: { start: 2, end: 8 } };
     d.view = "split";
     d.ink[id] = [
       {
@@ -109,6 +110,8 @@ describe("portable analysis handoff", () => {
     );
     const next = restored.studio!.assetId!;
     expect(next).not.toBe(id);
+    expect(restored.studio!.sourceRanges?.[next]).toEqual({ start: 2, end: 8 });
+    expect(restored.studio!.sourceRanges?.[id]).toBeUndefined();
     expect(await media.get(next)!.text()).toBe("source");
     expect(media.get(id)).toBeDefined();
     expect(restored.studio!.ink[next][0].assetId).toBe(next);

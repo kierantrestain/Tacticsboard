@@ -1,5 +1,8 @@
+import { useState } from "react";
+import { frameAt } from "../core";
 import {
   ArrowUpRight,
+  MoreHorizontal,
   Circle,
   Columns3,
   Eraser,
@@ -38,6 +41,7 @@ const tools = [
 export default function ToolRail() {
   const s = useStudio(),
     r = useRuntime();
+  const [more, setMore] = useState(false);
   const clear = () => {
     s.commit((b) => {
       const id = b.studio?.assetId;
@@ -57,28 +61,82 @@ export default function ToolRail() {
   return (
     <nav className="tl-tool-rail" aria-label="Broadcast telestration tools">
       <div className="tl-tool-group">
-        {tools.map(([tool, label, key, Icon]) => (
+        {tools
+          .filter((_, i) => i < 6)
+          .map(([tool, label, key, Icon]) => (
+            <button
+              className={`tl-tool ${s.tool === tool ? "is-active" : ""}`}
+              key={tool}
+              data-testid={`tool-${tool}`}
+              aria-label={label}
+              aria-pressed={s.tool === tool}
+              title={label + (key ? ` (${key})` : "")}
+              onClick={() => {
+                if (s.previewTime !== null && s.board) {
+                  const frame = frameAt(s.board, s.previewTime);
+                  s.commit((b) => Object.assign(b, frame));
+                }
+                s.set({
+                  tool: tool as Tool,
+                  selectedShape: null,
+                  playing: false,
+                });
+                r.set({
+                  panMode: false,
+                  selectedInk: null,
+                  markMode: "none",
+                  mediaPlaying: false,
+                });
+              }}
+            >
+              <Icon size={21} strokeWidth={1.7} />
+              {s.tool === tool && <i />}
+            </button>
+          ))}
+        <div className="director-more-tools">
           <button
-            className={`tl-tool ${s.tool === tool ? "is-active" : ""}`}
-            key={tool}
-            data-testid={`tool-${tool}`}
-            aria-label={label}
-            aria-pressed={s.tool === tool}
-            title={label + (key ? ` (${key})` : "")}
-            onClick={() => {
-              s.set({ tool: tool as Tool, selectedShape: null });
-              r.set({
-                panMode: false,
-                selectedInk: null,
-                markMode: "none",
-                mediaPlaying: false,
-              });
-            }}
+            className={`tl-tool ${more || tools.slice(6).some((t) => t[0] === s.tool) ? "is-active" : ""}`}
+            aria-label="More drawing tools"
+            aria-expanded={more}
+            onClick={() => setMore(!more)}
           >
-            <Icon size={21} strokeWidth={1.7} />
-            {s.tool === tool && <i />}
+            <MoreHorizontal size={21} />
           </button>
-        ))}
+          {more && (
+            <div className="director-tools-popover">
+              <strong>DRAWING TOOLS</strong>
+              {tools.slice(6).map(([tool, label, key, Icon]) => (
+                <button
+                  key={tool}
+                  aria-label={label}
+                  aria-pressed={s.tool === tool}
+                  onClick={() => {
+                    if (s.previewTime !== null && s.board) {
+                      const frame = frameAt(s.board, s.previewTime);
+                      s.commit((b) => Object.assign(b, frame));
+                    }
+                    s.set({
+                      tool: tool as Tool,
+                      selectedShape: null,
+                      playing: false,
+                    });
+                    r.set({
+                      panMode: false,
+                      selectedInk: null,
+                      markMode: "none",
+                      mediaPlaying: false,
+                    });
+                    setMore(false);
+                  }}
+                >
+                  <Icon size={18} />
+                  <span>{label}</span>
+                  <kbd>{key}</kbd>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
       <div className="tl-ink-colors">
         {["#66d9ff", "#ffffff", "#ffbd67", "#f075a3"].map((c) => (

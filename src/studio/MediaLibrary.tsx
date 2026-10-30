@@ -40,7 +40,11 @@ export default function MediaLibrary() {
     } catch (e) {
       r.set({ error: e instanceof Error ? e.message : "Import failed" });
     } finally {
-      r.set({ busy: "", progress: 0 });
+      r.set({
+        busy: "",
+        progress: 0,
+        assets: await listAssets().catch(() => r.assets),
+      });
     }
   };
   return (

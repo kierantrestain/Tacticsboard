@@ -152,6 +152,16 @@ export default function Transport({
       s.set({ playing: !s.playing, playhead: time >= duration ? 0 : time });
     }
   };
+  if (!asset && ["footage", "split"].includes(r.view))
+    return (
+      <section className="tl-transport ts-data-transport">
+        <strong>Choose a source to begin</strong>
+        <span>
+          The clip timeline, frame stepping and analysis range appear when a
+          source is selected.
+        </span>
+      </section>
+    );
   if (r.view === "stats")
     return (
       <section className="tl-transport ts-data-transport">

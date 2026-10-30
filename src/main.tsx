@@ -7,6 +7,7 @@ import "./styles.css";
 import "./studio/studio.css";
 import "./football/football.css";
 import "./studio/show.css";
+import "./studio/director.css";
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { error: boolean }

@@ -1,6 +1,6 @@
 import type { Board, Frame } from "../types";
 import type { CameraPreset, RundownCue, ViewMode } from "./types";
-import { emptyStudio } from "./types";
+import { defaultBroadcast, emptyStudio } from "./types";
 import { copy, uid } from "../core";
 
 export function makeCue(
@@ -24,6 +24,18 @@ export function makeCue(
       ? desk.assetId
       : undefined;
   return {
+    tracking: source ? copy(desk.tracking[source]) : undefined,
+    broadcast: copy({ ...defaultBroadcast(), ...desk.broadcast }),
+    report:
+      view === "stats"
+        ? copy(
+            desk.statsSnapshot ||
+              (desk.statsReportId
+                ? desk.dataReports?.[desk.statsReportId]
+                : undefined),
+          )
+        : undefined,
+    statsFields: copy(desk.statsFields),
     sceneId: board.activeScene,
     statsReportId: desk.statsReportId,
     statsPlayerId: desk.statsPlayerId,
@@ -88,7 +100,7 @@ export function cueBoard(board: Board, cue: RundownCue): Board {
   else if (changedContext || !savedScene) {
     const scene = {
       ...copy(cue.frame),
-      id: uid(),
+      id: cue.sceneId || uid(),
       title: cue.title,
       duration: 3,
       note: cue.note,
@@ -100,12 +112,60 @@ export function cueBoard(board: Board, cue: RundownCue): Board {
         scene;
     next.activeScene = scene.id;
   }
+  if (next.studio.assetId)
+    (next.studio.sourceRanges ||= {})[next.studio.assetId] = copy(
+      next.studio.trim,
+    );
   next.studio.view = cue.view;
+  next.studio.statsSnapshot = copy(cue.report);
+  next.studio.statsFields = copy(cue.statsFields);
+  if (cue.broadcast) next.studio.broadcast = copy(cue.broadcast);
+  else if (next.studio.broadcast)
+    next.studio.broadcast.headline = cue.lowerThird;
   next.studio.statsReportId = cue.statsReportId;
   next.studio.statsPlayerId = cue.statsPlayerId;
   next.studio.assetId = cue.assetId;
   next.studio.trim = copy(cue.trim);
   next.studio.lowerThird = cue.lowerThird;
-  if (cue.assetId) next.studio.ink[cue.assetId] = copy(cue.ink);
+  if (cue.assetId) {
+    next.studio.ink[cue.assetId] = copy(cue.ink);
+    if (cue.tracking) next.studio.tracking[cue.assetId] = copy(cue.tracking);
+  }
   return next;
+}
+
+/** Updating a shot preserves its place, title, timing and presenter script. */
+export function replaceCueContent(
+  previous: RundownCue,
+  current: RundownCue,
+): RundownCue {
+  return {
+    ...current,
+    id: previous.id,
+    title: previous.title,
+    note: previous.note,
+    duration: previous.duration,
+    reviewedAt: undefined,
+  };
+}
+
+export function cueContentKey(cue: RundownCue): string {
+  return JSON.stringify([
+    cue.view,
+    cue.camera,
+    cue.time,
+    cue.frame,
+    cue.settings,
+    cue.colors,
+    cue.formations,
+    cue.assetId,
+    cue.trim,
+    cue.ink,
+    cue.lowerThird,
+    cue.broadcast,
+    cue.report,
+    cue.statsFields,
+    cue.match?.id,
+    cue.tracking,
+  ]);
 }

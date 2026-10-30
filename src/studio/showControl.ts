@@ -3,7 +3,8 @@ import { frameAt } from "../core";
 import { useStudio } from "../store";
 import { useRuntime } from "./runtime";
 import { takeToAir } from "./production";
-import { makeCue, cueBoard } from "./cueModel";
+import { captureThumbnail } from "./capture";
+import { makeCue, cueBoard, replaceCueContent } from "./cueModel";
 export { makeCue, cueBoard } from "./cueModel";
 
 export function saveCue() {
@@ -22,6 +23,7 @@ export function saveCue() {
     r.time,
     s.previewTime === null ? undefined : frameAt(b, s.previewTime),
   );
+  cue.thumbnail = captureThumbnail();
   s.commit((b) => {
     b.studio ||= emptyStudio();
     (b.studio.cues ||= []).push(cue);
@@ -37,9 +39,8 @@ export function recallCue(id: string, take = false) {
   if (!b || !cue) return;
   if (cue.assetId && !r.assets.some((a) => a.id === cue.assetId)) {
     s.notify(
-      "This shot needs its source media. Import the portable project pack.",
+      "Source missing. The shot is open for inspection; restore its media before taking it to programme.",
     );
-    return;
   }
   // Recall is one undoable edit, preserving the current rundown and source library.
   s.commit((board) => Object.assign(board, cueBoard(board, cue)));
@@ -56,6 +57,7 @@ export function recallCue(id: string, take = false) {
     mediaPlaying: false,
     selectedInk: null,
     activeCueId: id,
+    cueClock: { startedAt: null, elapsed: 0 },
     zoom: 1,
     pan: { x: 0, y: 0 },
     panMode: false,
@@ -70,4 +72,25 @@ export function stepCue(direction: number, take = false) {
   const next =
     index < 0 ? (direction > 0 ? 0 : cues.length - 1) : index + direction;
   if (cues[next]) recallCue(cues[next].id, take);
+}
+
+export function updateCue() {
+  const s = useStudio.getState(),
+    r = useRuntime.getState(),
+    b = s.board;
+  const previous = b?.studio?.cues?.find((c) => c.id === r.activeCueId);
+  if (!b || !previous) return;
+  const current = makeCue(
+    b,
+    r.view,
+    r.camera,
+    r.time,
+    s.previewTime === null ? undefined : frameAt(b, s.previewTime),
+  );
+  current.thumbnail = captureThumbnail();
+  s.commit((board) => {
+    const i = board.studio!.cues!.findIndex((c) => c.id === previous.id);
+    board.studio!.cues![i] = replaceCueContent(previous, current);
+  });
+  s.notify("Shot updated. Preview it again before marking it reviewed.");
 }

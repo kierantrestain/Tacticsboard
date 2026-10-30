@@ -269,10 +269,11 @@ export default function Dialogs({
           <div>
             <h3>Prepare the story. Keep the panel in control.</h3>
             <p>
-              Programme opens a clean second window. Live follow mirrors the desk
-              by default; turn it off to rehearse without changing the TV. Save
-              any view with M, recall shots with [ / ], and press Enter to take
-              a held view. Presenter mode gives the panel large touch controls.
+              Programme opens a clean second window without changing its held
+              shot. Preview stays private until you press Enter to take. Enable
+              Live follow for live drawing. Save with M and recall shots with [
+              / ]. B blacks the output and restores the same held shot.
+              Presenter mode keeps these output controls explicit.
             </p>
           </div>
         </div>

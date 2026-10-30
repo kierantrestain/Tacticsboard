@@ -1,4 +1,4 @@
-const CACHE = "touchline-studio-v2.1.0-1";
+const CACHE = "touchline-studio-v3.1.0-1";
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches

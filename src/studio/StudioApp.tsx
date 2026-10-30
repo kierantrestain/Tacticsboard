@@ -86,7 +86,7 @@ import type {
   ProgramSnapshot,
   ViewMode,
 } from "./types";
-import { listAssets, importAsset, loadProject } from "./assetStore";
+import { getMedia, listAssets, importAsset, loadProject } from "./assetStore";
 import {
   encodeVideo,
   exportPack,
@@ -100,7 +100,13 @@ import {
   readProgram,
   takeToAir,
   queueLiveTake,
+  toggleBlackout,
+  setLiveFollow,
 } from "./production";
+import { registerPreviewCapture } from "./capture";
+import { transportProgram } from "./productionModel";
+import ProductionDesk from "./ProductionDesk";
+import ShowChecks from "./ShowChecks";
 import TacticsPanel from "./TacticsPanel";
 import BroadcastPanel from "./BroadcastPanel";
 import StatsStage from "./StatsStage";
@@ -138,16 +144,13 @@ function hydrate(data: Catalogue, details: Record<string, MatchDetails>) {
       .sort((a, b) => b.date.localeCompare(a.date));
   return data;
 }
-let previousFollow = false;
 function presenter() {
   const r = useRuntime.getState();
   if (r.presenter) {
-    r.set({ presenter: false, follow: previousFollow });
+    r.set({ presenter: false });
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   } else {
-    previousFollow = r.follow;
-    r.set({ presenter: true, follow: true });
-    takeToAir();
+    r.set({ presenter: true });
     document.documentElement.requestFullscreen?.().catch(() => {});
   }
 }
@@ -356,7 +359,14 @@ function Operator() {
     const listener = (e: MessageEvent) => {
       if (e.data.type === "output-alive") {
         lastSeen = Date.now();
-        r.set({ outputConnected: true });
+        r.set({
+          outputConnected: true,
+          outputAck: {
+            id: e.data.id,
+            black: !!e.data.black,
+            thumbnail: e.data.thumbnail,
+          },
+        });
       }
       if (e.data.type === "request-program") {
         const program = useRuntime.getState().program;
@@ -364,7 +374,7 @@ function Operator() {
           productionChannel?.postMessage({
             type: "take",
             snapshot: program,
-            phaseTime: useStudio.getState().previewTime,
+            phaseTime: program.phaseTime ?? null,
           });
       }
     };
@@ -379,16 +389,24 @@ function Operator() {
     queueLiveTake();
   }, [b, r.view, r.camera, r.follow, !!r.program]);
   useEffect(() => {
-    if (r.follow && !r.program?.black && r.program?.board.id === b?.id)
-      productionChannel?.postMessage({
+    if (
+      r.follow &&
+      !r.busy &&
+      !r.program?.black &&
+      r.program?.board.id === b?.id
+    ) {
+      const message = {
         type: "transport",
-        id: b?.id,
+        snapshotId: r.program!.id,
         time: r.time,
         playing: r.mediaPlaying,
         rate: r.rate,
         phaseTime: s.previewTime,
-      });
-  }, [r.time, r.mediaPlaying, r.rate, s.previewTime, r.follow]);
+      };
+      productionChannel?.postMessage(message);
+      r.set({ program: transportProgram(r.program, message) });
+    }
+  }, [r.time, r.mediaPlaying, r.rate, s.previewTime, r.follow, r.busy]);
   useEffect(() => {
     r.set({ activeCueId: null });
   }, [b?.id]);
@@ -401,6 +419,8 @@ function Operator() {
       if (
         !board ||
         ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) ||
+        (target.closest("button, a, [role=button]") !== null &&
+          ["Enter", " "].includes(e.key)) ||
         target.isContentEditable
       )
         return;
@@ -412,7 +432,12 @@ function Operator() {
         });
         return;
       }
-      if (runtime.modal || state.modal) return;
+      if (k === "b" && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        toggleBlackout();
+        return;
+      }
+      if (runtime.modal || state.modal || runtime.busy || state.loading) return;
       if ((e.metaKey || e.ctrlKey) && k === "z") {
         e.preventDefault();
         e.shiftKey ? state.redo() : state.undo();
@@ -426,7 +451,10 @@ function Operator() {
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const a = runtime.assets.find((a) => a.id === board.studio?.assetId),
-        isMedia = !!a && ["footage", "split", "replay"].includes(runtime.view);
+        isMedia =
+          !!a &&
+          (["footage", "split"].includes(runtime.view) ||
+            (runtime.view === "replay" && !!board.studio?.tracking[a.id]));
       if (k === "escape") {
         runtime.set({ markMode: "none", selectedInk: null });
         state.set({ tool: "select", selected: [], selectedShape: null });
@@ -453,11 +481,6 @@ function Operator() {
       if (k === "enter") {
         e.preventDefault();
         takeToAir();
-        return;
-      }
-      if (k === "b" && !e.repeat) {
-        e.preventDefault();
-        takeToAir(!runtime.program?.black);
         return;
       }
       if (/^[1-9]$/.test(k)) {
@@ -535,8 +558,12 @@ function Operator() {
         e: "erase",
       };
       if (tools[k]) {
-        state.set({ tool: tools[k] });
-        runtime.set({ panMode: false, markMode: "none" });
+        if (state.previewTime !== null) {
+          const frame = frameAt(board, state.previewTime);
+          state.commit((b) => Object.assign(b, frame));
+        }
+        state.set({ tool: tools[k], playing: false });
+        runtime.set({ panMode: false, markMode: "none", mediaPlaying: false });
         return;
       }
       if (k === "delete" || k === "backspace") {
@@ -588,7 +615,7 @@ function Operator() {
     window.addEventListener("keydown", key);
     const fullscreen = () => {
       if (!document.fullscreenElement && useRuntime.getState().presenter)
-        useRuntime.setState({ presenter: false, follow: previousFollow });
+        useRuntime.setState({ presenter: false });
     };
     document.addEventListener("fullscreenchange", fullscreen);
     return () => {
@@ -621,7 +648,11 @@ function Operator() {
     } catch (e) {
       r.set({ error: e instanceof Error ? e.message : "Import failed" });
     } finally {
-      r.set({ busy: "", progress: 0 });
+      r.set({
+        busy: "",
+        progress: 0,
+        assets: await listAssets().catch(() => r.assets),
+      });
     }
   };
   const capture = () => {
@@ -651,6 +682,21 @@ function Operator() {
     stage?.draw();
     return stage?.toCanvas({ pixelRatio: 2 }) || null;
   };
+  useEffect(() => registerPreviewCapture(capture));
+  useEffect(() => {
+    let alive = true;
+    void Promise.all(
+      r.assets.map(
+        async (asset) =>
+          [asset.id, !!(await getMedia(asset.id).catch(() => null))] as const,
+      ),
+    ).then((entries) => {
+      if (alive) r.set({ assetAvailability: Object.fromEntries(entries) });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [r.assets]);
   const still = async () => {
     const board = useStudio.getState().board;
     if (!board) return;
@@ -716,7 +762,10 @@ function Operator() {
       board = state.board;
     if (!board) return;
     const a = runtime.assets.find((a) => a.id === board.studio?.assetId),
-      sourceMode = !!a && ["footage", "split", "replay"].includes(runtime.view),
+      sourceMode =
+        !!a &&
+        (["footage", "split"].includes(runtime.view) ||
+          (runtime.view === "replay" && !!board.studio?.tracking[a.id])),
       start = sourceMode ? board.studio?.trim.start || 0 : 0,
       duration =
         runtime.view === "stats"
@@ -736,6 +785,7 @@ function Operator() {
     r.set({
       modal: null,
       busy: "Rendering frame-timed 1080p analysis",
+      follow: false,
       progress: 0,
       mediaPlaying: false,
       selectedInk: null,
@@ -808,8 +858,13 @@ function Operator() {
     } catch (e) {
       r.set({ error: e instanceof Error ? e.message : "Video export failed" });
     } finally {
-      r.set({ busy: "", progress: 0, time: start });
-      s.set({ previewTime: null });
+      s.set({ previewTime: state.previewTime });
+      r.set({
+        busy: "",
+        progress: 0,
+        time: runtime.time,
+        follow: useRuntime.getState().program?.black ? false : runtime.follow,
+      });
       abortRef.current = null;
     }
   };
@@ -992,7 +1047,8 @@ function Operator() {
     },
     {
       title: "Enter presenter mode",
-      detail: "Large touch controls and live follow",
+      detail:
+        "Large touch controls, presenter notes and explicit output controls",
       Icon: Expand,
       key: "P",
       action: presenter,
@@ -1019,6 +1075,7 @@ function Operator() {
     },
   ];
   const nav = [
+    ["show", "Show", ShieldCheck, () => r.set({ sidebar: "show" })],
     [
       "studio",
       "Studio",
@@ -1081,7 +1138,7 @@ function Operator() {
         </a>
         <span className="tl-header-divider" />
         <div className="tl-project-title">
-          <span>ANALYSIS WORKSPACE</span>
+          <span>FOOTBALL SHOW DESK</span>
           <input
             aria-label="Analysis title"
             key={b.id + b.title}
@@ -1097,7 +1154,11 @@ function Operator() {
         </div>
         <span className={`tl-save-state ${s.saveError ? "error" : ""}`}>
           <ShieldCheck size={12} />
-          {s.saveError ? "Export to back up" : "Saved on device"}
+          {s.saveError
+            ? "Export to back up"
+            : s.savePending
+              ? "Saving…"
+              : "Saved on device"}
         </span>
         <button
           className="tl-command-button"
@@ -1248,8 +1309,8 @@ function Operator() {
                 {r.program?.black
                   ? "TV BLACKED OUT"
                   : r.follow
-                    ? "LIVE WORKSPACE"
-                    : "REHEARSAL"}
+                    ? "LIVE FOLLOW · EDITS GO TO OUTPUT"
+                    : "PREVIEW · OFF AIR"}
               </span>
               <button
                 className={r.sidebar === "tactics" ? "active" : ""}
@@ -1275,7 +1336,7 @@ function Operator() {
             <div className="tl-viewport-heading">
               <span className="tl-preview-label">
                 <i />
-                EDITOR PREVIEW
+                PREVIEW
               </span>
               <span className="tl-stage-context">
                 {r.view === "stats"
@@ -1362,7 +1423,11 @@ function Operator() {
               <div
                 className={`tl-source-container ${isFootage ? "" : "tl-hidden-source"}`}
               >
-                <MediaStage ref={sourceRef} asset={asset} />
+                <MediaStage
+                  ref={sourceRef}
+                  asset={asset}
+                  onImport={() => importRef.current?.click()}
+                />
                 {r.view === "split" && (
                   <span className="tl-stage-chip">
                     SOURCE / {timecode(r.time, desk.fps)}
@@ -1460,17 +1525,16 @@ function Operator() {
                 <i style={{ background: b.colors.home }} />
                 {home?.shortName} <ArrowRight size={12} />
               </span>
-              <p>
-                {r.view === "stats"
-                  ? "Choose a team or player card · M saves this view"
-                  : r.view === "replay"
-                    ? "Drag to orbit · scroll to move closer"
-                    : r.view === "footage"
-                      ? "Draw to explain · use ← / → to step through the moment"
-                      : r.view === "split"
-                        ? "Observe the source. Explain the structure."
-                        : "Drag a player · Shift-click to group · draw the next move"}
-              </p>
+              <button
+                className="director-preview-caption"
+                onClick={() => r.set({ sidebar: "broadcast" })}
+                title="Edit the caption shown on programme"
+              >
+                <span>CAPTION</span>
+                {desk.broadcast?.showLowerThird === false
+                  ? "Hidden on output"
+                  : desk.broadcast?.headline || desk.lowerThird || b.title}
+              </button>
               <span>
                 <ArrowRight size={12} />
                 {away?.shortName}
@@ -1482,65 +1546,30 @@ function Operator() {
         <Transport asset={asset} source={sourceRef} />
       </section>
       <section className="tl-inspector-shell">
-        <div className="tl-inspector-switch">
-          <button
-            aria-label="Tactical setups and guides"
-            title="Tactical setups & live guides"
-            className={r.sidebar === "tactics" ? "is-active" : ""}
-            onClick={() => r.set({ sidebar: "tactics" })}
+        <ProductionDesk />
+        <div className="director-inspector-switch">
+          <label htmlFor="workspace-panel">WORKSPACE</label>
+          <select
+            id="workspace-panel"
+            aria-label="Workspace panel"
+            value={r.sidebar}
+            onChange={(e) =>
+              r.set({ sidebar: e.target.value as typeof r.sidebar })
+            }
           >
-            <Target size={18} />
-          </button>
-          <button
-            aria-label="Broadcast design inspector"
-            title="Broadcast design"
-            className={r.sidebar === "broadcast" ? "is-active" : ""}
-            onClick={() => r.set({ sidebar: "broadcast" })}
-          >
-            <Monitor size={18} />
-          </button>
-          <button
-            aria-label="Team and match inspector"
-            title="Team & match"
-            className={r.sidebar === "inspector" ? "is-active" : ""}
-            onClick={() => r.set({ sidebar: "inspector" })}
-          >
-            <Users size={18} />
-          </button>
-          <button
-            aria-label="Source media library"
-            title="Source library"
-            className={r.sidebar === "media" ? "is-active" : ""}
-            onClick={() => r.set({ sidebar: "media" })}
-          >
-            <Clapperboard size={18} />
-          </button>
-          <button
-            aria-label="Reconstruction tools"
-            title="Reconstruct the play"
-            className={r.sidebar === "reconstruct" ? "is-active" : ""}
-            onClick={() => r.set({ sidebar: "reconstruct" })}
-          >
-            <Waypoints size={18} />
-          </button>
-          <button
-            aria-label="Graphics layers"
-            title="Graphics & timing"
-            className={r.sidebar === "layers" ? "is-active" : ""}
-            onClick={() => r.set({ sidebar: "layers" })}
-          >
-            <Layers3 size={18} />
-          </button>
-          <button
-            aria-label="Presenter rundown"
-            title="Presenter rundown"
-            className={r.sidebar === "rundown" ? "is-active" : ""}
-            onClick={() => r.set({ sidebar: "rundown" })}
-          >
-            <BookmarkPlus size={18} />
-          </button>
+            <option value="rundown">Show rundown</option>
+            <option value="show">Pre-show checks</option>
+            <option value="tactics">Tactical setups & guides</option>
+            <option value="inspector">Teams & players</option>
+            <option value="media">Source library</option>
+            <option value="reconstruct">Reconstruction</option>
+            <option value="layers">Graphics & timing</option>
+            <option value="broadcast">Broadcast design</option>
+          </select>
         </div>
-        {r.sidebar === "tactics" ? (
+        {r.sidebar === "show" ? (
+          <ShowChecks />
+        ) : r.sidebar === "tactics" ? (
           <TacticsPanel />
         ) : r.sidebar === "broadcast" ? (
           <BroadcastPanel />
@@ -1555,65 +1584,16 @@ function Operator() {
         ) : (
           <Rundown />
         )}
-        <div className="tl-air-control">
-          <div>
-            <span className={`tl-air-state ${r.program ? "on-air" : ""}`}>
-              <i />
-              {r.program?.black
-                ? "OUTPUT BLACKED OUT"
-                : !r.outputConnected
-                  ? "OPEN TV OUTPUT"
-                  : r.program
-                    ? r.follow
-                      ? "LIVE FOLLOW ON"
-                      : "PROGRAMME HELD"
-                    : "TV OUTPUT READY"}
-            </span>
-            <button
-              className={r.follow ? "is-active" : ""}
-              aria-pressed={r.follow}
-              onClick={() => r.set({ follow: !r.follow })}
-            >
-              Live follow <span />
-            </button>
-          </div>
-          <button className="tl-take-button" onClick={() => takeToAir()}>
-            <Radio size={17} />
-            <strong>
-              {r.program?.black
-                ? "RESTORE TV OUTPUT"
-                : r.follow
-                  ? "SEND VIEW TO TV"
-                  : "TAKE TO PROGRAMME"}
-            </strong>
-            <ArrowRight size={18} />
-          </button>
-          <div className="tl-program-secondary">
-            <button onClick={openProgram}>
-              <Monitor size={12} />
-              Open output
-            </button>
-            <button
-              aria-pressed={!!r.program?.black}
-              onClick={() => takeToAir(!r.program?.black)}
-            >
-              <Square size={11} fill="currentColor" />
-              {r.program?.black ? "Restore" : "Blackout"}
-            </button>
-          </div>
-        </div>
       </section>
       <footer className="tl-status">
         <span>
           <span className="tl-dot" />
           TOUCHLINE STUDIO <i />
-          {r.online ? "Workspace ready" : "Offline workspace"}
+          {r.online ? "Network connected" : "Offline · saved data"}
           {r.online ? <Wifi size={11} /> : <WifiOff size={11} />}
         </span>
         <button onClick={() => s.set({ modal: "data" })}>
-          {catalogue.teams.length} clubs <i />
-          {catalogue.quality.playerCount.toLocaleString()} player records{" "}
-          <ArrowUpRight size={11} />
+          Data sources & coverage <ArrowUpRight size={11} />
         </button>
         <button
           className="tl-data-check"
@@ -1623,13 +1603,7 @@ function Operator() {
           {dataCheckedAt ? "checked " + checkedTime(dataCheckedAt) : "loading…"}
         </button>
         <span className="tl-status-right">
-          {r.view === "replay"
-            ? "3D ENGINE"
-            : r.view === "footage"
-              ? "SOURCE ANALYSIS"
-              : "TACTICAL ENGINE"}
-          <i />
-          ON-DEVICE PROCESSING
+          M save shot <i /> Enter take <i /> B blackout
         </span>
       </footer>
       {r.presenter && (
@@ -1656,7 +1630,11 @@ function Operator() {
             <span>
               <Mark />
               TOUCHLINE <i />
-              LIVE FOLLOW
+              {r.program?.black
+                ? "OUTPUT BLACK"
+                : r.follow
+                  ? "LIVE FOLLOW"
+                  : "PREVIEW ONLY"}
             </span>
             <button
               aria-label="Previous presenter shot"
@@ -1671,7 +1649,11 @@ function Operator() {
             </button>
             <button
               onClick={() => {
-                if (asset && r.view !== "board")
+                if (
+                  asset &&
+                  (["footage", "split"].includes(r.view) ||
+                    (r.view === "replay" && !!desk.tracking[asset.id]))
+                )
                   r.set({ mediaPlaying: !r.mediaPlaying });
                 else
                   s.set({
@@ -1687,13 +1669,21 @@ function Operator() {
               )}
               <span>{r.mediaPlaying || s.playing ? "Pause" : "Play"}</span>
             </button>
-            <button onClick={() => bookmarkMoment(asset)}>
-              <BookmarkPlus size={20} />
-              <span>Save shot</span>
+            <button onClick={() => takeToAir()} disabled={!!r.program?.black}>
+              <Radio size={20} />
+              <span>Take preview</span>
             </button>
-            <button onClick={s.undo}>
-              <RotateIcon />
-              <span>Undo</span>
+            <button
+              aria-pressed={r.follow}
+              onClick={() => setLiveFollow(!r.follow)}
+              disabled={!!r.program?.black}
+            >
+              <Monitor size={20} />
+              <span>{r.follow ? "Hold output" : "Live follow"}</span>
+            </button>
+            <button onClick={toggleBlackout} disabled={!r.program}>
+              <Square size={17} />
+              <span>{r.program?.black ? "Restore held" : "Blackout"}</span>
             </button>
             <button onClick={presenter}>
               <X size={20} />

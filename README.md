@@ -1,6 +1,6 @@
 # Touchline Studio
 
-A standalone football analysis workspace for preparing and presenting studio segments. Version 3 adds complete saved-shot rundowns, tactical setups, live guides, player spotlighting and configurable Bang On Sports output graphics. It adds game/season/career player drill-downs, historical season archives, source coverage reports, TV data cards and ordered still reconstruction. It combines the full season match centre with still and short-clip telestration, assisted reconstruction, a virtual 3D pitch, a presenter rundown and an independently controlled clean programme window.
+A standalone football analysis workspace for preparing and presenting studio segments. Version 3.1 adds a production desk with separate preview and programme, received output thumbnails, compact saved-shot rundowns, pre-show checks and deliberate take/blackout controls. Tactical setups, live guides, player spotlighting and configurable Bang On Sports graphics support the explanation. It adds game/season/career player drill-downs, historical season archives, source coverage reports, TV data cards and ordered still reconstruction. It combines the full season match centre with still and short-clip telestration, assisted reconstruction, a virtual 3D pitch, a presenter rundown and an independently controlled clean programme window.
 
 See the [show workflow](docs/SHOW_WORKFLOW.md) for complete segment preparation, saved shots, TV design and presenter controls.
 
@@ -22,7 +22,7 @@ All published UCL league-phase pairings are included. Future knockout pairings c
 4. **Reconstruct the passage.** In Rebuild, identify four visible landmarks using the pitch or penalty-area template. Detect people locally or mark the feet of the relevant players. Confirm teams and assign real player identities yourself. Choose camera compensation or a locked shot, then track the selected passage. Scrub, inspect uncertainty flags and drag incorrect observations into place. Confirm the review before building an editable replay.
    For a set of pictures, map and review each still, assign real player identities, then use **Still sequence** to order two to twenty images into editable phases. Stable identities link the same player across images. Movement between stills is an illustrative interpolation; unseen movement and off-screen players are not reconstructed.
 5. **Present the explanation.** Compare the original with a top-down reconstruction, or open 3D replay. Use broadcast, overhead, goal or touchline cameras; orbit the pitch, move players and draw in perspective. Optional single-pose source cutouts are available in Display. Bookmark moments and add presenter notes to the rundown.
-6. **Control the programme.** Open the clean output on a second display or capture its window in OBS. Live follow is on by default for immediate updates. Turn it off to rehearse while holding the programme, then use **Take to programme**. Presenter mode includes shot recall controls. Blackout is available. Change the programme caption in Display.
+6. **Control the programme.** Open the clean output on a second display or capture its window in OBS. Preview edits stay private by default. Use **Take preview** to send a shot, or explicitly enable **Live follow** for live drawing. Opening the output does not take anything. Blackout restores the same held shot; it never substitutes the current preview. Presenter mode includes explicit take, follow and blackout controls. Change the caption alongside a saved shot or in TV design.
 7. **Export and transfer.** Export a 4K PNG, a silent frame-timed 1080p/25 fps analysis film, an editable JSON document or a portable ZIP including its source files. Open a ZIP on another computer to restore the complete analysis. A JSON document alone does not include the media.
 
 ## What reconstruction means here
@@ -60,6 +60,8 @@ Projects autosave locally and sources live in IndexedDB. The project library ret
 Install Touchline through the browser's Install/Add to Dock menu on HTTPS. The app shell and catalogue cache for offline use after opening; vision engines and models cache after their first use. Data refresh and uncached assets require a connection. No footage leaves the browser for processing, and no paid API or secret is required. The football data route contacts its public upstream provider for requested fixture information.
 
 The season index includes all 380 Premier League fixtures across 38 official gameweeks and all 144 published UCL league-phase fixtures. All 134 completed matches have an archived full report loaded on demand. It also includes league tables and 669 FPL registered player records; 546 confidently matched squad profiles receive the richer PL statistics. The catalogue retains supplied squad details, competition statistics, manager identities, observed formations and editable scouting notes. Missing fields remain unknown. See [data provenance](docs/DATA_PROVENANCE.md).
+
+The [production desk review](docs/PRODUCTION_DESK_REVIEW.md) records the workflow audit, corrected faults, test evidence and remaining integration limits.
 
 ## Run and test
 

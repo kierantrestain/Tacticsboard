@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
-  BookmarkPlus,
   Check,
   ChevronLeft,
   ChevronRight,
   Copy,
-  MonitorPlay,
+  MoreHorizontal,
+  Pause,
   Play,
   Plus,
   Radio,
@@ -16,41 +16,50 @@ import {
 } from "lucide-react";
 import { useStudio } from "../store";
 import { useRuntime, editDesk } from "./runtime";
-import { emptyStudio, timecode } from "./types";
-import { takeToAir } from "./production";
-import { copy, uid } from "../core";
-import { recallCue, saveCue, stepCue } from "./showControl";
+import { defaultBroadcast, emptyStudio } from "./types";
+import { copy, uid, frameAt } from "../core";
+import { recallCue, saveCue, stepCue, updateCue, makeCue } from "./showControl";
+import { inspectCue, viewLabels } from "./readiness";
+import { cueContentKey } from "./cueModel";
 import MiniPitch from "./MiniPitch";
-const labels = {
-  stats: "Match data card",
-  board: "Tactical board",
-  footage: "Source footage",
-  split: "Source + board",
-  replay: "3D replay",
-};
 export default function Rundown() {
   const s = useStudio(),
     r = useRuntime(),
-    d = s.board?.studio || emptyStudio(),
+    b = s.board!,
+    d = b.studio || emptyStudio(),
     cues = d.cues || [];
-  const [running, setRunning] = useState(false),
-    [elapsed, setElapsed] = useState(0);
+  const [, tick] = useState(0);
+  const selectedRow = useRef<HTMLElement>(null);
   useEffect(() => {
-    if (!running) return;
-    const started = Date.now() - elapsed * 1000;
-    const timer = setInterval(
-      () => setElapsed(Math.floor((Date.now() - started) / 1000)),
-      500,
-    );
-    return () => clearInterval(timer);
-  }, [running]);
+    selectedRow.current?.scrollIntoView({
+      block: "nearest",
+      behavior: "smooth",
+    });
+  }, [r.activeCueId]);
   useEffect(() => {
-    setElapsed(0);
-    setRunning(false);
-  }, [r.activeCueId, s.board?.id]);
+    if (!r.cueClock.startedAt) return;
+    const t = setInterval(() => tick((v) => v + 1), 500);
+    return () => clearInterval(t);
+  }, [r.cueClock.startedAt]);
+  const elapsed =
+    r.cueClock.elapsed +
+    (r.cueClock.startedAt
+      ? Math.floor((Date.now() - r.cueClock.startedAt) / 1000)
+      : 0);
   const active = cues.find((c) => c.id === r.activeCueId),
     index = cues.findIndex((c) => c.id === r.activeCueId),
     total = cues.reduce((n, c) => n + c.duration, 0);
+  const current = active
+    ? makeCue(
+        b,
+        r.view,
+        r.camera,
+        r.time,
+        s.previewTime === null ? undefined : frameAt(b, s.previewTime),
+      )
+    : null;
+  const dirty =
+    active && current && cueContentKey(active) !== cueContentKey(current);
   const reorder = (id: string, delta: number) =>
     editDesk((d) => {
       const list = d.cues || [],
@@ -62,74 +71,67 @@ export default function Rundown() {
       }
     });
   return (
-    <aside className="ts-panel ts-rundown">
-      <div className="tl-panel-title">
+    <aside className="ts-panel director-rundown">
+      <div className="director-rundown-head">
         <div>
           <span className="tl-eyebrow">SHOW RUNDOWN</span>
-          <h2>Your analysis, on cue.</h2>
+          <h2>
+            {cues.length} shots{" "}
+            <small>
+              {Math.floor(total / 60)}:{String(total % 60).padStart(2, "0")}{" "}
+              planned
+            </small>
+          </h2>
         </div>
-        <MonitorPlay size={22} />
-      </div>
-      <div className="ts-rundown-summary">
-        <span>
-          <b>{String(cues.length).padStart(2, "0")}</b> shots
-        </span>
-        <span>
-          {Math.floor(total / 60)}m {total % 60}s planned
-        </span>
         <button className="tl-primary" onClick={saveCue}>
-          <Plus size={14} />
-          Save view
+          <Plus size={15} /> Save shot
         </button>
       </div>
-      {!!cues.length && (
-        <div className="ts-cue-transport">
+      {active && (
+        <div
+          className={`director-cue-transport ${elapsed > active.duration ? "over" : ""}`}
+        >
           <button
             aria-label="Previous rundown shot"
             disabled={index <= 0}
             onClick={() => stepCue(-1)}
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={17} />
           </button>
-          <div>
-            <small>
-              {active
-                ? `SHOT ${index + 1} / ${cues.length}`
-                : "READY WHEN YOU ARE"}
-            </small>
-            <strong>{active?.title || "Choose the opening shot"}</strong>
-          </div>
+          <span>
+            {index + 1} / {cues.length}
+          </span>
           <button
             aria-label="Next rundown shot"
             disabled={index === cues.length - 1}
             onClick={() => stepCue(1)}
           >
-            <ChevronRight size={18} />
+            <ChevronRight size={17} />
           </button>
-        </div>
-      )}
-      {active && (
-        <div
-          className={`ts-cue-clock ${elapsed > active.duration ? "over" : ""}`}
-        >
           <button
             aria-label={
-              running ? "Pause presenter timer" : "Start presenter timer"
+              r.cueClock.startedAt
+                ? "Pause presenter timer"
+                : "Start presenter timer"
             }
-            onClick={() => setRunning(!running)}
+            onClick={() =>
+              r.set({
+                cueClock: {
+                  startedAt: r.cueClock.startedAt ? null : Date.now(),
+                  elapsed,
+                },
+              })
+            }
           >
-            {running ? <TimerReset size={14} /> : <Play size={14} />}
+            {r.cueClock.startedAt ? <Pause size={14} /> : <Play size={14} />}
           </button>
           <strong>
             {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")}
           </strong>
-          <span>/ {active.duration}s cue</span>
+          <small>/ {active.duration}s</small>
           <button
             aria-label="Reset presenter timer"
-            onClick={() => {
-              setRunning(false);
-              setElapsed(0);
-            }}
+            onClick={() => r.set({ cueClock: { startedAt: null, elapsed: 0 } })}
           >
             <TimerReset size={14} />
           </button>
@@ -137,182 +139,242 @@ export default function Rundown() {
       )}
       <div className="tl-panel-scroll">
         {!cues.length && (
-          <div className="ts-rundown-empty">
-            <BookmarkPlus size={30} />
-            <h3>Prepare once. Present freely.</h3>
+          <div className="director-empty">
+            <h3>Your story starts here.</h3>
             <p>
-              Save a board, clip frame or 3D angle. Each shot remembers the
-              positions, graphics and camera.
+              Arrange the board, choose a clip or make a data card. Save each
+              moment as a shot.
             </p>
             <button className="tl-primary" onClick={saveCue}>
-              <Plus size={15} />
-              Save the opening shot
+              <Plus size={15} /> Save opening shot
             </button>
-            <small>Press M to save any view · [ / ] to cue shots</small>
           </div>
         )}
         {cues.map((cue, i) => {
-          const asset = r.assets.find((a) => a.id === cue.assetId),
-            missing = !!cue.assetId && !asset;
+          const issues = inspectCue(b, cue, r.assets, r.assetAvailability),
+            blocked = issues.some((i) => i.level === "block"),
+            selected = cue.id === r.activeCueId;
           return (
             <article
-              className={`ts-cue-card ${r.activeCueId === cue.id ? "active" : ""}`}
+              className={`director-cue ${selected ? "selected" : ""}`}
               key={cue.id}
+              ref={selected ? selectedRow : undefined}
             >
               <button
-                className="ts-cue-image"
+                className="director-cue-row"
                 aria-label={`Recall shot ${i + 1}: ${cue.title}`}
-                disabled={missing}
                 onClick={() => recallCue(cue.id)}
               >
-                {asset && cue.view !== "replay" ? (
-                  <img src={asset.thumbnail} alt="" />
-                ) : (
-                  <MiniPitch frame={cue.frame} colors={cue.colors} />
-                )}
-                <span>{String(i + 1).padStart(2, "0")}</span>
-                <small>{labels[cue.view]}</small>
-                {r.activeCueId === cue.id && (
-                  <Check className="ts-cue-check" size={18} />
+                <span className="director-cue-number">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <div className="director-cue-thumb">
+                  {cue.thumbnail ? (
+                    <img src={cue.thumbnail} alt="" />
+                  ) : cue.view === "stats" ? (
+                    <span className="director-stats-thumb">
+                      MATCH
+                      <br />
+                      <b>DATA</b>
+                    </span>
+                  ) : (
+                    <MiniPitch frame={cue.frame} colors={cue.colors} />
+                  )}
+                </div>
+                <span className="director-cue-label">
+                  <strong>{cue.title}</strong>
+                  <small>
+                    {viewLabels[cue.view]} · {cue.duration}s
+                  </small>
+                  <em
+                    className={
+                      blocked
+                        ? "blocked"
+                        : issues.length
+                          ? "needs-review"
+                          : "ready"
+                    }
+                  >
+                    {blocked
+                      ? "Source needs attention"
+                      : issues.length
+                        ? "Needs review"
+                        : "Reviewed"}
+                  </em>
+                </span>
+                {r.program?.cueId === cue.id && !r.program.black && (
+                  <i className="director-cue-tally" title="Held on programme" />
                 )}
               </button>
-              <div className="ts-cue-body">
-                <input
-                  aria-label={`Shot ${i + 1} title`}
-                  key={cue.id + cue.title}
-                  defaultValue={cue.title}
-                  onBlur={(e) =>
-                    editDesk((d) => {
-                      d.cues!.find((c) => c.id === cue.id)!.title =
-                        e.target.value.trim().slice(0, 80) || "Untitled shot";
-                    })
-                  }
-                />
-                <textarea
-                  aria-label={`Shot ${i + 1} presenter notes`}
-                  placeholder="The point the panel needs to see…"
-                  defaultValue={cue.note}
-                  onBlur={(e) =>
-                    editDesk((d) => {
-                      d.cues!.find((c) => c.id === cue.id)!.note =
-                        e.target.value.slice(0, 4000);
-                    })
-                  }
-                />
-                {missing && (
-                  <p className="ts-missing">
-                    Source media is missing. Import its project pack.
-                  </p>
-                )}
-                <div className="ts-cue-meta">
+              {selected && (
+                <div className="director-cue-editor">
                   <label>
+                    SHOT TITLE
                     <input
-                      type="number"
-                      aria-label={`Shot ${i + 1} planned seconds`}
-                      min="1"
-                      max="600"
-                      value={cue.duration}
-                      onChange={(e) =>
+                      aria-label={`Shot ${i + 1} title`}
+                      key={cue.id + cue.title}
+                      defaultValue={cue.title}
+                      maxLength={80}
+                      onBlur={(e) =>
                         editDesk((d) => {
-                          d.cues!.find((c) => c.id === cue.id)!.duration =
-                            Math.max(1, Math.min(600, +e.target.value || 1));
+                          const c = d.cues!.find((c) => c.id === cue.id)!;
+                          c.title =
+                            e.target.value.trim().slice(0, 80) ||
+                            "Untitled shot";
                         })
                       }
                     />
-                    sec
                   </label>
-                  <span>
-                    {cue.assetId
-                      ? timecode(cue.time)
-                      : cue.camera === "broadcast"
-                        ? "Broadcast view"
-                        : cue.camera}
-                  </span>
+                  <label>
+                    ON-SCREEN CAPTION
+                    <input
+                      aria-label={`Shot ${i + 1} caption`}
+                      maxLength={120}
+                      value={
+                        b.studio?.broadcast?.headline ||
+                        b.studio?.lowerThird ||
+                        b.title
+                      }
+                      onChange={(e) =>
+                        editDesk((d) => {
+                          d.broadcast = {
+                            ...defaultBroadcast(),
+                            ...d.broadcast,
+                            headline: e.target.value,
+                          };
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    PRESENTER NOTE
+                    <textarea
+                      aria-label={`Shot ${i + 1} presenter notes`}
+                      key={cue.id + cue.note}
+                      placeholder="The one point the audience should understand…"
+                      defaultValue={cue.note}
+                      maxLength={4000}
+                      onBlur={(e) =>
+                        editDesk((d) => {
+                          d.cues!.find((c) => c.id === cue.id)!.note =
+                            e.target.value.slice(0, 4000);
+                        })
+                      }
+                    />
+                  </label>
+                  <div className="director-cue-timing">
+                    <label>
+                      Planned{" "}
+                      <input
+                        type="number"
+                        aria-label={`Shot ${i + 1} planned seconds`}
+                        min={1}
+                        max={600}
+                        value={cue.duration}
+                        onChange={(e) =>
+                          editDesk((d) => {
+                            d.cues!.find((c) => c.id === cue.id)!.duration =
+                              Math.max(1, Math.min(600, +e.target.value || 1));
+                          })
+                        }
+                      />{" "}
+                      sec
+                    </label>
+                    <details>
+                      <summary aria-label={`Shot ${i + 1} options`}>
+                        <MoreHorizontal size={18} />
+                      </summary>
+                      <div>
+                        <button
+                          disabled={i === 0}
+                          onClick={() => reorder(cue.id, -1)}
+                        >
+                          <ArrowUp size={13} />
+                          Move up
+                        </button>
+                        <button
+                          disabled={i === cues.length - 1}
+                          onClick={() => reorder(cue.id, 1)}
+                        >
+                          <ArrowDown size={13} />
+                          Move down
+                        </button>
+                        <button
+                          disabled={cues.length >= 80}
+                          onClick={() =>
+                            editDesk((d) => {
+                              const next = copy(cue);
+                              next.id = uid();
+                              next.title = (cue.title + " copy").slice(0, 80);
+                              d.cues!.splice(i + 1, 0, next);
+                            })
+                          }
+                        >
+                          <Copy size={13} />
+                          Duplicate
+                        </button>
+                        <button
+                          onClick={() => {
+                            editDesk((d) => {
+                              d.cues = d.cues!.filter((c) => c.id !== cue.id);
+                            });
+                            r.set({ activeCueId: null });
+                            s.notify("Shot removed. Undo restores it.");
+                          }}
+                        >
+                          <Trash2 size={13} />
+                          Remove shot
+                        </button>
+                      </div>
+                    </details>
+                  </div>
+                  {dirty && (
+                    <p className="director-shot-warning">
+                      Preview has changes that are not saved in this shot.
+                    </p>
+                  )}
+                  {issues
+                    .filter((i) => i.level === "block")
+                    .map((issue) => (
+                      <p key={issue.code} className="director-shot-warning">
+                        {issue.message}
+                      </p>
+                    ))}
+                  <div className="director-cue-actions">
+                    <button disabled={!dirty} onClick={updateCue}>
+                      Update shot
+                    </button>
+                    <button
+                      disabled={!!dirty || blocked}
+                      onClick={() =>
+                        editDesk((d) => {
+                          d.cues!.find((c) => c.id === cue.id)!.reviewedAt =
+                            Date.now();
+                        })
+                      }
+                    >
+                      <Check size={13} />
+                      {cue.reviewedAt ? "Reviewed" : "Mark reviewed"}
+                    </button>
+                    <button
+                      disabled={blocked || !!r.busy || !!r.program?.black}
+                      onClick={() => recallCue(cue.id, true)}
+                    >
+                      <Radio size={13} />
+                      Take saved
+                    </button>
+                  </div>
                 </div>
-                <div className="ts-cue-actions">
-                  <button
-                    className="ts-recall"
-                    disabled={missing}
-                    onClick={() => recallCue(cue.id)}
-                  >
-                    <Play size={12} />
-                    Recall
-                  </button>
-                  <button
-                    className="ts-on-air"
-                    disabled={missing}
-                    onClick={() => recallCue(cue.id, true)}
-                  >
-                    <Radio size={12} />
-                    To TV
-                  </button>
-                  <button
-                    aria-label={`Move shot ${i + 1} up`}
-                    disabled={i === 0}
-                    onClick={() => reorder(cue.id, -1)}
-                  >
-                    <ArrowUp size={13} />
-                  </button>
-                  <button
-                    aria-label={`Move shot ${i + 1} down`}
-                    disabled={i === cues.length - 1}
-                    onClick={() => reorder(cue.id, 1)}
-                  >
-                    <ArrowDown size={13} />
-                  </button>
-                  <button
-                    aria-label={`Duplicate shot ${i + 1}`}
-                    disabled={cues.length >= 80}
-                    onClick={() =>
-                      editDesk((d) => {
-                        const next = copy(cue);
-                        next.id = uid();
-                        next.title = (cue.title + " copy").slice(0, 80);
-                        d.cues!.splice(i + 1, 0, next);
-                      })
-                    }
-                  >
-                    <Copy size={13} />
-                  </button>
-                  <button
-                    aria-label={`Remove shot ${i + 1}`}
-                    onClick={() =>
-                      editDesk((d) => {
-                        d.cues = d.cues!.filter((c) => c.id !== cue.id);
-                      })
-                    }
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
+              )}
             </article>
           );
         })}
-        {!!d.bookmarks.length && (
-          <div className="ts-section-title">SAVED SOURCE MOMENTS</div>
-        )}
-        {d.bookmarks.map((m) => (
-          <div className="ts-legacy-moment" key={m.id}>
-            <strong>{m.title}</strong>
-            <small>{m.note}</small>
-            <button
-              onClick={() => {
-                editDesk((d) => {
-                  d.assetId = m.assetId;
-                });
-                r.set({ view: "footage", time: m.time, mediaPlaying: false });
-                if (r.follow) takeToAir();
-              }}
-            >
-              <Play size={12} />
-              Recall {timecode(m.time)}
-            </button>
-          </div>
-        ))}
       </div>
-      <div className="ts-panel-footnote">
-        M save shot <span /> [ previous <span /> ] next <span /> Enter take
+      <div className="director-rundown-foot">
+        <button onClick={() => r.set({ sidebar: "show" })}>
+          Check the show <ChevronRight size={13} />
+        </button>
+        <span>M save · [ / ] cue</span>
       </div>
     </aside>
   );

@@ -102,6 +102,12 @@ export const defaultBroadcast = (): BroadcastStyle => ({
 });
 /** A cue holds a frame, never a nested Board/StudioDocument. */
 export interface RundownCue {
+  tracking?: TrackingSequence;
+  broadcast?: BroadcastStyle;
+  report?: MatchStats;
+  statsFields?: string[];
+  thumbnail?: string;
+  reviewedAt?: number;
   sceneId?: string;
   statsReportId?: string;
   statsPlayerId?: string;
@@ -127,6 +133,9 @@ export interface RundownCue {
   lowerThird: string;
 }
 export interface StudioDocument {
+  statsSnapshot?: MatchStats;
+  statsFields?: string[];
+  sourceRanges?: Record<string, { start: number; end: number }>;
   dataReports?: Record<string, MatchStats>;
   statsReportId?: string;
   statsPlayerId?: string;
@@ -148,6 +157,10 @@ export interface StudioDocument {
   cues?: RundownCue[];
 }
 export interface ProgramSnapshot {
+  phaseTime?: number | null;
+  cueId?: string;
+  title?: string;
+  thumbnail?: string;
   report?: MatchStats;
   id: string;
   board: Board;
@@ -198,6 +211,23 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
     record(d.landmarks) &&
     record(d.targets) &&
     record(d.tracking) &&
+    (d.statsFields === undefined || validFields(d.statsFields)) &&
+    (d.statsSnapshot === undefined ||
+      isStudioDocument({
+        ...emptyStudio(),
+        dataReports: { snapshot: d.statsSnapshot },
+      })) &&
+    (d.sourceRanges === undefined ||
+      (record(d.sourceRanges) &&
+        Object.keys(d.sourceRanges).length <= 500 &&
+        Object.values(d.sourceRanges).every(
+          (r) =>
+            !!r &&
+            Number.isFinite(r.start) &&
+            Number.isFinite(r.end) &&
+            r.start >= 0 &&
+            r.end >= r.start,
+        ))) &&
     (d.statsReportId === undefined || typeof d.statsReportId === "string") &&
     (d.statsPlayerId === undefined || typeof d.statsPlayerId === "string") &&
     (d.dataReports === undefined ||
@@ -276,6 +306,27 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
             [p.x, p.y].every((n) => Number.isFinite(n) && n >= 0 && n <= 1);
           return (
             !!c &&
+            (c.tracking === undefined ||
+              isStudioDocument({
+                ...emptyStudio(),
+                tracking: { snapshot: c.tracking },
+              })) &&
+            (c.broadcast === undefined ||
+              isStudioDocument({ ...emptyStudio(), broadcast: c.broadcast })) &&
+            (c.report === undefined ||
+              isStudioDocument({
+                ...emptyStudio(),
+                dataReports: { snapshot: c.report },
+              })) &&
+            (c.statsFields === undefined || validFields(c.statsFields)) &&
+            (c.thumbnail === undefined ||
+              (typeof c.thumbnail === "string" &&
+                c.thumbnail.length < 200000 &&
+                /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(
+                  c.thumbnail,
+                ))) &&
+            (c.reviewedAt === undefined ||
+              (Number.isFinite(c.reviewedAt) && c.reviewedAt > 0)) &&
             (c.sceneId === undefined || typeof c.sceneId === "string") &&
             (c.statsReportId === undefined ||
               typeof c.statsReportId === "string") &&
@@ -445,3 +496,12 @@ export const timecode = (seconds: number, fps = 25) => {
   const s = Math.max(0, seconds);
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}:${String(Math.floor((s % 1) * fps)).padStart(2, "0")}`;
 };
+
+function validFields(fields: unknown): fields is string[] {
+  return (
+    Array.isArray(fields) &&
+    fields.length <= 8 &&
+    fields.every((f) => typeof f === "string" && f.length < 100) &&
+    new Set(fields).size === fields.length
+  );
+}

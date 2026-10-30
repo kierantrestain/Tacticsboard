@@ -108,6 +108,7 @@ export async function exportPack(board: Board, assets: MediaAsset[]) {
         ...Object.keys(b.studio?.tracking || {}),
         ...Object.keys(b.studio?.landmarks || {}),
         ...Object.keys(b.studio?.targets || {}),
+        ...Object.keys(b.studio?.sourceRanges || {}),
         ...b.scenes.map((s) => s.source?.assetId),
         ...(b.studio?.bookmarks || []).map((m) => m.assetId),
         ...(b.studio?.cues || []).map((c) => c.assetId),
@@ -205,8 +206,15 @@ export async function importPack(file: File): Promise<Board> {
   }
   if (b.studio) {
     const d = b.studio;
-    for (const key of ["ink", "landmarks", "targets", "tracking"] as const) {
-      const record = d[key] as Record<string, any>;
+    for (const key of [
+      "ink",
+      "landmarks",
+      "targets",
+      "tracking",
+      "sourceRanges",
+    ] as const) {
+      const record = d[key] as Record<string, any> | undefined;
+      if (!record) continue;
       for (const old of Object.keys(record)) {
         const id = remap[old] || old;
         record[id] = record[old];
@@ -219,6 +227,8 @@ export async function importPack(file: File): Promise<Board> {
     d.bookmarks.forEach((m) => (m.assetId = remap[m.assetId] || m.assetId));
     d.cues?.forEach((c) => {
       if (c.assetId) c.assetId = remap[c.assetId] || c.assetId;
+      if (c.tracking)
+        c.tracking.assetId = remap[c.tracking.assetId] || c.tracking.assetId;
       c.ink.forEach((i) => {
         i.assetId = remap[i.assetId] || i.assetId;
       });

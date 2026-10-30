@@ -30,6 +30,7 @@ const ACTIVE = "fixture.active-document";
 const PREFIX = "fixture.document.";
 const INDEX = "fixture.documents";
 let interaction: Board | null = null;
+let matchLoadId = 0;
 let timer: ReturnType<typeof setTimeout>;
 let saveTimer: ReturnType<typeof setTimeout>;
 export const channel =
@@ -78,6 +79,7 @@ interface Studio {
   toast: string;
   savedAt: string;
   saveError: boolean;
+  savePending: boolean;
   library: SavedBoard[];
   summaries: Record<string, MatchDetails>;
   loading: boolean;
@@ -126,6 +128,7 @@ export const useStudio = create<Studio>((set, get) => ({
   toast: "",
   savedAt: "",
   saveError: false,
+  savePending: false,
   library: readIndex(),
   summaries: {},
   loading: false,
@@ -219,6 +222,7 @@ export const useStudio = create<Studio>((set, get) => ({
   save: async () => {
     const b = get().board;
     if (!b || IS_OUTPUT) return;
+    set({ savePending: true });
     try {
       await saveProject(b);
       for (let i = localStorage.length - 1; i >= 0; i--) {
@@ -252,10 +256,15 @@ export const useStudio = create<Studio>((set, get) => ({
           localStorage.removeItem(PREFIX + b.id);
         }
         localStorage.setItem(ACTIVE, b.id);
-        set({ savedAt: at, saveError: false, library });
+        set({
+          savedAt: at,
+          saveError: false,
+          savePending: get().board !== b,
+          library,
+        });
       }
     } catch {
-      set({ saveError: true });
+      set({ saveError: true, savePending: false });
       get().notify(
         "Autosave needs more browser storage. Export a project pack to keep this analysis.",
       );
@@ -362,6 +371,7 @@ export const useStudio = create<Studio>((set, get) => ({
     get().notify(`${f} shape applied`);
   },
   chooseTeams: (h, a) => {
+    matchLoadId++;
     const { catalogue } = get();
     if (!catalogue) return;
     const ht = catalogue.teams.find((t) => t.id === h),
@@ -379,11 +389,28 @@ export const useStudio = create<Studio>((set, get) => ({
       b.players = next.players;
       b.drawings = [];
       b.match = undefined;
+      b.title = `${ht.shortName} v ${at.shortName} — match analysis`;
+      if (b.studio) {
+        b.studio.assetId = undefined;
+        b.studio.view = "board";
+        b.studio.statsReportId = undefined;
+        b.studio.statsPlayerId = undefined;
+        b.studio.statsSnapshot = undefined;
+        b.studio.statsFields = undefined;
+        b.studio.lowerThird = b.title;
+        if (b.studio.broadcast) b.studio.broadcast.headline = "";
+      }
       b.lineupSource = next.lineupSource;
       b.scenes = next.scenes;
       b.activeScene = next.activeScene;
     });
-    set({ modal: null, selected: [], selectedShape: null, profileId: null });
+    set({
+      modal: null,
+      selected: [],
+      selectedShape: null,
+      profileId: null,
+      loading: false,
+    });
     get().notify("Teams and recent starting selections loaded");
   },
   loadMatch: async (m) => {
@@ -394,6 +421,8 @@ export const useStudio = create<Studio>((set, get) => ({
     if (!ht || !at) {
       throw Error("This fixture includes a club outside the loaded catalogue.");
     }
+    const request = ++matchLoadId,
+      projectId = get().board?.id;
     set({ loading: true });
     let d = get().summaries[m.id];
     if (!d) {
@@ -401,6 +430,10 @@ export const useStudio = create<Studio>((set, get) => ({
         d = await loadReport(m);
       } catch {}
     } else void loadReport(m).catch(() => {});
+    if (request !== matchLoadId || get().board?.id !== projectId) {
+      if (request === matchLoadId) set({ loading: false });
+      return;
+    }
     get().commit((b) => {
       b.homeTeamId = ht.id;
       b.context = boardContext(ht, at);
@@ -409,6 +442,22 @@ export const useStudio = create<Studio>((set, get) => ({
       if (b.studio) {
         if (b.match && b.match.id !== m.id) b.studio.assetId = undefined;
         b.studio.view = "board";
+        b.studio.statsReportId = m.id;
+        b.studio.statsPlayerId = undefined;
+        b.studio.statsSnapshot = undefined;
+        b.studio.statsFields = undefined;
+        if (d)
+          (b.studio.dataReports ||= {})[m.id] = {
+            id: d.id,
+            lineups: d.lineups,
+            teamStats: d.teamStats,
+            updatedAt: d.updatedAt,
+            sourceUrl: d.sourceUrl,
+          };
+        if (b.match?.id !== m.id) {
+          b.studio.lowerThird = `${ht.shortName} v ${at.shortName}`;
+          if (b.studio.broadcast) b.studio.broadcast.headline = "";
+        }
       }
       b.match = m;
       b.title = `${ht.shortName} v ${at.shortName} — match analysis`;
@@ -548,6 +597,7 @@ if (!IS_OUTPUT) {
   useStudio.subscribe((state) => {
     if (state.board && state.board !== last) {
       last = state.board;
+      if (!state.savePending) useStudio.setState({ savePending: true });
       channel?.postMessage({ type: "board", board: state.board });
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => useStudio.getState().save(), 600);

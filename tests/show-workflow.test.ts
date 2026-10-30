@@ -98,6 +98,9 @@ describe("show preparation and recall", () => {
     expect(
       missing.scenes.find((s) => s.id === missing.activeScene)?.title,
     ).toBe("High press");
+    const recalledAgain = cueBoard(missing, cue);
+    expect(recalledAgain.scenes).toHaveLength(missing.scenes.length);
+    expect(recalledAgain.activeScene).toBe(cue.sceneId);
   });
   it("does not attach unrelated footage to a stats card or a manual board replay", () => {
     const b = board();

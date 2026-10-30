@@ -27,10 +27,14 @@ interface Runtime {
     | "layers"
     | "rundown"
     | "tactics"
-    | "broadcast";
+    | "broadcast"
+    | "show";
   activeCueId: string | null;
   compactTimeline: boolean;
   outputConnected: boolean;
+  outputAck: { id: string; black: boolean; thumbnail?: string } | null;
+  assetAvailability: Record<string, boolean>;
+  cueClock: { startedAt: number | null; elapsed: number };
   modal: "export" | "projects" | "shortcuts" | "commands" | null;
   presenter: boolean;
   follow: boolean;
@@ -58,13 +62,16 @@ export const useRuntime = create<Runtime>((set) => ({
   zoom: 1,
   pan: { x: 0, y: 0 },
   panMode: false,
-  sidebar: "inspector",
+  sidebar: "rundown",
   activeCueId: null,
-  compactTimeline: false,
+  compactTimeline: true,
   outputConnected: false,
+  outputAck: null,
+  assetAvailability: {},
+  cueClock: { startedAt: null, elapsed: 0 },
   modal: null,
   presenter: false,
-  follow: true,
+  follow: false,
   program: null,
   selectedInk: null,
   markMode: "none",
@@ -80,7 +87,26 @@ export const useRuntime = create<Runtime>((set) => ({
 export function editDesk(fn: (d: ReturnType<typeof emptyStudio>) => void) {
   useStudio.getState().commit((b) => {
     b.studio ||= emptyStudio();
+    const beforeLandmarks = JSON.stringify(b.studio.landmarks);
+    const beforeTargets = JSON.stringify(b.studio.targets);
     fn(b.studio);
+    if (
+      JSON.stringify(b.studio.landmarks) !== beforeLandmarks ||
+      JSON.stringify(b.studio.targets) !== beforeTargets
+    ) {
+      const marks = JSON.parse(beforeLandmarks),
+        targets = JSON.parse(beforeTargets);
+      for (const [id, sequence] of Object.entries(b.studio.tracking)) {
+        if (
+          JSON.stringify(marks[id]) !==
+            JSON.stringify(b.studio.landmarks[id]) ||
+          JSON.stringify(targets[id]) !== JSON.stringify(b.studio.targets[id])
+        )
+          sequence.reviewed = false;
+      }
+    }
+    if (b.studio.assetId)
+      (b.studio.sourceRanges ||= {})[b.studio.assetId] = { ...b.studio.trim };
   });
 }
 export function getDesk() {
@@ -88,14 +114,18 @@ export function getDesk() {
 }
 export function selectAsset(asset: MediaAsset) {
   editDesk((d) => {
+    if (d.assetId) (d.sourceRanges ||= {})[d.assetId] = { ...d.trim };
     d.assetId = asset.id;
     d.view = "footage";
-    d.trim = { start: 0, end: Math.min(20, asset.duration || 20) };
+    d.trim = d.sourceRanges?.[asset.id] || {
+      start: 0,
+      end: Math.min(20, asset.duration || 20),
+    };
     d.fps = asset.fps;
   });
   useRuntime.setState({
     view: "footage",
-    time: 0,
+    time: getDesk().trim.start,
     mediaPlaying: false,
     zoom: 1,
     pan: { x: 0, y: 0 },

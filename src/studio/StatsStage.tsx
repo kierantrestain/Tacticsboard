@@ -5,12 +5,12 @@ import {
   useRef,
   useState,
 } from "react";
-import { BarChart3, RefreshCw } from "lucide-react";
+import { BarChart3, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { useStudio } from "../store";
 import { useRuntime, editDesk } from "./runtime";
 import { loadReport } from "../football/data";
 import { statCardRows } from "../football/reportTools";
-import { emptyStudio } from "./types";
+import { defaultBroadcast, emptyStudio } from "./types";
 import type { Board, Match, MatchDetails } from "../types";
 import type { MatchStats } from "./types";
 export function statsCanvas(
@@ -39,7 +39,7 @@ export function statsCanvas(
     while (v.length > 1 && c.measureText(v).width > width) v = v.slice(0, -1);
     c.fillText(v === value ? v : v.slice(0, -1) + "…", x, y);
   };
-  c.fillStyle = "#14251b";
+  c.fillStyle = "#101b2b";
   c.fillRect(0, 0, 1600, 900);
   c.fillStyle = accent;
   c.fillRect(50, 50, 5, 48);
@@ -72,7 +72,12 @@ export function statsCanvas(
     1440,
     '700 42px "Manrope Variable",Arial',
   );
-  const rows = statCardRows(report, playerId, board.match).slice(0, 10);
+  const allRows = statCardRows(report, playerId, board.match);
+  const rows = (
+    board.studio?.statsFields
+      ? allRows.filter((row) => board.studio!.statsFields!.includes(row.key))
+      : allRows
+  ).slice(0, 8);
   if (!player) {
     text(
       board.context?.home.shortName || "HOME",
@@ -94,11 +99,16 @@ export function statsCanvas(
     );
   }
   rows.forEach((row, i) => {
-    const top = player ? 215 + Math.floor(i / 2) * 112 : 230 + i * 55;
+    const rowHeight = player
+      ? Math.min(180, 570 / Math.ceil(rows.length / 2))
+      : Math.min(94, 550 / rows.length);
+    const top = player
+      ? 215 + Math.floor(i / 2) * rowHeight
+      : 230 + i * rowHeight;
     c.fillStyle = i % 2 ? "#ffffff03" : "#ffffff07";
     if (player) {
       const x = i % 2 ? 825 : 80;
-      c.fillRect(x, top, 695, 100);
+      c.fillRect(x, top, 695, rowHeight - 10);
       text(
         row.label,
         x + 23,
@@ -107,13 +117,19 @@ export function statsCanvas(
         '500 17px "Inter Variable",Arial',
         "#a3b99b",
       );
-      text(row.home, x + 23, top + 77, 640, '650 35px "Inter Variable",Arial');
+      text(
+        row.home,
+        x + 23,
+        top + Math.min(rowHeight - 30, 104),
+        640,
+        '650 42px "Inter Variable",Arial',
+      );
     } else {
-      c.fillRect(80, top, 1440, 51);
+      c.fillRect(80, top, 1440, rowHeight - 5);
       text(
         row.home,
         360,
-        top + 35,
+        top + rowHeight / 2 + 9,
         440,
         '650 29px "Inter Variable",Arial',
         "#edf5e5",
@@ -122,7 +138,7 @@ export function statsCanvas(
       text(
         row.label,
         800,
-        top + 32,
+        top + rowHeight / 2 + 7,
         400,
         '500 19px "Inter Variable",Arial',
         "#b3c7a9",
@@ -131,7 +147,7 @@ export function statsCanvas(
       text(
         row.away,
         1240,
-        top + 35,
+        top + rowHeight / 2 + 9,
         440,
         '650 29px "Inter Variable",Arial',
         "#edf5e5",
@@ -149,7 +165,7 @@ export function statsCanvas(
       "#a3b99b",
     );
   text(
-    `ESPN match report · ${board.match?.date?.slice(0, 10) || "Source snapshot"} · missing values remain unknown`,
+    `Match report · ${board.match?.date?.slice(0, 10) || "Source snapshot"} · — means not supplied`,
     80,
     850,
     1440,
@@ -160,8 +176,14 @@ export function statsCanvas(
 }
 export async function presentMatchData(match: Match, playerId?: string) {
   const s = useStudio.getState();
-  await s.loadMatch(match);
+  if (s.board?.match?.id !== match.id) await s.loadMatch(match);
+  const projectId = useStudio.getState().board?.id;
   const report = await loadReport(match);
+  if (
+    useStudio.getState().board?.id !== projectId ||
+    useStudio.getState().board?.match?.id !== match.id
+  )
+    return;
   s.commit((b) => {
     b.studio ||= emptyStudio();
     (b.studio.dataReports ||= {})[match.id] = {
@@ -173,6 +195,18 @@ export async function presentMatchData(match: Match, playerId?: string) {
     };
     b.studio.statsReportId = match.id;
     b.studio.statsPlayerId = playerId;
+    b.studio.statsSnapshot = undefined;
+    b.studio.statsFields = undefined;
+    const player = playerId
+      ? report.lineups.flatMap((l) => l.players).find((p) => p.id === playerId)
+      : undefined;
+    b.studio.broadcast = {
+      ...defaultBroadcast(),
+      ...b.studio.broadcast,
+      headline: player
+        ? `${player.name} · match performance`
+        : `${b.context?.home.shortName || match.homeName} v ${b.context?.away.shortName || match.awayName} · match numbers`,
+    };
     b.studio.view = "stats";
   });
   s.set({ modal: null, playing: false, previewTime: null });
@@ -190,6 +224,7 @@ const StatsStage = forwardRef<
     desk = b.studio || emptyStudio(),
     report =
       provided ||
+      desk.statsSnapshot ||
       (desk.statsReportId ? desk.dataReports?.[desk.statsReportId] : undefined),
     playerId = desk.statsPlayerId,
     canvasRef = useRef<HTMLCanvasElement>(null),
@@ -210,12 +245,18 @@ const StatsStage = forwardRef<
       {!program && (
         <div className="ts-data-tools">
           <BarChart3 size={15} />
+          {!report && (
+            <button onClick={() => s.set({ modal: "matches" })}>
+              Choose a match report
+            </button>
+          )}
           <select
             aria-label="TV data card selection"
             value={playerId || ""}
             onChange={(e) =>
               editDesk((d) => {
                 d.statsPlayerId = e.target.value || undefined;
+                d.statsFields = undefined;
               })
             }
           >
@@ -228,6 +269,54 @@ const StatsStage = forwardRef<
                 </option>
               ))}
           </select>
+          {report && (
+            <details className="director-metrics">
+              <summary>
+                <SlidersHorizontal size={14} /> Choose metrics
+              </summary>
+              <div>
+                <strong>Card metrics · up to 8</strong>
+                <p>Keep the card focused on the point you are making.</p>
+                {statCardRows(report, playerId, b.match).map((row, i) => {
+                  const chosen =
+                      desk.statsFields ||
+                      statCardRows(report, playerId, b.match)
+                        .slice(0, 8)
+                        .map((r) => r.key),
+                    checked = chosen.includes(row.key);
+                  return (
+                    <label key={row.key}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={!checked && chosen.length >= 8}
+                        onChange={() =>
+                          editDesk((d) => {
+                            d.statsFields = checked
+                              ? chosen.filter((k) => k !== row.key)
+                              : [...chosen, row.key];
+                          })
+                        }
+                      />
+                      <span>{row.label}</span>
+                    </label>
+                  );
+                })}
+                <button
+                  onClick={() =>
+                    editDesk((d) => {
+                      d.statsFields = undefined;
+                    })
+                  }
+                >
+                  Reset selection
+                </button>
+              </div>
+            </details>
+          )}
+          {desk.statsSnapshot && (
+            <span className="director-frozen-data">Saved report snapshot</span>
+          )}
           <button
             disabled={!b.match || busy}
             onClick={async () => {
@@ -237,6 +326,7 @@ const StatsStage = forwardRef<
               try {
                 const report = await loadReport(b.match, true);
                 editDesk((d) => {
+                  d.statsSnapshot = undefined;
                   (d.dataReports ||= {})[b.match!.id] = {
                     id: report.id,
                     lineups: report.lineups,

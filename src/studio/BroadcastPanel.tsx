@@ -4,7 +4,7 @@ import { useStudio } from "../store";
 import { editDesk, useRuntime } from "./runtime";
 import { defaultBroadcast } from "./types";
 import type { BroadcastStyle } from "./types";
-import { openProgram, takeToAir } from "./production";
+import { openProgram, takeToAir, toggleBlackout } from "./production";
 export default function BroadcastPanel() {
   const s = useStudio(),
     r = useRuntime(),
@@ -119,9 +119,14 @@ export default function BroadcastPanel() {
           <Monitor size={16} />
           Open clean TV window
         </button>
-        <button className="ts-wide-action" onClick={() => takeToAir()}>
+        <button
+          className="ts-wide-action"
+          onClick={() => (r.program?.black ? toggleBlackout() : takeToAir())}
+        >
           <Radio size={16} />
-          {r.program?.black ? "Restore programme" : "Send current view to TV"}
+          {r.program?.black
+            ? "Restore held programme"
+            : "Send current view to TV"}
         </button>
         <p className="ts-note">
           Move the clean window to your studio display, or capture it in OBS.

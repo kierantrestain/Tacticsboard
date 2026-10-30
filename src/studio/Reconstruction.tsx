@@ -1,3 +1,4 @@
+import { appendTrackingPhases } from "./reconstructionBoard";
 import { playerCutout } from "./cutouts";
 import StillSequence from "./StillSequence";
 import { useState } from "react";
@@ -242,66 +243,28 @@ export default function Reconstruction({
   };
   const build = () => {
     if (!asset || !seq?.reviewed) return;
-    const selected = seq.frames.filter(
-      (f, i) => i % 4 === 0 || i === seq.frames.length - 1,
-    );
+    if ((s.board?.scenes.length || 0) >= 100) {
+      s.notify(
+        "The storyboard has 100 phases. Remove a phase before building another replay.",
+      );
+      return;
+    }
+    let added = 0;
     s.commit((b) => {
-      b.scenes = selected.map((f, i) => ({
-        id: uid(),
-        title:
-          i === 0 ? "Source shape" : `Moment ${String(i + 1).padStart(2, "0")}`,
-        duration: Math.max(
-          0.25,
-          (selected[i + 1]?.time ?? f.time + 1) - f.time,
-        ),
-        note: `Source ${asset.name} · ${timecode(f.time)}${f.points.some((p) => p.review) ? " · includes observations flagged for review" : ""}`,
-        source: {
-          assetId: asset.id,
-          time: f.time,
-          review: f.points.some((p) => p.review),
-        },
-        players: f.points
-          .filter(
-            (p) =>
-              p.pitch.x >= 0 &&
-              p.pitch.x <= 1 &&
-              p.pitch.y >= 0 &&
-              p.pitch.y <= 1,
-          )
-          .map((p) => {
-            const t = targets.find((t) => t.id === p.id)!;
-            return {
-              uid: `reconstructed:${t.id}`,
-              playerId: t.playerId || t.id,
-              side: t.side,
-              name: t.name,
-              number: t.number,
-              x: p.pitch.x,
-              y: p.pitch.y,
-              opacity: p.review ? 0.45 : 1,
-            };
-          }),
-        drawings: [],
-        ball: { x: 0.5, y: 0.5 },
-      }));
-      b.activeScene = b.scenes[0].id;
-      b.players = copy(b.scenes[0].players);
-      b.drawings = [];
-      b.ball = { x: 0.5, y: 0.5 };
-      b.settings.ballVisible = false;
-      b.lineupSource = {
-        home: "Reconstructed visible players",
-        away: "Reconstructed visible players",
-      };
+      added = appendTrackingPhases(b, seq, asset);
     });
+    if (!added) {
+      s.notify("No reviewed tracking frames are available to build.");
+      return;
+    }
     r.set({
-      view: "split",
-      sidebar: "reconstruct",
+      view: "board",
+      sidebar: "tactics",
       time: seq.start,
       mediaPlaying: false,
     });
     s.notify(
-      "Editable replay built. The board contains only the players observed in the source.",
+      `${added} editable phases added. Existing phases and the original source are preserved.`,
     );
   };
   if (!asset)

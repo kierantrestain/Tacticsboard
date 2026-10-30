@@ -233,6 +233,7 @@ const MediaStage = forwardRef<
   SourceHandle,
   {
     asset?: MediaAsset;
+    onImport?: () => void;
     board?: Board;
     program?: boolean;
     time?: number;
@@ -243,6 +244,7 @@ const MediaStage = forwardRef<
   (
     {
       asset,
+      onImport,
       board: provided,
       program = false,
       time: givenTime,
@@ -666,6 +668,11 @@ const MediaStage = forwardRef<
               <em>The explanation.</em>
             </h2>
             <p>Import a still or a short match clip to start the analysis.</p>
+            {!program && onImport && (
+              <button className="tl-primary" onClick={onImport}>
+                Import video or images
+              </button>
+            )}
           </div>
         ) : !element && !error ? (
           <div className="tl-stage-message">Opening local source…</div>

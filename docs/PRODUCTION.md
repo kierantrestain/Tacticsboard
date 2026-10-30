@@ -10,7 +10,7 @@ Use consistent team colours, a short programme caption and a small number of rea
 
 Use a current Chromium browser over HTTPS on a desktop or landscape touchscreen. Presenter mode gives the analysis most of the screen and temporarily enables Live follow. Programme opens a separate clean window. Keep both windows on the same origin and browser profile. Move the output to a second screen or capture its window in OBS. An independent OBS browser engine has separate storage and cannot receive this browser's production channel.
 
-Live follow is enabled by default. Turn it off to hold the programme while preparing a view, then Take to programme. Source transport is shared for the currently taken project. Use Blackout to cut/restore the programme; editing or reopening the output preserves an engaged blackout. Source audio is muted on programme; exports are silent for studio commentary. Change the caption under Display.
+Preview is private by default. Take preview deliberately, or enable live follow for immediate drawing updates. Transport messages are bound to the exact take. Blackout holds and restores that same shot; opening or reopening output never takes the current preview. Source audio is muted on programme; exports are silent for studio commentary. Change the caption in the selected shot or TV design.
 
 Stills export as 3840 × 2160 PNG. Films render frame timestamps at 1920 × 1080 / 25 fps using WebCodecs and Mediabunny, with H.264 MP4 if supported and WebM otherwise. Source exports cover up to 20 seconds; tactical storyboards up to 60 seconds. Export the film and inspect it before transmission. This browser tool does not supply native SDI, NDI, EVS integration or certified broadcast timing.
 
@@ -58,3 +58,7 @@ The full pinned-model Vercel preparation/build passed for the first version 3 st
 Rehearse camera calibration and uncertainty review with the show's actual footage, the WebGL renderer, touchscreen and final OBS/capture chain on the studio computer. Ordinary broadcast clips cannot guarantee perfect reconstruction. No paid feed, native NDI/SDI device output or cross-device programme control has been added.
 
 The final version 3 local checks pass 59 tests, TypeScript and the Vite production build. Desktop browser QA verified match/player drill-downs, data-card programme output, cross-match shot recall, presenter notes/navigation, blackout preservation and the Canvas 3D fallback. A player-card PNG was downloaded and checked at 3840 × 2160. Portable source/cue/stat-card round trips pass automated tests; the cloud browser did not return the second ZIP download event, so that browser download/import path is not claimed as verified.
+
+## Version 3.1 production-desk review
+
+The current changes and acceptance evidence are in [PRODUCTION_DESK_REVIEW.md](PRODUCTION_DESK_REVIEW.md). Earlier version 3 claims about blackout were too narrow: editing while black was checked, but restoring a different preview and reopening output were not. The current controller has explicit held-shot semantics and regression tests for both paths.
