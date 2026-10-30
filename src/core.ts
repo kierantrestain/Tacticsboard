@@ -55,10 +55,17 @@ export function formationPoints(
   const result = [{ x: 0.075, y: 0.5 }];
   lines.forEach((count, i) => {
     const x = 0.18 + (i / Math.max(1, lines.length - 1)) * 0.255;
+    // Keep central pairs and trios connected; wide rows retain their width.
+    const width =
+      count === 2
+        ? 0.3
+        : count === 3 && i < lines.length - 1
+          ? 0.44
+          : 0.74;
     for (let j = 0; j < count; j++)
       result.push({
         x,
-        y: count === 1 ? 0.5 : 0.13 + (j / (count - 1)) * 0.74,
+        y: count === 1 ? 0.5 : 0.5 - width / 2 + (j / (count - 1)) * width,
       });
   });
   return result.map((p) => (side === "home" ? p : { x: 1 - p.x, y: 1 - p.y }));

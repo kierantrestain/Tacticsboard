@@ -103,6 +103,15 @@ describe("formation and confirmed lineup mapping", () => {
       formationPoints("4-3-3", "home"),
     );
   });
+  it("keeps midfield pairs and central trios inside the wide players", () => {
+    const pivot = formationPoints("4-2-3-1", "home").slice(5, 7);
+    expect(pivot[0].y).toBeCloseTo(0.35);
+    expect(pivot[1].y).toBeCloseTo(0.65);
+    const backThree = formationPoints("3-5-2", "home").slice(1, 4);
+    const wingBacks = formationPoints("3-5-2", "home").slice(4, 9);
+    expect(backThree[0].y).toBeGreaterThan(wingBacks[0].y);
+    expect(backThree[2].y).toBeLessThan(wingBacks[4].y);
+  });
 });
 describe("storyboard animation and portable documents", () => {
   it("interpolates stable player identities and the ball without changing stored keyframes", () => {
