@@ -18,24 +18,10 @@ import { editDesk } from "../studio/runtime";
 import { dateLabel, formatMatchStat, initials, shortName, uid } from "../core";
 import { FORMATIONS } from "../core";
 import type { Board, Player, Side, Team } from "../types";
-export function TeamBadge({
-  team,
-  size = "normal",
-}: {
-  team?: Team;
-  size?: "small" | "normal" | "large";
-}) {
-  return (
-    <span
-      className={`team-badge ${size}`}
-      style={
-        { "--team-color": team?.color || "#8ea99b" } as React.CSSProperties
-      }
-    >
-      <span>{team?.abbreviation?.slice(0, 3) || "FC"}</span>
-    </span>
-  );
-}
+import { TeamBadge } from "../football/ClubBadge";
+export { TeamBadge } from "../football/ClubBadge";
+import MatchReport from "../football/MatchReport";
+import PlayerData from "../football/PlayerData";
 function Toggle({
   label,
   checked,
@@ -410,6 +396,7 @@ export default function Sidebar() {
                   field was not supplied. Preferred foot, xG and tracking data
                   are not inferred.
                 </p>
+                <PlayerData player={player} team={team} />
                 {player.sourceUrl && (
                   <a
                     className="text-link"
@@ -547,109 +534,19 @@ export default function Sidebar() {
         )}
         {inspector === "match" && (
           <>
-            <div className="section-heading">
-              <h3>Match desk</h3>
-              <span>Source record</span>
-            </div>
             {board.match ? (
-              <>
-                <h2 className="match-desk-title">
-                  {board.match.homeName}
-                  <br />
-                  <span>
-                    {board.match.completed
-                      ? `${board.match.homeScore ?? "—"} : ${board.match.awayScore ?? "—"}`
-                      : "v"}
-                  </span>
-                  <br />
-                  {board.match.awayName}
-                </h2>
-                <p className="muted-text">
-                  {dateLabel(board.match.date)} · {board.match.status}
-                  {board.match.venue ? ` · ${board.match.venue}` : ""}
-                </p>
-                {s.summaries[board.match.id]?.teamStats.length ? (
-                  <>
-                    <div className="section-heading">
-                      <h3>Team comparison</h3>
-                      <span>Home / away</span>
-                    </div>
-                    <div className="match-stat-head">
-                      <strong>{board.match.homeName}</strong>
-                      <strong>{board.match.awayName}</strong>
-                    </div>
-                    <div className="match-stat-list">
-                      {Object.entries(
-                        s.summaries[board.match.id].teamStats.find(
-                          (t) => t.teamId === board.homeTeamId,
-                        )?.stats || {},
-                      ).map(([key, v]) => (
-                        <div key={key}>
-                          <strong>
-                            {formatMatchStat(
-                              s.summaries[board.match!.id].teamStats.find(
-                                (t) => t.teamId === board.homeTeamId,
-                              )?.stats,
-                              key,
-                            )}
-                          </strong>
-                          <span>{v.label}</span>
-                          <strong>
-                            {formatMatchStat(
-                              s.summaries[board.match!.id].teamStats.find(
-                                (t) => t.teamId === board.awayTeamId,
-                              )?.stats,
-                              key,
-                            )}
-                          </strong>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="data-footnote">
-                      Completion and accuracy percentages are calculated from
-                      the supplied match totals.
-                    </p>
-                  </>
-                ) : (
-                  <p className="data-footnote">
-                    No team statistics have been supplied for this match.
-                  </p>
-                )}
-                {!!s.summaries[board.match.id]?.events.length && (
-                  <>
-                    <div className="section-heading">
-                      <h3>Key events</h3>
-                    </div>
-                    <div className="match-event-list">
-                      {s.summaries[board.match.id].events.map((e, i) => (
-                        <div key={i}>
-                          <strong>{e.minute || "·"}</strong>
-                          <p>{e.text}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-                <a
-                  className="text-link"
-                  href={board.match.sourceUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open match source <ExternalLink size={12} />
-                </a>
-              </>
+              <MatchReport match={board.match} compact />
             ) : (
               <p className="muted-text">
-                Load a match to inspect its supplied team statistics, events and
-                confirmed lineups.
+                Choose a fixture to explore lineups, team statistics, individual
+                match statistics and commentary.
               </p>
             )}
             <button
               className="primary-button full-width"
               onClick={() => s.set({ modal: "matches" })}
             >
-              Choose a match <ChevronRight size={14} />
+              Open match centre <ChevronRight size={14} />
             </button>
           </>
         )}

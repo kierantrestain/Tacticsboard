@@ -165,7 +165,7 @@ const Pitch3D = forwardRef<
     const base = new THREE.Mesh(
       new THREE.BoxGeometry(118, 1.8, 81),
       new THREE.MeshStandardMaterial({
-        color: "#10203b",
+        color: "#173c27",
         roughness: 0.7,
         metalness: 0.15,
       }),
@@ -176,7 +176,7 @@ const Pitch3D = forwardRef<
     const pitch = new THREE.Mesh(
       new THREE.PlaneGeometry(105, 68),
       new THREE.MeshStandardMaterial({
-        color: "#1d3e69",
+        color: "#348449",
         roughness: 0.93,
         metalness: 0.03,
       }),
@@ -188,9 +188,9 @@ const Pitch3D = forwardRef<
       const stripe = new THREE.Mesh(
         new THREE.PlaneGeometry(10.5, 68),
         new THREE.MeshBasicMaterial({
-          color: i % 2 ? "#5885b9" : "#0c2143",
+          color: i % 2 ? "#7ac26c" : "#143e23",
           transparent: true,
-          opacity: 0.07,
+          opacity: 0.12,
           depthWrite: false,
         }),
       );
@@ -200,8 +200,8 @@ const Pitch3D = forwardRef<
     }
     const line = (
       points: [number, number][],
-      color = "#8da9cd",
-      opacity = 0.6,
+      color = "#f1f5e4",
+      opacity = 0.86,
     ) => {
       const geometry = new THREE.BufferGeometry().setFromPoints(
         points.map(([x, z]) => new THREE.Vector3(x, 0.035, z)),
@@ -232,6 +232,18 @@ const Pitch3D = forwardRef<
     );
     for (const sign of [-1, 1]) {
       const x = sign * 52.5;
+      line(
+        Array.from({ length: 49 }, (_, i) => {
+          const a = -0.925 + (i / 48) * 1.85;
+          return [sign * (41.5 - 9.15 * Math.cos(a)), 9.15 * Math.sin(a)];
+        }),
+      );
+      line(
+        Array.from({ length: 25 }, (_, i) => [
+          sign * 41.5 + Math.cos((i / 24) * Math.PI * 2) * 0.16,
+          Math.sin((i / 24) * Math.PI * 2) * 0.16,
+        ]),
+      );
       line([
         [x, -20.16],
         [x - sign * 16.5, -20.16],

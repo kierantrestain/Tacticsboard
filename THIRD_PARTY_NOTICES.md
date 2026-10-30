@@ -175,3 +175,8 @@ SOFTWARE.
 Mediabunny is distributed unmodified in executable form. Its MPL-covered source files are available in the exact source distribution linked above. This application does not change those files; the MPL does not relicense unrelated application files. Full runtime notices are also served at `/licenses/` on the deployment.
 
 Official vision model downloads are generated during build rather than committed as application source. EfficientDet Lite2 is pinned by SHA-256 in `scripts/prepare-vision.mjs`; SSD Lite MobileNet V2 is pinned in `scripts/coco-model.json`. These TensorFlow/MediaPipe assets use Apache-2.0. The models detect generic COCO categories; model use does not establish rights to a user's imported footage.
+
+
+## Football data and club marks
+
+ESPN public football JSON and the official Premier League FPL public feeds provide the source-attributed football data described in `docs/DATA_PROVENANCE.md`. Club crest images load from ESPN-supplied URLs; their copyrights and trademarks remain with their respective owners. They are not relicensed under the application's open-source dependency notices. No third-party match footage is committed or deployed.

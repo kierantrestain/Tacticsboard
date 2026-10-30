@@ -84,18 +84,21 @@ describe("football route", () => {
     expect(fetch.mock.calls[0][0]).toBe(
       "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary?event=401878768",
     );
-    expect(JSON.parse(res.body)).toEqual(normaliseSummary(raw, "401878768"));
-    expect(res.headers["Cache-Control"]).toContain("s-maxage=900");
+    const actual = JSON.parse(res.body),
+      expected = JSON.parse(JSON.stringify(normaliseSummary(raw, "401878768")));
+    expect(Date.now() - Date.parse(actual.updatedAt)).toBeLessThan(1000);
+    delete actual.updatedAt;
+    delete expected.updatedAt;
+    expect(actual).toEqual(expected);
+    expect(res.headers["Cache-Control"]).toContain("s-maxage=30");
   });
   it("preserves source failure and rejects another season instead of passing stale data off as current", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue({
-          ok: true,
-          json: async () => ({ season: { year: 2025 }, athletes: [] }),
-        }),
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ season: { year: 2025 }, athletes: [] }),
+      }),
     );
     const res = response();
     await handler(

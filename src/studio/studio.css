@@ -5340,3 +5340,29 @@ a {
   font-size: 13px;
   font-weight: 600;
 }
+.team-badge:has(img) {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  padding: 2px;
+}
+.team-badge img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 3px #0005);
+}
+.team-badge .crest-fallback {
+  display: none;
+}
+.team-badge.crest-unavailable .crest-fallback {
+  display: inline;
+}
+.tl-phase-preview {
+  background: linear-gradient(140deg, #2b6d3a, #224b2e);
+}
+.tl-phase-preview rect,
+.tl-phase-preview path,
+.tl-phase-preview circle:not(.tl-mini-player) {
+  stroke: #eaf3dca6;
+}

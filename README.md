@@ -1,10 +1,20 @@
 # Touchline Studio
 
-A standalone football analysis workspace for preparing and presenting studio segments. The V2 release adds still and short-clip telestration, assisted reconstruction, a virtual 3D pitch, a presenter rundown and an independently controlled clean programme window.
+A standalone football analysis workspace for preparing and presenting studio segments. Version 2.1 combines the full season match centre with still and short-clip telestration, assisted reconstruction, a virtual 3D pitch, a presenter rundown and an independently controlled clean programme window.
+
+## Match centre and current data
+
+Open **Matches** for the season schedule. Choose Premier League or Champions League, select a gameweek/matchday, filter a club or date, and inspect the report before choosing **Analyse this match**. The **Players** view searches and sorts league-wide statistics; select a player for every supplied field and its PL match log. **Table** shows the competition standings and recent form.
+
+Reports expose all supplied team statistics, individual starter/substitute statistics, commentary, attendance and officials. PL minutes, starts, xG/xA, defensive figures and match logs come from the official public FPL feed. Fantasy assists stay explicitly labelled because their rules differ from ESPN assists. FPL registration lists can differ from the current ESPN squad, so they remain separate; ambiguous player identities are not joined.
+
+The visible app checks the season/player feed and tables every two minutes; an open live-match report polls every 30 seconds, otherwise every two minutes. Opening a matchweek checks its fixture dates. CDN caching is 30 seconds for match reports/daily scores, two minutes for season/player/table data and 15 minutes for squads. These are application refresh intervals, not an upstream real-time guarantee. Every view shows its check time and retains saved values on a source outage.
+
+All published UCL league-phase pairings are included. Future knockout pairings cannot be known before the draw. Use the source-backed date lookup as new rounds are published and `npm run data:season` to refresh the shipped season archive.
 
 ## The analysis workflow
 
-1. **Prepare the match.** Select clubs, load available match XIs, change formations or substitute players. The existing catalogue contains 20 Premier League and 36 UCL league-phase memberships, deduplicated into 51 clubs and 1,609 squad records. The snapshot date is 30 October 2026; these are not continuously verified live rosters.
+1. **Prepare the match.** Select clubs, load available match XIs, change formations or substitute players. The existing catalogue contains 20 Premier League and 36 UCL league-phase memberships, deduplicated into 51 clubs and 1,609 squad records. The snapshot date is 30 October 2026; public feeds refresh the visible statistics and matchdays while the app is open.
 2. **Import a still or clip.** Sources remain on this computer. Use a browser-decodable MP4, WebM, MOV, JPG or PNG under 200 MB. Select up to 20 seconds; scrub the filmstrip, step nominal frames, slow playback, set in/out points and freeze a frame.
 3. **Explain the moment.** Draw arrows, runs, lines, freehand ink, areas, circles, passing triangles, spotlights, text, distance estimates and perspective reference lines. Adjust graphic colour, opacity, weight and visibility times. Zoom and pan the source. After calibration, attach graphics to the pitch to carry the same explanation into the replay.
 4. **Reconstruct the passage.** In Rebuild, identify four visible landmarks using the pitch or penalty-area template. Detect people locally or mark the feet of the relevant players. Confirm teams and assign real player identities yourself. Choose camera compensation or a locked shot, then track the selected passage. Scrub, inspect uncertainty flags and drag incorrect observations into place. Confirm the review before building an editable replay.
@@ -44,7 +54,7 @@ Projects autosave locally and sources live in IndexedDB. The project library ret
 
 Install Touchline through the browser's Install/Add to Dock menu on HTTPS. The app shell and catalogue cache for offline use after opening; vision engines and models cache after their first use. Data refresh and uncached assets require a connection. No footage leaves the browser for processing, and no paid API or secret is required. The football data route contacts its public upstream provider for requested fixture information.
 
-The bundled data includes 134 fixtures/results and 84 match summaries, with supplied squad details, competition statistics, manager identities, observed formations and editable scouting notes. Missing fields remain unknown. See [data provenance](docs/DATA_PROVENANCE.md).
+The season index includes all 380 Premier League fixtures across 38 official gameweeks and all 144 published UCL league-phase fixtures. All 134 completed matches have an archived full report loaded on demand. It also includes league tables and 669 FPL registered player records; 546 confidently matched squad profiles receive the richer PL statistics. The catalogue retains supplied squad details, competition statistics, manager identities, observed formations and editable scouting notes. Missing fields remain unknown. See [data provenance](docs/DATA_PROVENANCE.md).
 
 ## Run and test
 
@@ -61,6 +71,7 @@ The preparation script downloads checksum-pinned official vision models and copi
 
 ```bash
 npm run data:refresh
+npm run data:season
 python3 scripts/make-test-clip.py
 ```
 

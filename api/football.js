@@ -1,3 +1,9 @@
+import {
+  normaliseFPL,
+  normaliseStandings,
+  normalisePlayerHistory,
+} from "../lib/football-normalizers.js";
+import clubIndex from "../public/data/club-index.json" with { type: "json" };
 const BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer/";
 const LEAGUES = new Set(["eng.1", "uefa.champions"]);
 const string = (v) => (typeof v === "string" ? v : "");
@@ -35,8 +41,31 @@ function player(a, league) {
   };
 }
 export function normaliseSummary(d, id) {
+  const info = d.gameInfo || {},
+    competition = d.header?.competitions?.[0],
+    st = competition?.status?.type || {};
   return {
     id,
+    updatedAt: new Date().toISOString(),
+    state: st.state,
+    status: st.description,
+    clock: competition?.status?.displayClock,
+    attendance: info.attendance ?? null,
+    venue: info.venue?.fullName,
+    officials: (info.officials || []).map((o) => ({
+      name: o.displayName || o.fullName,
+      role: o.position?.displayName,
+    })),
+    score: competition?.competitors?.map((t) => ({
+      teamId: String(t.id),
+      score: typeof t.score === "object" ? t.score.displayValue : t.score,
+    })),
+    commentary: (d.commentary || [])
+      .filter((c) => c.text)
+      .map((c) => ({
+        minute: c.time?.displayValue || c.clock?.displayValue,
+        text: c.text,
+      })),
     lineups: (d.rosters || []).map((r) => ({
       teamId: String(r.team?.id),
       side: r.homeAway,
@@ -50,6 +79,18 @@ export function normaliseSummary(d, id) {
           number: a.jersey,
           starter: !!a.starter,
           formationPlace: a.formationPlace,
+          subbedIn: !!a.subbedIn,
+          subbedOut: !!a.subbedOut,
+          stats: Object.fromEntries(
+            (a.stats || []).map((s) => [
+              s.name,
+              {
+                label: s.displayName || s.name,
+                value: s.value,
+                display: s.displayValue,
+              },
+            ]),
+          ),
           position: a.position?.displayName,
           positionCode: a.position?.abbreviation,
         })),
@@ -73,7 +114,7 @@ export function normaliseSummary(d, id) {
     sourceUrl: `https://www.espn.com/soccer/match/_/gameId/${id}`,
   };
 }
-function normaliseEvent(e, league) {
+export function normaliseEvent(e, league) {
   const c = e.competitions?.[0],
     home = c?.competitors?.find((t) => t.homeAway === "home"),
     away = c?.competitors?.find((t) => t.homeAway === "away");
@@ -92,6 +133,8 @@ function normaliseEvent(e, league) {
     awayName: away.team?.displayName,
     homeScore: score(home),
     awayScore: score(away),
+    state: st.state,
+    stage: e.seasonType?.name || e.season?.slug,
     status: st.description || "Scheduled",
     completed: !!st.completed,
     venue: c.venue?.fullName,
@@ -117,7 +160,23 @@ export default async function handler(req, res) {
     return;
   }
   let path;
-  if (action === "summary" && /^\d{1,12}$/.test(string(q.event)))
+  const season = string(q.season) || "2026";
+  if (!/^20\d{2}$/.test(season)) {
+    res.statusCode = 400;
+    res.end(JSON.stringify({ error: "Invalid season" }));
+    return;
+  }
+  if (action === "season") path = "fpl-season";
+  else if (action === "standings") path = "table";
+  else if (action === "player" && /^\d{1,5}$/.test(string(q.player)))
+    path = "fpl-player";
+  else if (
+    action === "summary" &&
+    /^fpl-\d{1,5}$/.test(string(q.event)) &&
+    clubIndex.fixtures.some((m) => m.id === q.event)
+  )
+    path = "fpl-report";
+  else if (action === "summary" && /^\d{1,12}$/.test(string(q.event)))
     path = `${league}/summary?event=${q.event}`;
   else if (
     action === "roster" &&
@@ -137,6 +196,70 @@ export default async function handler(req, res) {
     return;
   }
   try {
+    const getJSON = async (url) => {
+      const r = await fetch(url, {
+        signal: AbortSignal.timeout(9000),
+        headers: { Accept: "application/json" },
+      });
+      if (!r.ok) throw Error("Source unavailable");
+      return r.json();
+    };
+    let special;
+    if (path === "fpl-season") {
+      const [b, f] = await Promise.all([
+        getJSON("https://fantasy.premierleague.com/api/bootstrap-static/"),
+        getJSON("https://fantasy.premierleague.com/api/fixtures/"),
+      ]);
+      special = normaliseFPL(b, f, clubIndex);
+      if (special.seasonYear !== Number(season)) throw Error("Season mismatch");
+    } else if (path === "table")
+      special = normaliseStandings(
+        await getJSON(
+          `https://site.api.espn.com/apis/v2/sports/soccer/${league}/standings?season=${season}`,
+        ),
+      );
+    else if (path === "fpl-player")
+      special = normalisePlayerHistory(
+        await getJSON(
+          `https://fantasy.premierleague.com/api/element-summary/${q.player}/`,
+        ),
+      );
+    else if (path === "fpl-report") {
+      const m = clubIndex.fixtures.find((m) => m.id === q.event),
+        date = /^20\d{6}$/.test(string(q.date))
+          ? q.date
+          : m.date.slice(0, 10).replaceAll("-", "");
+      const day = await getJSON(BASE + "eng.1/scoreboard?dates=" + date),
+        event = (day.events || [])
+          .map((e) => normaliseEvent(e, "eng.1"))
+          .find((e) => e?.homeId === m.homeId && e?.awayId === m.awayId);
+      special = event
+        ? {
+            ...normaliseSummary(
+              await getJSON(BASE + "eng.1/summary?event=" + event.id),
+              q.event,
+            ),
+            sourceUrl: event.sourceUrl,
+            match: { ...m, ...event, id: q.event, fplId: m.fplId },
+          }
+        : {
+            id: q.event,
+            lineups: [],
+            teamStats: [],
+            events: [],
+            commentary: [],
+            updatedAt: new Date().toISOString(),
+          };
+    }
+    if (special) {
+      res.statusCode = 200;
+      res.setHeader(
+        "Cache-Control",
+        `public, s-maxage=${action === "summary" ? 30 : 120}, stale-while-revalidate=60`,
+      );
+      res.end(JSON.stringify(special));
+      return;
+    }
     const upstream = await fetch(BASE + path, {
       signal: AbortSignal.timeout(9000),
       headers: { Accept: "application/json" },
@@ -166,7 +289,7 @@ export default async function handler(req, res) {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.setHeader(
       "Cache-Control",
-      "public, s-maxage=900, stale-while-revalidate=86400",
+      `public, s-maxage=${action === "summary" || action === "fixtures" ? 30 : 900}, stale-while-revalidate=60`,
     );
     res.end(JSON.stringify(result));
   } catch {

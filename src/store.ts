@@ -1,3 +1,4 @@
+import { loadReport } from "./football/data";
 import { saveProject, loadProject } from "./studio/assetStore";
 import { create } from "zustand";
 import type {
@@ -387,19 +388,17 @@ export const useStudio = create<Studio>((set, get) => ({
     let d = get().summaries[m.id];
     if (!d) {
       try {
-        const r = await fetch(
-          `/api/football?action=summary&league=${encodeURIComponent(m.league)}&event=${encodeURIComponent(m.id)}`,
-        );
-        if (r.ok) {
-          const v = await r.json();
-          d = v.lineups ? v : undefined;
-        }
+        d = await loadReport(m);
       } catch {}
-    }
+    } else void loadReport(m).catch(() => {});
     get().commit((b) => {
       b.homeTeamId = ht.id;
       b.awayTeamId = at.id;
       b.competition = m.league;
+      if (b.studio) {
+        if (b.match && b.match.id !== m.id) b.studio.assetId = undefined;
+        b.studio.view = "board";
+      }
       b.match = m;
       b.title = `${ht.shortName} v ${at.shortName} — match analysis`;
       b.colors = {

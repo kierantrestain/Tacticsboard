@@ -1,3 +1,10 @@
+import {
+  bootFootball,
+  refreshFootball,
+  refreshTeam,
+  useFootball,
+  checkedTime,
+} from "../football/data";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import {
@@ -176,6 +183,18 @@ function Operator() {
     projectRef = useRef<HTMLInputElement>(null),
     abortRef = useRef<AbortController | null>(null),
     installRef = useRef<any>(null);
+  const dataCheckedAt = useFootball((s) => s.checkedAt);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void refreshFootball();
+    }, 120000);
+    return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    if (!b || !catalogue) return;
+    void refreshTeam(b.homeTeamId, b.competition);
+    void refreshTeam(b.awayTeamId, b.competition);
+  }, [b?.homeTeamId, b?.awayTeamId, b?.competition, !!catalogue]);
   const [error, setError] = useState(""),
     [exportReady, setExportReady] = useState<{
       url: string;
@@ -233,6 +252,7 @@ function Operator() {
           view: useStudio.getState().board?.studio?.view || "board",
         });
         s.set({ color: "#66d9ff" });
+        void bootFootball();
       })
       .catch((e) => {
         console.error(e);
@@ -1383,6 +1403,13 @@ function Operator() {
           {catalogue.teams.length} clubs <i />
           {catalogue.quality.playerCount.toLocaleString()} player records{" "}
           <ArrowUpRight size={11} />
+        </button>
+        <button
+          className="tl-data-check"
+          onClick={() => s.set({ modal: "matches" })}
+        >
+          Football data{" "}
+          {dataCheckedAt ? "checked " + checkedTime(dataCheckedAt) : "loading…"}
         </button>
         <span className="tl-status-right">
           {r.view === "replay"

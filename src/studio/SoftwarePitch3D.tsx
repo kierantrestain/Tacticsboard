@@ -106,9 +106,9 @@ const SoftwarePitch3D = forwardRef<
           [59, 40],
           [-59, 40],
         ],
-        "#27486f",
+        "#347f43",
         1,
-        "#101d31",
+        "#173c27",
       );
       worldPath(
         [
@@ -117,9 +117,9 @@ const SoftwarePitch3D = forwardRef<
           [52.5, 34],
           [-52.5, 34],
         ],
-        "#749cc155",
+        "#f1f5e4df",
         1.4,
-        "#21466d",
+        "#2c6f3a",
       );
       for (let i = 0; i < 10; i++)
         if (i % 2 === 0)
@@ -130,16 +130,16 @@ const SoftwarePitch3D = forwardRef<
               [-42 + i * 10.5, 34],
               [-52.5 + i * 10.5, 34],
             ],
-            "#ffffff03",
+            "#a2dc730e",
             0.1,
-            "#abcfff07",
+            "#122f1d16",
           );
       worldPath(
         [
           [0, -34],
           [0, 34],
         ],
-        "#93b2cf75",
+        "#f1f5e4cf",
         1.2,
       );
       worldPath(
@@ -147,11 +147,28 @@ const SoftwarePitch3D = forwardRef<
           Math.cos((i / 80) * Math.PI * 2) * 9.15,
           Math.sin((i / 80) * Math.PI * 2) * 9.15,
         ]),
-        "#93b2cf75",
+        "#f1f5e4cf",
         1.2,
       );
       for (const sign of [-1, 1]) {
         const x = sign * 52.5;
+        worldPath(
+          Array.from({ length: 49 }, (_, i) => {
+            const a = -0.925 + (i / 48) * 1.85;
+            return [sign * (41.5 - 9.15 * Math.cos(a)), 9.15 * Math.sin(a)];
+          }),
+          "#f1f5e4cf",
+          1.2,
+        );
+        worldPath(
+          Array.from({ length: 25 }, (_, i) => [
+            sign * 41.5 + Math.cos((i / 24) * Math.PI * 2) * 0.18,
+            Math.sin((i / 24) * Math.PI * 2) * 0.18,
+          ]),
+          "#f1f5e4",
+          1,
+          "#f1f5e4",
+        );
         worldPath(
           [
             [x, -20.16],
@@ -159,7 +176,7 @@ const SoftwarePitch3D = forwardRef<
             [x - sign * 16.5, 20.16],
             [x, 20.16],
           ],
-          "#93b2cf75",
+          "#f1f5e4cf",
           1.2,
         );
         worldPath(
@@ -169,7 +186,7 @@ const SoftwarePitch3D = forwardRef<
             [x - sign * 5.5, 9.16],
             [x, 9.16],
           ],
-          "#93b2cf75",
+          "#f1f5e4cf",
           1.2,
         );
         const posts = [
@@ -195,7 +212,7 @@ const SoftwarePitch3D = forwardRef<
           [-54, -36],
           [54, -36],
         ],
-        "#72bfff80",
+        "#f1f5e4cf",
         1,
       );
       worldPath(
@@ -203,7 +220,7 @@ const SoftwarePitch3D = forwardRef<
           [-54, 36],
           [54, 36],
         ],
-        "#72bfff80",
+        "#f1f5e4cf",
         1,
       );
       for (const d of [...f.drawings, ...(draft ? [draft] : [])]) {

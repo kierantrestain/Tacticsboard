@@ -39,18 +39,20 @@ export default function ToolRail() {
   const s = useStudio(),
     r = useRuntime();
   const clear = () => {
-    if (["footage", "split"].includes(r.view) && s.board?.studio?.assetId) {
-      const id = s.board.studio.assetId;
-      editDesk((d) => {
-        d.ink[id] = [];
-      });
-      r.set({ selectedInk: null });
-    } else {
-      s.commit((b) => {
-        b.drawings = [];
-      });
-      s.set({ selectedShape: null });
-    }
+    s.commit((b) => {
+      const id = b.studio?.assetId;
+      if (
+        id &&
+        b.studio &&
+        (r.view === "footage" ||
+          r.view === "split" ||
+          (r.view === "replay" && b.studio.tracking[id]))
+      )
+        b.studio.ink[id] = [];
+      if (r.view !== "footage") b.drawings = [];
+    });
+    r.set({ selectedInk: null });
+    s.set({ selectedShape: null });
   };
   return (
     <nav className="tl-tool-rail" aria-label="Broadcast telestration tools">

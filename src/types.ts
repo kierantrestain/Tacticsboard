@@ -16,6 +16,13 @@ export type Tool =
   | "offside";
 export type Stat = { value?: number | null; display?: string; label: string };
 export interface Player {
+  fplId?: number;
+  advanced?: {
+    checkedAt: string;
+    status?: string;
+    news?: string;
+    stats: Record<string, Stat>;
+  };
   id: string;
   name: string;
   shortName?: string;
@@ -33,6 +40,9 @@ export interface Player {
   sourceUrl?: string;
 }
 export interface LineupPlayer {
+  stats?: Record<string, Stat>;
+  subbedIn?: boolean;
+  subbedOut?: boolean;
   id: string;
   name: string;
   number?: string;
@@ -59,6 +69,9 @@ export interface Manager {
   tacticsBasis: string;
 }
 export interface Team {
+  badgeUrl?: string;
+  fplId?: number;
+  rosterCheckedAt?: string;
   id: string;
   name: string;
   shortName: string;
@@ -79,6 +92,15 @@ export interface Team {
   }[];
 }
 export interface Match {
+  fplId?: number;
+  matchweek?: number;
+  stage?: string;
+  state?: string;
+  fplStats?: {
+    identifier: string;
+    h: { element: number; value: number }[];
+    a: { element: number; value: number }[];
+  }[];
   id: string;
   league: string;
   date: string;
@@ -95,6 +117,16 @@ export interface Match {
   sourceUrl: string;
 }
 export interface MatchDetails {
+  updatedAt?: string;
+  state?: string;
+  status?: string;
+  clock?: string;
+  attendance?: number | null;
+  venue?: string;
+  officials?: { name: string; role?: string }[];
+  commentary?: { minute?: string; text: string }[];
+  score?: { teamId: string; score: string }[];
+  match?: Match;
   id: string;
   lineups: Lineup[];
   teamStats: {

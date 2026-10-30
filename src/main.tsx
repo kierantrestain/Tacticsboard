@@ -5,6 +5,7 @@ import "@fontsource-variable/inter";
 import "@fontsource-variable/manrope";
 import "./styles.css";
 import "./studio/studio.css";
+import "./football/football.css";
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { error: boolean }

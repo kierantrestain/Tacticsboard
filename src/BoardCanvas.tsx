@@ -22,6 +22,8 @@ import {
 import type { KonvaEventObject } from "konva/lib/Node";
 import { Pause, Play, ImageOff, VolumeX } from "lucide-react";
 import { useStudio, channel } from "./store";
+import { useRuntime } from "./studio/runtime";
+import { homography, invert3, project } from "./studio/geometry";
 import { clamp, copy, frameAt, moveDrawing, shortName, uid } from "./core";
 import type { Board, BoardPlayer, Drawing, Frame } from "./types";
 import { getMedia } from "./media";
@@ -60,8 +62,8 @@ function ink(hex: string) {
 function Pitch({ board }: { board: Board }) {
   const light = board.settings.theme === "light",
     grass = board.settings.theme === "grass";
-  const color = light ? "#dee7dd" : grass ? "#275f3e" : "#1b3558";
-  const line = light ? "#748775" : "#96b2d3";
+  const color = light ? "#4c9254" : grass ? "#2c7840" : "#307a43";
+  const line = "#eef4df";
   return (
     <Group listening={false}>
       <Rect
@@ -70,7 +72,7 @@ function Pitch({ board }: { board: Board }) {
         width={1160}
         height={734}
         cornerRadius={9}
-        fill={light ? "#d4ded3" : grass ? "#234c34" : "#10233e"}
+        fill={light ? "#397247" : grass ? "#1d4e2c" : "#173c27"}
       />
       <Rect x={PX} y={PY} width={PW} height={PH} fill={color} />
       {Array.from({ length: 10 }, (_, i) => (
@@ -859,7 +861,7 @@ const BoardCanvas = forwardRef<
                     onDragStart={() => {
                       const ids = selected.includes(p.uid) ? selected : [p.uid];
                       drag.current = {
-                        players: copy(board.players),
+                        players: copy(externalFrame?.players || board.players),
                         uids: ids,
                         origin: copy(p),
                       };
@@ -873,6 +875,41 @@ const BoardCanvas = forwardRef<
                       e.target.position({ x: sx(x), y: sy(y) });
                       const { origin, players, uids } = drag.current;
                       studio.preview((b) => {
+                        const asset = b.studio?.assetId,
+                          sequence =
+                            asset && externalFrame
+                              ? b.studio?.tracking[asset]
+                              : undefined;
+                        if (sequence?.frames.length) {
+                          const time = useRuntime.getState().time;
+                          const frame = sequence.frames.reduce((a, f) =>
+                            Math.abs(a.time - time) < Math.abs(f.time - time)
+                              ? a
+                              : f,
+                          );
+                          const map =
+                            frame.map ||
+                            homography(b.studio!.landmarks[asset!]);
+                          const inverse = map ? invert3(map) : null;
+                          for (const id of uids) {
+                            const point = frame.points.find(
+                                (q) => "reconstructed:" + q.id === id,
+                              ),
+                              base = players.find((q) => q.uid === id);
+                            if (!point || !base) continue;
+                            point.pitch = {
+                              x: clamp(base.x + x - origin.x),
+                              y: clamp(base.y + y - origin.y),
+                            };
+                            if (inverse)
+                              point.image = project(inverse, point.pitch);
+                            point.manual = true;
+                            point.review = false;
+                            point.confidence = 1;
+                          }
+                          sequence.reviewed = false;
+                          return;
+                        }
                         b.players = b.players.map((q) => {
                           const base = players.find((z) => z.uid === q.uid);
                           return uids.includes(q.uid) && base

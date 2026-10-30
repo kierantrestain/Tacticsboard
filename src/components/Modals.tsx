@@ -1,3 +1,4 @@
+import MatchCentre from "../football/MatchCentre";
 import { useEffect, useRef, useState } from "react";
 import {
   X,
@@ -469,7 +470,17 @@ function DataModal() {
       for (const item of updated) {
         const t = next.teams.find((t) => t.id === item.id);
         if (t) {
-          t.players = item.players;
+          const old = new Map(t.players.map((p) => [p.id, p]));
+          t.players = item.players.map((p: any) => ({
+            ...old.get(p.id),
+            ...p,
+            fplId: old.get(p.id)?.fplId,
+            advanced: old.get(p.id)?.advanced,
+            statsByCompetition: {
+              ...old.get(p.id)?.statsByCompetition,
+              ...p.statsByCompetition,
+            },
+          }));
           t.rosterUpdatedAt = item.updatedAt;
         }
       }
@@ -521,7 +532,7 @@ function DataModal() {
         </div>
         <div>
           <span>Squads and match records</span>
-          <strong>ESPN public football data</strong>
+          <strong>ESPN + Premier League FPL</strong>
         </div>
         <div>
           <span>Manager identity</span>
@@ -543,8 +554,9 @@ function DataModal() {
           rather than tracking data.
         </li>
         <li>
-          Missing metrics stay unknown. This feed does not supply a complete xG,
-          heatmap or optical-tracking dataset.
+          Premier League xG/xA and match logs come from the separately labelled
+          FPL feed. Missing metrics stay unknown; heatmaps and optical tracking
+          are not fabricated.
         </li>
       </ul>
       <p className="data-footnote">
@@ -645,7 +657,7 @@ export default function Modals(props: {
 }) {
   const modal = useStudio((s) => s.modal);
   if (modal === "teams") return <TeamsModal />;
-  if (modal === "matches") return <MatchesModal />;
+  if (modal === "matches") return <MatchCentre />;
   if (modal === "library") return <LibraryModal />;
   if (modal === "help") return <HelpModal />;
   if (modal === "data") return <DataModal />;
