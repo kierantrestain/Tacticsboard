@@ -67,7 +67,7 @@ npm test
 npm run build
 ```
 
-The preparation script downloads checksum-pinned official vision models and copies runtime WASM files into ignored `public/vision/`. Allow the build to reach `storage.googleapis.com`. The graphics engine uses WebGL when available, with a Canvas 2D projection fallback. Vision uses MediaPipe with a TensorFlow WASM/CPU fallback. Codecs available through WebCodecs determine MP4 versus WebM exports; current Chromium over HTTPS is the primary production target. Export is frame-timed rather than real-time recording.
+The report preparation script restores the checksum-verified statistical archive for deployment. The vision preparation script downloads checksum-pinned official vision models and copies runtime WASM files into ignored `public/vision/`. Allow the build to reach `storage.googleapis.com`. The graphics engine uses WebGL when available, with a Canvas 2D projection fallback. Vision uses MediaPipe with a TensorFlow WASM/CPU fallback. Codecs available through WebCodecs determine MP4 versus WebM exports; current Chromium over HTTPS is the primary production target. Export is frame-timed rather than real-time recording.
 
 ```bash
 npm run data:refresh
