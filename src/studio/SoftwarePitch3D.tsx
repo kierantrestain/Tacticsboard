@@ -368,20 +368,22 @@ const SoftwarePitch3D = forwardRef<
           continue;
         const x = p.x * 105 - 52.5,
           z = p.y * 68 - 34,
-          head = dot(x, 2.3, z),
-          top = dot(x, 1.9, z),
-          foot = dot(x, 0.3, z),
-          side = dot(x + right.x * 0.8, 1.2, z + right.z * 0.8),
-          centre = dot(x, 1.2, z),
+          markerScale = Math.max(.7,Math.min(1.6,b.settings.markerScale || 1)),
+          head = dot(x, 2.3*markerScale, z),
+          top = dot(x, 1.9*markerScale, z),
+          foot = dot(x, 0.3*markerScale, z),
+          side = dot(x + right.x * 0.8*markerScale, 1.2*markerScale, z + right.z * 0.8*markerScale),
+          centre = dot(x, 1.2*markerScale, z),
           radius = Math.max(
             2,
             Math.hypot(side.x - centre.x, side.y - centre.y),
           ),
           color =
-            p.opacity !== undefined && p.opacity < 0.8
+            p.opacity !== undefined && p.opacity < 0.8 && !b.settings.focusPlayer
               ? "#ddb06d"
               : b.colors[p.side];
         ctx.save();
+        ctx.globalAlpha=p.opacity??1;
         ctx.fillStyle = "#02091470";
         ctx.beginPath();
         ctx.ellipse(

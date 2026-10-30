@@ -1,6 +1,8 @@
 # Touchline Studio
 
-A standalone football analysis workspace for preparing and presenting studio segments. Version 2.1 combines the full season match centre with still and short-clip telestration, assisted reconstruction, a virtual 3D pitch, a presenter rundown and an independently controlled clean programme window.
+A standalone football analysis workspace for preparing and presenting studio segments. Version 3 adds complete saved-shot rundowns, tactical setups, live guides, player spotlighting and configurable Bang On Sports output graphics. It combines the full season match centre with still and short-clip telestration, assisted reconstruction, a virtual 3D pitch, a presenter rundown and an independently controlled clean programme window.
+
+See the [show workflow](docs/SHOW_WORKFLOW.md) for complete segment preparation, saved shots, TV design and presenter controls.
 
 ## Match centre and current data
 
@@ -19,7 +21,7 @@ All published UCL league-phase pairings are included. Future knockout pairings c
 3. **Explain the moment.** Draw arrows, runs, lines, freehand ink, areas, circles, passing triangles, spotlights, text, distance estimates and perspective reference lines. Adjust graphic colour, opacity, weight and visibility times. Zoom and pan the source. After calibration, attach graphics to the pitch to carry the same explanation into the replay.
 4. **Reconstruct the passage.** In Rebuild, identify four visible landmarks using the pitch or penalty-area template. Detect people locally or mark the feet of the relevant players. Confirm teams and assign real player identities yourself. Choose camera compensation or a locked shot, then track the selected passage. Scrub, inspect uncertainty flags and drag incorrect observations into place. Confirm the review before building an editable replay.
 5. **Present the explanation.** Compare the original with a top-down reconstruction, or open 3D replay. Use broadcast, overhead, goal or touchline cameras; orbit the pitch, move players and draw in perspective. Optional single-pose source cutouts are available in Display. Bookmark moments and add presenter notes to the rundown.
-6. **Control the programme.** Open the clean output on a second display or capture its window in OBS. Preview edits remain separate until **Take to programme**; Live follow and Presenter mode enable immediate updates. Blackout is available. Change the programme caption in Display.
+6. **Control the programme.** Open the clean output on a second display or capture its window in OBS. Live follow is on by default for immediate updates. Turn it off to rehearse while holding the programme, then use **Take to programme**. Presenter mode includes shot recall controls. Blackout is available. Change the programme caption in Display.
 7. **Export and transfer.** Export a 4K PNG, a silent frame-timed 1080p/25 fps analysis film, an editable JSON document or a portable ZIP including its source files. Open a ZIP on another computer to restore the complete analysis. A JSON document alone does not include the media.
 
 ## What reconstruction means here
@@ -40,7 +42,9 @@ The app does not implement native SDI/NDI/EVS integration, cross-device control,
 | Space | Play or pause |
 | ← / → in a source | Step a nominal frame; Shift steps one second |
 | I / O | Set clip in / out |
-| F / M / P | Freeze frame / bookmark moment / presenter mode |
+| F / M / P | Freeze frame / save rundown shot / presenter mode |
+| [ / ] / 1–9 | Previous / next / numbered rundown shot |
+| Enter / B | Take the current view / blackout or restore TV |
 | Ctrl or Cmd + K | Search commands |
 | Ctrl or Cmd + Z / Shift + Z | Undo / redo |
 | Ctrl or Cmd + S | Save |

@@ -27,6 +27,7 @@ import { homography, invert3, project } from "./studio/geometry";
 import { clamp, copy, frameAt, moveDrawing, shortName, uid } from "./core";
 import type { Board, BoardPlayer, Drawing, Frame } from "./types";
 import { getMedia } from "./media";
+import { analysisFrame } from "./studio/tactics";
 const W = 1200,
   H = 760,
   PX = 65,
@@ -564,9 +565,11 @@ const BoardCanvas = forwardRef<
   }, [media, program, board?.id]);
   if (!board) return <div className="canvas-container" ref={container} />;
   const scale = size.width / W;
-  const frame: Frame =
+  const frame: Frame = analysisFrame(
+    board,
     externalFrame ||
-    (previewTime !== null ? frameAt(board, previewTime) : board);
+      (previewTime !== null ? frameAt(board, previewTime) : board),
+  );
   const angle = board.settings.camera === "angle";
   let transform: {
     x: number;
@@ -799,7 +802,12 @@ const BoardCanvas = forwardRef<
                 key={d.id}
                 drawing={d}
                 selected={!program && selectedShape === d.id}
-                interactive={!program && tool === "select" && !playing}
+                interactive={
+                  !program &&
+                  tool === "select" &&
+                  !playing &&
+                  !d.id.startsWith("guide:")
+                }
                 onSelect={() => chooseShape(d)}
                 onMove={(dx, dy) =>
                   studio.commit((b) => {
@@ -832,6 +840,14 @@ const BoardCanvas = forwardRef<
                     name={`player-${p.uid}`}
                     x={sx(p.x)}
                     y={sy(p.y)}
+                    scaleX={Math.max(
+                      0.7,
+                      Math.min(1.6, board.settings.markerScale || 1),
+                    )}
+                    scaleY={Math.max(
+                      0.7,
+                      Math.min(1.6, board.settings.markerScale || 1),
+                    )}
                     opacity={p.opacity ?? 1}
                     draggable={!program && tool === "select" && !playing}
                     onClick={(e) => {

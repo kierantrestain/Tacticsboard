@@ -20,7 +20,17 @@ interface Runtime {
   zoom: number;
   pan: Point;
   panMode: boolean;
-  sidebar: "inspector" | "media" | "reconstruct" | "layers" | "rundown";
+  sidebar:
+    | "inspector"
+    | "media"
+    | "reconstruct"
+    | "layers"
+    | "rundown"
+    | "tactics"
+    | "broadcast";
+  activeCueId: string | null;
+  compactTimeline: boolean;
+  outputConnected: boolean;
   modal: "export" | "projects" | "shortcuts" | "commands" | null;
   presenter: boolean;
   follow: boolean;
@@ -49,9 +59,12 @@ export const useRuntime = create<Runtime>((set) => ({
   pan: { x: 0, y: 0 },
   panMode: false,
   sidebar: "inspector",
+  activeCueId: null,
+  compactTimeline: false,
+  outputConnected: false,
   modal: null,
   presenter: false,
-  follow: false,
+  follow: true,
   program: null,
   selectedInk: null,
   markMode: "none",

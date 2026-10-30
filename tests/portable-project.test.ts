@@ -16,6 +16,7 @@ import { newBoard } from "../src/core";
 import catalogue from "../public/data/catalogue.json";
 import type { Team } from "../src/types";
 import type { MediaAsset } from "../src/studio/types";
+import { makeCue } from "../src/studio/cueModel";
 describe("portable analysis handoff", () => {
   it("round-trips original source bytes and remaps every document reference", async () => {
     const board = newBoard(
@@ -76,6 +77,7 @@ describe("portable analysis handoff", () => {
       },
     ];
     board.scenes[0].source = { assetId: id, time: 0, review: false };
+    d.cues = [makeCue(board, "footage", "endline", 4)];
     const result = await exportPack(board, [asset]);
     const restored = await importPack(
       new File([result.blob], "project.touchline.zip"),
@@ -91,6 +93,9 @@ describe("portable analysis handoff", () => {
     expect(restored.studio!.targets[next]).toEqual([]);
     expect(restored.studio!.landmarks[next]).toEqual([]);
     expect(restored.studio!.view).toBe("split");
+    expect(restored.studio!.cues![0].assetId).toBe(next);
+    expect(restored.studio!.cues![0].ink[0].assetId).toBe(next);
+    expect(restored.studio!.cues![0].camera).toBe("endline");
     expect(records.has(next)).toBe(true);
   });
   it("refuses an archive whose referenced source is missing", async () => {

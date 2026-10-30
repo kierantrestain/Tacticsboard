@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import BoardCanvas from "../BoardCanvas";
 import MediaStage from "./MediaStage";
 import { useStudio } from "../store";
@@ -8,7 +9,7 @@ import { listAssets } from "./assetStore";
 import { frameAt, isBoard } from "../core";
 import { sampleTracking } from "./geometry";
 import type { ProgramSnapshot, MediaAsset } from "./types";
-import { timecode } from "./types";
+import { defaultBroadcast, timecode } from "./types";
 const Pitch3D = lazy(() => import("./Pitch3D"));
 export function reconstructedFrame(
   snapshot: ProgramSnapshot,
@@ -71,7 +72,6 @@ export default function ProgramOutput() {
         setSnapshot(e.data.snapshot);
         setPhaseTime(e.data.phaseTime ?? null);
         useStudio.setState({ board: e.data.snapshot.board });
-        void listAssets().then(setAssets);
       }
       if (e.data.type === "transport") {
         setSnapshot((old) =>
@@ -89,6 +89,8 @@ export default function ProgramOutput() {
     };
     productionChannel?.addEventListener("message", onMessage);
     productionChannel?.postMessage({ type: "request-program" });
+    productionChannel?.postMessage({ type: "output-alive" });
+    const heartbeat=setInterval(()=>productionChannel?.postMessage({type:"output-alive"}),2000);
     const key = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === "f")
         document.documentElement.requestFullscreen?.().catch(() => {});
@@ -96,10 +98,14 @@ export default function ProgramOutput() {
     window.addEventListener("keydown", key);
     if (snapshot) useStudio.setState({ board: snapshot.board });
     return () => {
+      clearInterval(heartbeat);
       productionChannel?.removeEventListener("message", onMessage);
       window.removeEventListener("keydown", key);
     };
   }, []);
+  useEffect(() => {
+    void listAssets().then(setAssets);
+  }, [snapshot?.board.studio?.assetId]);
   if (!snapshot)
     return (
       <main className="tl-program waiting">
@@ -112,32 +118,56 @@ export default function ProgramOutput() {
     );
   const b = snapshot.board,
     asset = assets.find((a) => a.id === b.studio?.assetId),
-    frame = reconstructedFrame(snapshot, phaseTime);
+    frame = reconstructedFrame(snapshot, phaseTime),
+    style = { ...defaultBroadcast(), ...b.studio?.broadcast };
   return (
     <main
       className={`tl-program ${snapshot.black ? "black" : ""}`}
+      style={{ "--show-accent": style.accent } as CSSProperties}
       onDoubleClick={() => document.documentElement.requestFullscreen?.()}
     >
       {!snapshot.black && (
         <>
-          <header>
-            <span className="tl-program-brand">
-              TOUCHLINE<small>STUDIO</small>
-            </span>
-            <span className="tl-program-source">
-              {snapshot.view === "footage"
-                ? "MATCH ANALYSIS"
-                : snapshot.view === "replay"
-                  ? "VIRTUAL REPLAY"
-                  : "TACTICAL ANALYSIS"}{" "}
-              <i />
-              {asset && snapshot.view !== "board"
-                ? timecode(snapshot.time, b.studio?.fps)
-                : b.match?.completed
-                  ? `${b.match.homeScore} — ${b.match.awayScore}`
-                  : "ANALYST RECONSTRUCTION"}
-            </span>
-          </header>
+          {(style.showHeader || style.showScore) && (
+            <header className="ts-program-header">
+              {style.showHeader && (
+                <>
+                  <span className="tl-program-brand">
+                    {style.channel}
+                    <small>{style.programme}</small>
+                  </span>
+                  <span className="tl-program-source">
+                    {snapshot.view === "footage"
+                      ? "MATCH ANALYSIS"
+                      : snapshot.view === "replay"
+                        ? "VIRTUAL REPLAY"
+                        : "TACTICAL ANALYSIS"}{" "}
+                    <i />
+                    {asset && snapshot.view !== "board"
+                      ? timecode(snapshot.time, b.studio?.fps)
+                      : b.match?.completed
+                        ? `${b.match.homeScore} — ${b.match.awayScore}`
+                        : "ANALYST RECONSTRUCTION"}
+                  </span>
+                </>
+              )}
+              {style.showScore && (
+                <div className="ts-scorebug">
+                  <span style={{ borderColor: b.colors.home }}>
+                    {snapshot.teams?.home || b.match?.homeName || "HOME"}
+                  </span>
+                  <b>
+                    {b.match?.completed
+                      ? `${b.match.homeScore} : ${b.match.awayScore}`
+                      : "v"}
+                  </b>
+                  <span style={{ borderColor: b.colors.away }}>
+                    {snapshot.teams?.away || b.match?.awayName || "AWAY"}
+                  </span>
+                </div>
+              )}
+            </header>
+          )}
           <div
             className={`tl-program-stage ${snapshot.view === "split" ? "is-split" : ""}`}
           >
@@ -168,11 +198,18 @@ export default function ProgramOutput() {
               ) : null}
             </Suspense>
           </div>
-          <footer>
-            <span className="tl-program-rule" />
-            <strong>{b.studio?.lowerThird || b.title}</strong>
-            <span>TOUCHLINE ANALYSIS</span>
-          </footer>
+          {style.showLowerThird && (
+            <footer className="ts-program-lower">
+              <span className="tl-program-rule" />
+              <div>
+                <small>{style.subtitle}</small>
+                <strong>
+                  {style.headline || b.studio?.lowerThird || b.title}
+                </strong>
+              </div>
+              <span>ANALYSIS</span>
+            </footer>
+          )}
         </>
       )}
     </main>

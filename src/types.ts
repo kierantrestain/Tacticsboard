@@ -214,6 +214,12 @@ export interface Board extends Frame {
     mediaVisible: boolean;
     tokenStyle: "disc" | "shirt";
     ballVisible?: boolean;
+    thirds?: boolean;
+    teamShape?: boolean;
+    teamLines?: boolean;
+    shapeSide?: Side;
+    focusPlayer?: string;
+    markerScale?: number;
   };
 }
 export interface SavedBoard {

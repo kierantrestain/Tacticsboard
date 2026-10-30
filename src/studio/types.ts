@@ -1,4 +1,4 @@
-import type { Board, Drawing, Side } from "../types";
+import type { Board, Drawing, Frame, Side } from "../types";
 export type ViewMode = "board" | "footage" | "split" | "replay";
 export type CameraPreset = "broadcast" | "overhead" | "endline" | "touchline";
 export interface Point {
@@ -76,6 +76,44 @@ export interface Bookmark {
   title: string;
   note: string;
 }
+export interface BroadcastStyle {
+  channel: string;
+  programme: string;
+  accent: string;
+  headline: string;
+  subtitle: string;
+  showHeader: boolean;
+  showLowerThird: boolean;
+  showScore: boolean;
+}
+export const defaultBroadcast = (): BroadcastStyle => ({
+  channel: "BANG ON",
+  programme: "SPORTS",
+  accent: "#c5f06a",
+  headline: "",
+  subtitle: "FOOTBALL ANALYSIS",
+  showHeader: true,
+  showLowerThird: true,
+  showScore: true,
+});
+/** A cue holds a frame, never a nested Board/StudioDocument. */
+export interface RundownCue {
+  id: string;
+  title: string;
+  note: string;
+  duration: number;
+  view: ViewMode;
+  camera: CameraPreset;
+  time: number;
+  frame: Frame;
+  settings: Board["settings"];
+  colors: Board["colors"];
+  formations: Board["formations"];
+  assetId?: string;
+  trim: { start: number; end: number };
+  ink: MediaInk[];
+  lowerThird: string;
+}
 export interface StudioDocument {
   version: 2;
   view?: ViewMode;
@@ -91,6 +129,8 @@ export interface StudioDocument {
   useSourceCutouts?: boolean;
   showTrails: boolean;
   lowerThird: string;
+  broadcast?: BroadcastStyle;
+  cues?: RundownCue[];
 }
 export interface ProgramSnapshot {
   id: string;
@@ -102,6 +142,7 @@ export interface ProgramSnapshot {
   rate: number;
   takenAt: number;
   black: boolean;
+  teams?: { home: string; away: string };
 }
 export interface SourceHandle {
   capture: () => HTMLCanvasElement | null;
@@ -146,6 +187,106 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
     typeof d.lowerThird === "string" &&
     typeof d.showTracking === "boolean" &&
     typeof d.showTrails === "boolean" &&
+    (d.broadcast === undefined ||
+      (!!d.broadcast &&
+        typeof d.broadcast.channel === "string" &&
+        d.broadcast.channel.length <= 40 &&
+        typeof d.broadcast.programme === "string" &&
+        d.broadcast.programme.length <= 40 &&
+        typeof d.broadcast.headline === "string" &&
+        d.broadcast.headline.length <= 120 &&
+        typeof d.broadcast.subtitle === "string" &&
+        d.broadcast.subtitle.length <= 100 &&
+        /^#[0-9a-f]{6}$/i.test(d.broadcast.accent) &&
+        [
+          d.broadcast.showHeader,
+          d.broadcast.showLowerThird,
+          d.broadcast.showScore,
+        ].every((x) => typeof x === "boolean"))) &&
+    (d.cues === undefined ||
+      (Array.isArray(d.cues) &&
+        d.cues.length <= 80 &&
+        new Set(d.cues.map((c) => c?.id)).size === d.cues.length &&
+        d.cues.every((c) => {
+          const point = (p: { x: number; y: number }) =>
+            !!p &&
+            [p.x, p.y].every((n) => Number.isFinite(n) && n >= 0 && n <= 1);
+          return (
+            !!c &&
+            typeof c.id === "string" &&
+            typeof c.title === "string" &&
+            c.title.length <= 80 &&
+            typeof c.note === "string" &&
+            c.note.length <= 4000 &&
+            typeof c.lowerThird === "string" &&
+            ["board", "footage", "split", "replay"].includes(c.view) &&
+            ["broadcast", "overhead", "endline", "touchline"].includes(
+              c.camera,
+            ) &&
+            Number.isFinite(c.time) &&
+            c.time >= 0 &&
+            Number.isFinite(c.duration) &&
+            c.duration >= 1 &&
+            c.duration <= 600 &&
+            (c.assetId === undefined || typeof c.assetId === "string") &&
+            !!c.trim &&
+            Number.isFinite(c.trim.start) &&
+            Number.isFinite(c.trim.end) &&
+            c.trim.start >= 0 &&
+            c.trim.end >= c.trim.start &&
+            !!c.frame &&
+            point(c.frame.ball) &&
+            Array.isArray(c.frame.players) &&
+            c.frame.players.length <= 44 &&
+            new Set(c.frame.players.map((p) => p?.uid)).size ===
+              c.frame.players.length &&
+            c.frame.players.every(
+              (p) =>
+                point(p) &&
+                typeof p.uid === "string" &&
+                typeof p.playerId === "string" &&
+                typeof p.name === "string" &&
+                typeof p.number === "string" &&
+                ["home", "away"].includes(p.side),
+            ) &&
+            Array.isArray(c.frame.drawings) &&
+            c.frame.drawings.length <= 500 &&
+            c.frame.drawings.every(
+              (i) =>
+                !!i &&
+                typeof i.id === "string" &&
+                typeof i.color === "string" &&
+                Number.isFinite(i.width) &&
+                Number.isFinite(i.opacity) &&
+                Array.isArray(i.points) &&
+                i.points.length <= 20000 &&
+                i.points.every(Number.isFinite),
+            ) &&
+            !!c.settings &&
+            ["studio", "grass", "light"].includes(c.settings.theme) &&
+            ["top", "angle"].includes(c.settings.camera) &&
+            ["full", "left", "right"].includes(c.settings.view) &&
+            ["disc", "shirt"].includes(c.settings.tokenStyle) &&
+            !!c.colors &&
+            /^#[0-9a-f]{3,8}$/i.test(c.colors.home) &&
+            /^#[0-9a-f]{3,8}$/i.test(c.colors.away) &&
+            !!c.formations &&
+            typeof c.formations.home === "string" &&
+            typeof c.formations.away === "string" &&
+            Array.isArray(c.ink) &&
+            c.ink.length <= 1000 &&
+            c.ink.every(
+              (i) =>
+                !!i &&
+                typeof i.id === "string" &&
+                Array.isArray(i.points) &&
+                i.points.length <= 20000 &&
+                i.points.every(Number.isFinite) &&
+                Number.isFinite(i.from) &&
+                Number.isFinite(i.to),
+            )
+          );
+        }))) &&
     Object.values(d.ink).every(
       (a) =>
         Array.isArray(a) &&

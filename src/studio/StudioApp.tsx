@@ -18,6 +18,8 @@ import {
   Camera,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clapperboard,
   Columns2,
   Command,
@@ -46,6 +48,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Square,
+  Target,
   Upload,
   Users,
   Video,
@@ -73,7 +76,7 @@ import {
 } from "../core";
 import type { Catalogue, MatchDetails, Tool, Frame } from "../types";
 import { useRuntime, editDesk, selectAsset } from "./runtime";
-import { emptyStudio, timecode } from "./types";
+import { defaultBroadcast, emptyStudio, timecode } from "./types";
 import type {
   MediaAsset,
   SourceHandle,
@@ -93,7 +96,11 @@ import {
   productionChannel,
   readProgram,
   takeToAir,
+  queueLiveTake,
 } from "./production";
+import TacticsPanel from "./TacticsPanel";
+import BroadcastPanel from "./BroadcastPanel";
+import { recallCue, saveCue, stepCue } from "./showControl";
 import MediaStage from "./MediaStage";
 import MediaLibrary from "./MediaLibrary";
 import Reconstruction from "./Reconstruction";
@@ -330,7 +337,13 @@ function Operator() {
     return () => cancelAnimationFrame(raf);
   }, [r.view, r.mediaPlaying, r.rate, asset?.id]);
   useEffect(() => {
+    let lastSeen = 0;
+    const heartbeat = setInterval(()=>{
+      const connected=Date.now()-lastSeen<10000;
+      if(useRuntime.getState().outputConnected!==connected) r.set({outputConnected:connected});
+    },2000);
     const listener = (e: MessageEvent) => {
+      if(e.data.type==="output-alive"){lastSeen=Date.now();r.set({outputConnected:true});}
       if (e.data.type === "request-program") {
         const program = useRuntime.getState().program;
         if (program)
@@ -342,15 +355,14 @@ function Operator() {
       }
     };
     productionChannel?.addEventListener("message", listener);
-    return () => productionChannel?.removeEventListener("message", listener);
+    return () => {clearInterval(heartbeat);productionChannel?.removeEventListener("message", listener);};
   }, []);
   useEffect(() => {
     if (!r.follow || !r.program) return;
-    const t = setTimeout(() => takeToAir(), 75);
-    return () => clearTimeout(t);
+    queueLiveTake();
   }, [b, r.view, r.camera, r.follow, !!r.program]);
   useEffect(() => {
-    if (r.program?.board.id === b?.id)
+    if (r.follow && !r.program?.black && r.program?.board.id === b?.id)
       productionChannel?.postMessage({
         type: "transport",
         id: b?.id,
@@ -359,7 +371,10 @@ function Operator() {
         rate: r.rate,
         phaseTime: s.previewTime,
       });
-  }, [r.time, r.mediaPlaying, r.rate, s.previewTime]);
+  }, [r.time, r.mediaPlaying, r.rate, s.previewTime, r.follow]);
+  useEffect(() => {
+    r.set({ activeCueId: null });
+  }, [b?.id]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement,
@@ -410,7 +425,27 @@ function Operator() {
         return;
       }
       if (k === "m") {
-        bookmarkMoment(a);
+        saveCue();
+        return;
+      }
+      if (k === "[" || k === "]") {
+        e.preventDefault();
+        stepCue(k === "]" ? 1 : -1);
+        return;
+      }
+      if (k === "enter") {
+        e.preventDefault();
+        takeToAir();
+        return;
+      }
+      if (k === "b" && !e.repeat) {
+        e.preventDefault();
+        takeToAir(!runtime.program?.black);
+        return;
+      }
+      if (/^[1-9]$/.test(k)) {
+        const cue = board.studio?.cues?.[Number(k) - 1];
+        if (cue) recallCue(cue.id);
         return;
       }
       if (k === " ") {
@@ -623,6 +658,16 @@ function Operator() {
         raw.height,
         board.studio?.lowerThird || board.title,
         r.view === "footage" ? "MATCH ANALYSIS" : "TACTICAL REPLAY",
+        { ...defaultBroadcast(), ...board.studio?.broadcast },
+        {
+          home:
+            catalogue?.teams.find((t) => t.id === board.homeTeamId)
+              ?.abbreviation || "HOME",
+          away:
+            catalogue?.teams.find((t) => t.id === board.awayTeamId)
+              ?.abbreviation || "AWAY",
+          ...board.match,
+        },
       );
       const blob = await new Promise<Blob>((resolve, reject) =>
         out.toBlob(
@@ -713,6 +758,16 @@ function Operator() {
             raw.height,
             board.studio?.lowerThird || board.title,
             runtime.view === "footage" ? "MATCH ANALYSIS" : "TACTICAL REPLAY",
+            { ...defaultBroadcast(), ...board.studio?.broadcast },
+            {
+              home:
+                catalogue?.teams.find((t) => t.id === board.homeTeamId)
+                  ?.abbreviation || "HOME",
+              away:
+                catalogue?.teams.find((t) => t.id === board.awayTeamId)
+                  ?.abbreviation || "AWAY",
+              ...board.match,
+            },
           );
         },
       });
@@ -828,6 +883,28 @@ function Operator() {
     isReconstruction = !!asset && !!desk.tracking[asset.id];
   const commands: StudioCommand[] = [
     {
+      title: "Open tactical setups",
+      detail: "Build-up, pressing, blocks, counters and player guides",
+      Icon: Target,
+      action: () => {
+        setView("board");
+        r.set({ sidebar: "tactics" });
+      },
+    },
+    {
+      title: "Save view to show rundown",
+      detail: "Remember this frame, graphics and camera angle",
+      key: "M",
+      Icon: BookmarkPlus,
+      action: saveCue,
+    },
+    {
+      title: "Style the TV output",
+      detail: "Channel identity, match score and lower-third design",
+      Icon: Monitor,
+      action: () => r.set({ sidebar: "broadcast" }),
+    },
+    {
       title: "Import match footage",
       detail: "Open stills or short clips from this computer",
       Icon: Upload,
@@ -923,6 +1000,15 @@ function Operator() {
       },
     ],
     [
+      "tactics",
+      "Tactics",
+      Target,
+      () => {
+        setView("board");
+        r.set({ sidebar: "tactics" });
+      },
+    ],
+    [
       "sources",
       "Sources",
       Clapperboard,
@@ -946,7 +1032,9 @@ function Operator() {
     ["projects", "Projects", FolderOpen, () => r.set({ modal: "projects" })],
   ] as const;
   return (
-    <main className={`tl-app ${r.presenter ? "tl-presenting" : ""}`}>
+    <main
+      className={`tl-app ${r.presenter ? "tl-presenting" : ""} ${r.compactTimeline ? "ts-compact" : ""}`}
+    >
       <header className="tl-header">
         <a
           className="tl-brand"
@@ -1031,7 +1119,9 @@ function Operator() {
               title={label}
               aria-label={label}
               className={
-                (id === "studio" && r.view === "board") ||
+                (id === "studio" &&
+                  r.view === "board" &&
+                  !["tactics", "broadcast", "rundown"].includes(r.sidebar)) ||
                 (id === "sources" && r.sidebar === "media") ||
                 id === r.sidebar
                   ? "is-active"
@@ -1058,6 +1148,13 @@ function Operator() {
             onClick={() => r.set({ modal: "shortcuts" })}
           >
             <HelpCircle size={21} />
+          </button>
+          <button
+            aria-label="Broadcast settings"
+            title="Broadcast identity & TV graphics"
+            onClick={() => r.set({ sidebar: "broadcast" })}
+          >
+            <Monitor size={21} />
           </button>
           <button
             aria-label="Display settings"
@@ -1115,6 +1212,36 @@ function Operator() {
         <div className="tl-viewport-shell">
           <ToolRail />
           <div className="tl-viewport">
+            <div className="ts-quickbar">
+              <span>
+                <i />
+                {r.program?.black
+                  ? "TV BLACKED OUT"
+                  : r.follow
+                    ? "LIVE WORKSPACE"
+                    : "REHEARSAL"}
+              </span>
+              <button
+                className={r.sidebar === "tactics" ? "active" : ""}
+                onClick={() => r.set({ sidebar: "tactics" })}
+              >
+                <Target size={14} />
+                Tactical setups
+              </button>
+              <button
+                onClick={() => {
+                  saveCue();
+                  r.set({ sidebar: "rundown" });
+                }}
+              >
+                <BookmarkPlus size={14} />
+                Save shot <kbd>M</kbd>
+              </button>
+              <button onClick={() => r.set({ sidebar: "broadcast" })}>
+                <Monitor size={14} />
+                <span>TV design</span>
+              </button>
+            </div>
             <div className="tl-viewport-heading">
               <span className="tl-preview-label">
                 <i />
@@ -1130,6 +1257,17 @@ function Operator() {
                       : active.title}
               </span>
               <div className="tl-viewport-controls">
+                <button
+                  className="tl-icon"
+                  aria-label={
+                    r.compactTimeline ? "Show storyboard" : "Expand pitch"
+                  }
+                  title={r.compactTimeline ? "Show storyboard" : "Expand pitch"}
+                  aria-pressed={r.compactTimeline}
+                  onClick={() => r.set({ compactTimeline: !r.compactTimeline })}
+                >
+                  <Maximize2 size={15} />
+                </button>
                 {r.view === "replay" ? (
                   <select
                     aria-label="3D camera angle"
@@ -1310,6 +1448,22 @@ function Operator() {
       <section className="tl-inspector-shell">
         <div className="tl-inspector-switch">
           <button
+            aria-label="Tactical setups and guides"
+            title="Tactical setups & live guides"
+            className={r.sidebar === "tactics" ? "is-active" : ""}
+            onClick={() => r.set({ sidebar: "tactics" })}
+          >
+            <Target size={18} />
+          </button>
+          <button
+            aria-label="Broadcast design inspector"
+            title="Broadcast design"
+            className={r.sidebar === "broadcast" ? "is-active" : ""}
+            onClick={() => r.set({ sidebar: "broadcast" })}
+          >
+            <Monitor size={18} />
+          </button>
+          <button
             aria-label="Team and match inspector"
             title="Team & match"
             className={r.sidebar === "inspector" ? "is-active" : ""}
@@ -1350,7 +1504,11 @@ function Operator() {
             <BookmarkPlus size={18} />
           </button>
         </div>
-        {r.sidebar === "inspector" ? (
+        {r.sidebar === "tactics" ? (
+          <TacticsPanel />
+        ) : r.sidebar === "broadcast" ? (
+          <BroadcastPanel />
+        ) : r.sidebar === "inspector" ? (
           <Sidebar />
         ) : r.sidebar === "media" ? (
           <MediaLibrary />
@@ -1365,7 +1523,14 @@ function Operator() {
           <div>
             <span className={`tl-air-state ${r.program ? "on-air" : ""}`}>
               <i />
-              {r.program ? "PROGRAMME READY" : "PREVIEW ONLY"}
+              {r.program?.black
+                ? "OUTPUT BLACKED OUT"
+                : !r.outputConnected ? "OPEN TV OUTPUT"
+                : r.program
+                  ? r.follow
+                    ? "LIVE FOLLOW ON"
+                    : "PROGRAMME HELD"
+                  : "TV OUTPUT READY"}
             </span>
             <button
               className={r.follow ? "is-active" : ""}
@@ -1377,7 +1542,13 @@ function Operator() {
           </div>
           <button className="tl-take-button" onClick={() => takeToAir()}>
             <Radio size={17} />
-            <strong>TAKE TO PROGRAMME</strong>
+            <strong>
+              {r.program?.black
+                ? "RESTORE TV OUTPUT"
+                : r.follow
+                  ? "SEND VIEW TO TV"
+                  : "TAKE TO PROGRAMME"}
+            </strong>
             <ArrowRight size={18} />
           </button>
           <div className="tl-program-secondary">
@@ -1385,9 +1556,12 @@ function Operator() {
               <Monitor size={12} />
               Open output
             </button>
-            <button onClick={() => takeToAir(true)}>
+            <button
+              aria-pressed={!!r.program?.black}
+              onClick={() => takeToAir(!r.program?.black)}
+            >
               <Square size={11} fill="currentColor" />
-              Blackout
+              {r.program?.black ? "Restore" : "Blackout"}
             </button>
           </div>
         </div>
@@ -1422,39 +1596,71 @@ function Operator() {
         </span>
       </footer>
       {r.presenter && (
-        <div className="tl-presenter-hud">
-          <span>
-            <Mark />
-            TOUCHLINE <i />
-            LIVE FOLLOW
-          </span>
-          <button
-            onClick={() => {
-              if (asset && r.view !== "board")
-                r.set({ mediaPlaying: !r.mediaPlaying });
-              else s.set({ playing: !s.playing, playhead: s.previewTime ?? 0 });
-            }}
-          >
-            {r.mediaPlaying || s.playing ? (
-              <Pause size={20} />
-            ) : (
-              <Play size={20} />
-            )}
-            <span>{r.mediaPlaying || s.playing ? "Pause" : "Play"}</span>
-          </button>
-          <button onClick={() => bookmarkMoment(asset)}>
-            <BookmarkPlus size={20} />
-            <span>Mark</span>
-          </button>
-          <button onClick={s.undo}>
-            <RotateIcon />
-            <span>Undo</span>
-          </button>
-          <button onClick={presenter}>
-            <X size={20} />
-            <span>Exit</span>
-          </button>
-        </div>
+        <>
+          {!!desk.cues?.length && (
+            <div className="ts-presenter-cue">
+              <small>{`SHOT ${
+                Math.max(
+                  0,
+                  desk.cues.findIndex((c) => c.id === r.activeCueId),
+                ) + 1
+              } / ${desk.cues.length}`}</small>
+              <strong>
+                {desk.cues.find((c) => c.id === r.activeCueId)?.title ||
+                  "Select the first shot"}
+              </strong>
+              <p>
+                {desk.cues.find((c) => c.id === r.activeCueId)?.note ||
+                  "Use the arrows to move through your prepared analysis."}
+              </p>
+            </div>
+          )}
+          <div className="tl-presenter-hud">
+            <span>
+              <Mark />
+              TOUCHLINE <i />
+              LIVE FOLLOW
+            </span>
+            <button
+              aria-label="Previous presenter shot"
+              onClick={() => stepCue(-1)}
+            >
+              <ChevronLeft size={20} />
+              <span>Previous</span>
+            </button>
+            <button aria-label="Next presenter shot" onClick={() => stepCue(1)}>
+              <ChevronRight size={20} />
+              <span>Next shot</span>
+            </button>
+            <button
+              onClick={() => {
+                if (asset && r.view !== "board")
+                  r.set({ mediaPlaying: !r.mediaPlaying });
+                else
+                  s.set({ playing: !s.playing, playhead: s.previewTime ?? 0 });
+              }}
+            >
+              {r.mediaPlaying || s.playing ? (
+                <Pause size={20} />
+              ) : (
+                <Play size={20} />
+              )}
+              <span>{r.mediaPlaying || s.playing ? "Pause" : "Play"}</span>
+            </button>
+            <button onClick={() => bookmarkMoment(asset)}>
+              <BookmarkPlus size={20} />
+              <span>Save shot</span>
+            </button>
+            <button onClick={s.undo}>
+              <RotateIcon />
+              <span>Undo</span>
+            </button>
+            <button onClick={presenter}>
+              <X size={20} />
+              <span>Exit</span>
+            </button>
+          </div>
+        </>
       )}
       {s.toast && (
         <div className="tl-toast" role="status">

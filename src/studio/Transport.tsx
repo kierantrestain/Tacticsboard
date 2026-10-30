@@ -23,6 +23,7 @@ import { useRuntime, editDesk } from "./runtime";
 import type { MediaAsset, SourceHandle } from "./types";
 import { emptyStudio, timecode } from "./types";
 import { getMedia, putRecord, saveFreeze } from "./assetStore";
+import { saveCue } from "./showControl";
 export async function freezeFrame(
   asset: MediaAsset | undefined,
   source: SourceHandle | null,
@@ -46,22 +47,7 @@ export async function freezeFrame(
   }
 }
 export function bookmarkMoment(asset?: MediaAsset) {
-  const s = useStudio.getState(),
-    r = useRuntime.getState();
-  if (!asset) {
-    s.addScene();
-    return;
-  }
-  editDesk((d) => {
-    d.bookmarks.push({
-      id: uid(),
-      assetId: asset.id,
-      time: r.time,
-      title: `Moment ${String(d.bookmarks.length + 1).padStart(2, "0")}`,
-      note: "",
-    });
-  });
-  s.notify("Moment added to the rundown.");
+  saveCue();
 }
 export default function Transport({
   asset,
@@ -324,7 +310,7 @@ export default function Transport({
               <span />
               {timecode(time, d.fps)}
             </div>
-            {d.bookmarks
+            {[...d.bookmarks, ...(d.cues || []).filter((c) => c.assetId)]
               .filter((m) => m.assetId === asset!.id)
               .map((m) => (
                 <button

@@ -243,7 +243,11 @@ export default function Dialogs({
             ["Shift + ← / →", "Jump one second"],
             ["I / O", "Set clip in / out"],
             ["F", "Save a freeze frame"],
-            ["M", "Mark a rundown moment"],
+            ["M", "Save any view as a rundown shot"],
+            ["[ / ]", "Previous / next rundown shot"],
+            ["1–9", "Recall a numbered shot"],
+            ["Enter", "Send the current view to TV"],
+            ["B", "Blackout / restore the TV output"],
             ["P", "Enter / exit presenter"],
             ["Ctrl / Cmd + K", "Command centre"],
             ["V / A / R", "Move / pass / run"],
@@ -263,12 +267,12 @@ export default function Dialogs({
         <div className="tl-dialog-guide">
           <Monitor size={26} />
           <div>
-            <h3>Rehearse in preview. Take the moment to air.</h3>
+            <h3>Prepare the story. Keep the panel in control.</h3>
             <p>
-              Programme opens a clean second window. “Take” recalls the prepared
-              view; “Live follow” mirrors editing. Presenter mode enables live
-              follow and gives the panel large touch controls. Use OBS window
-              capture for the same-computer output.
+              Programme opens a clean second window. Live follow mirrors the desk
+              by default; turn it off to rehearse without changing the TV. Save
+              any view with M, recall shots with [ / ], and press Enter to take
+              a held view. Presenter mode gives the panel large touch controls.
             </p>
           </div>
         </div>

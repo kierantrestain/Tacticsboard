@@ -11,6 +11,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { Board, Frame } from "../types";
 import type { CameraPreset } from "./types";
+import { analysisFrame } from "./tactics";
 export interface ReplayHandle {
   capture: () => HTMLCanvasElement | null;
   renderFrame: (frame: Frame) => HTMLCanvasElement | null;
@@ -63,7 +64,8 @@ function dispose(node: THREE.Object3D) {
 const Pitch3D = forwardRef<
   ReplayHandle,
   { board: Board; frame: Frame; camera: CameraPreset; program?: boolean }
->(({ board, frame, camera, program = false }, ref) => {
+>(({ board, frame: rawFrame, camera, program = false }, ref) => {
+  const frame = analysisFrame(board, rawFrame);
   const container = useRef<HTMLDivElement>(null),
     current = useRef({ board, frame, camera });
   current.current = { board, frame, camera };
@@ -91,7 +93,7 @@ const Pitch3D = forwardRef<
       renderFrame: (f) => {
         const v = state.current;
         if (!v) return null;
-        v.update(f);
+        v.update(analysisFrame(current.current.board, f));
         v.renderer.render(v.scene, v.camera);
         return v.renderer.domElement;
       },
@@ -379,7 +381,10 @@ const Pitch3D = forwardRef<
       }
       g.add(
         label(
-          (number ? number + "  " : "") + name.split(" ").slice(-1)[0],
+          (number ? number + "  " : "") +
+            (current.current.board.settings.names
+              ? name.split(" ").slice(-1)[0]
+              : ""),
           color,
         ),
       );
@@ -403,13 +408,16 @@ const Pitch3D = forwardRef<
       for (const p of f.players) {
         let item = players.get(p.uid),
           color =
-            p.opacity !== undefined && p.opacity < 0.8
+            p.opacity !== undefined &&
+            p.opacity < 0.8 &&
+            !b.settings.focusPlayer
               ? "#d8a464"
               : b.colors[p.side];
         if (
           !item ||
           item.color !== color ||
-          item.name !== p.name ||
+          item.name !==
+            p.name + String(b.settings.names) + String(b.settings.numbers) ||
           item.cutout !== p.cutout
         ) {
           if (item) {
@@ -423,10 +431,29 @@ const Pitch3D = forwardRef<
             p.cutout,
           );
           scene.add(node);
-          item = { node, name: p.name, color, cutout: p.cutout };
+          item = {
+            node,
+            name:
+              p.name + String(b.settings.names) + String(b.settings.numbers),
+            color,
+            cutout: p.cutout,
+          };
           players.set(p.uid, item);
         }
         item.node.position.set(p.x * 105 - 52.5, 0.04, p.y * 68 - 34);
+        item.node.scale.setScalar(
+          Math.max(0.7, Math.min(1.6, b.settings.markerScale || 1)),
+        );
+        item.node.traverse((node) => {
+          if (node instanceof THREE.Mesh || node instanceof THREE.Sprite) {
+            for (const material of Array.isArray(node.material)
+              ? node.material
+              : [node.material]) {
+              material.transparent = true;
+              material.opacity = p.opacity ?? 1;
+            }
+          }
+        });
         item.node.visible =
           p.side === "home" ? b.settings.homeVisible : b.settings.awayVisible;
       }

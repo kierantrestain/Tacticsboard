@@ -57,11 +57,7 @@ export function formationPoints(
     const x = 0.18 + (i / Math.max(1, lines.length - 1)) * 0.255;
     // Keep central pairs and trios connected; wide rows retain their width.
     const width =
-      count === 2
-        ? 0.3
-        : count === 3 && i < lines.length - 1
-          ? 0.44
-          : 0.74;
+      count === 2 ? 0.3 : count === 3 && i < lines.length - 1 ? 0.44 : 0.74;
     for (let j = 0; j < count; j++)
       result.push({
         x,
@@ -229,7 +225,7 @@ export function newBoard(home: Team, away: Team): Board {
       homeVisible: true,
       awayVisible: true,
       mediaVisible: true,
-      tokenStyle: "shirt",
+      tokenStyle: "disc",
     },
   };
 }
@@ -375,6 +371,10 @@ export function isBoard(value: unknown): value is Board {
     ["top", "angle"].includes(b.settings.camera) &&
     ["full", "left", "right"].includes(b.settings.view) &&
     ["disc", "shirt"].includes(b.settings.tokenStyle) &&
+    (b.settings.markerScale === undefined ||
+      (Number.isFinite(b.settings.markerScale) &&
+        b.settings.markerScale >= 0.7 &&
+        b.settings.markerScale <= 1.6)) &&
     [
       "names",
       "numbers",

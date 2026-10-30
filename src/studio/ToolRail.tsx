@@ -94,6 +94,21 @@ export default function ToolRail() {
       </div>
       <div className="tl-tool-utility">
         <button
+          className="tl-tool ts-stroke-button"
+          aria-label={`Line weight ${s.stroke}. Click to change.`}
+          title={`Line weight: ${s.stroke} · click to change`}
+          onClick={() => s.set({ stroke: s.stroke >= 7 ? 2 : s.stroke + 1 })}
+        >
+          <span
+            style={{
+              height: Math.min(7, s.stroke),
+              width: 19,
+              borderRadius: 3,
+              background: "currentColor",
+            }}
+          />
+        </button>
+        <button
           className="tl-tool"
           title="Undo (Ctrl Z)"
           aria-label="Undo"

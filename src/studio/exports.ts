@@ -2,6 +2,8 @@ import { zipSync, unzipSync, strToU8, strFromU8 } from "fflate";
 import { copy, download, filename, isBoard } from "../core";
 import type { Board } from "../types";
 import type { MediaAsset } from "./types";
+import { defaultBroadcast } from "./types";
+import type { BroadcastStyle } from "./types";
 import { getMedia, saveMedia, putRecord } from "./assetStore";
 import { uid } from "../core";
 export function productionFrame(
@@ -12,35 +14,89 @@ export function productionFrame(
   rawHeight: number,
   title: string,
   sub = "TACTICAL ANALYSIS",
+  broadcast?: BroadcastStyle,
+  score?: {
+    home: string;
+    away: string;
+    homeScore?: string | null;
+    awayScore?: string | null;
+    completed?: boolean;
+  },
 ) {
   const out = document.createElement("canvas");
   out.width = width;
   out.height = height;
   const ctx = out.getContext("2d")!,
     k = width / 1920;
-  ctx.fillStyle = "#07101f";
+  const style = { ...defaultBroadcast(), ...broadcast };
+  const text = (value: string, max: number) => {
+    let fitted = value;
+    while (fitted.length > 1 && ctx.measureText(fitted).width > max)
+      fitted = fitted.slice(0, -1);
+    return fitted === value ? value : fitted.slice(0, -1) + "…";
+  };
+  ctx.fillStyle = "#0b1410";
   ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = "#f2f7ff";
-  ctx.font = `800 ${27 * k}px Manrope,Arial`;
-  ctx.fillText("TOUCHLINE", 55 * k, 54 * k);
-  ctx.fillStyle = "#568dff";
-  ctx.font = `600 ${10 * k}px Inter,Arial`;
-  ctx.fillText("STUDIO  /  " + sub, 56 * k, 76 * k);
+  if (style.showHeader) {
+    ctx.fillStyle = "#f2f7ed";
+    ctx.font = `800 ${27 * k}px "Manrope Variable",Arial`;
+    ctx.fillText(text(style.channel, 700 * k), 55 * k, 54 * k);
+    ctx.fillStyle = style.accent;
+    ctx.font = `600 ${10 * k}px "Inter Variable",Arial`;
+    ctx.fillText(
+      text(style.programme + "  /  " + sub, 700 * k),
+      56 * k,
+      76 * k,
+    );
+  }
+  if (style.showScore && score) {
+    const x = width - 450 * k,
+      y = 30 * k;
+    ctx.fillStyle = "#1d2d20";
+    ctx.fillRect(x, y, 395 * k, 48 * k);
+    ctx.fillStyle = style.accent;
+    ctx.fillRect(x + 142 * k, y, 110 * k, 48 * k);
+    ctx.textAlign = "center";
+    ctx.font = `700 ${18 * k}px "Inter Variable",Arial`;
+    ctx.fillStyle = "#e5f0dc";
+    ctx.fillText(text(score.home, 125 * k), x + 71 * k, y + 31 * k);
+    ctx.fillText(text(score.away, 125 * k), x + 324 * k, y + 31 * k);
+    ctx.fillStyle = "#18280d";
+    ctx.fillText(
+      score.completed ? `${score.homeScore} : ${score.awayScore}` : "v",
+      x + 197 * k,
+      y + 31 * k,
+    );
+    ctx.textAlign = "left";
+  }
   const maxW = width - 70 * k,
-    maxH = height - 145 * k,
+    maxH =
+      height -
+      ((style.showHeader || style.showScore ? 100 : 20) +
+        (style.showLowerThird ? 90 : 20)) *
+        k,
     ratio = Math.min(maxW / rawWidth, maxH / rawHeight),
     w = rawWidth * ratio,
     h = rawHeight * ratio;
-  ctx.drawImage(raw, (width - w) / 2, 100 * k, w, h);
-  ctx.fillStyle = "#528bff";
-  ctx.fillRect(55 * k, height - 47 * k, 3 * k, 22 * k);
-  ctx.fillStyle = "#e7effd";
-  ctx.font = `500 ${18 * k}px Inter,Arial`;
-  ctx.fillText(title, 72 * k, height - 29 * k);
-  ctx.textAlign = "right";
-  ctx.fillStyle = "#7991b6";
-  ctx.font = `${10 * k}px Inter,Arial`;
-  ctx.fillText("TOUCHLINE ANALYSIS", width - 55 * k, height - 30 * k);
+  const top = (style.showHeader || style.showScore ? 100 : 20) * k;
+  ctx.drawImage(raw, (width - w) / 2, top + (maxH - h) / 2, w, h);
+  if (style.showLowerThird) {
+    ctx.fillStyle = style.accent;
+    ctx.fillRect(55 * k, height - 74 * k, 4 * k, 47 * k);
+    ctx.font = `600 ${10 * k}px "Inter Variable",Arial`;
+    ctx.fillText(
+      text(style.subtitle, width - 210 * k),
+      74 * k,
+      height - 62 * k,
+    );
+    ctx.fillStyle = "#eff4e8";
+    ctx.font = `600 ${25 * k}px "Inter Variable",Arial`;
+    ctx.fillText(
+      text(style.headline || title, width - 160 * k),
+      74 * k,
+      height - 29 * k,
+    );
+  }
   return out;
 }
 export async function exportPack(board: Board, assets: MediaAsset[]) {
@@ -54,15 +110,24 @@ export async function exportPack(board: Board, assets: MediaAsset[]) {
         ...Object.keys(b.studio?.targets || {}),
         ...b.scenes.map((s) => s.source?.assetId),
         ...(b.studio?.bookmarks || []).map((m) => m.assetId),
+        ...(b.studio?.cues || []).map((c) => c.assetId),
       ].filter(Boolean) as string[],
     ),
     included = assets.filter((a) => ids.has(a.id));
   const entries: Record<string, Uint8Array> = {},
     meta: MediaAsset[] = [];
   let size = 0;
+  for (const id of ids)
+    if (!included.some((a) => a.id === id))
+      throw Error(
+        "A referenced source is missing. Restore the project media before exporting a portable pack.",
+      );
   for (const a of included) {
     const blob = await getMedia(a.id);
-    if (!blob) continue;
+    if (!blob)
+      throw Error(
+        `The source “${a.name}” is missing. Restore it before exporting a portable pack.`,
+      );
     size += blob.size;
     if (size > 200 * 1048576)
       throw Error(
@@ -152,6 +217,12 @@ export async function importPack(file: File): Promise<Board> {
     }
     if (d.assetId) d.assetId = remap[d.assetId] || d.assetId;
     d.bookmarks.forEach((m) => (m.assetId = remap[m.assetId] || m.assetId));
+    d.cues?.forEach((c) => {
+      if (c.assetId) c.assetId = remap[c.assetId] || c.assetId;
+      c.ink.forEach((i) => {
+        i.assetId = remap[i.assetId] || i.assetId;
+      });
+    });
     b.scenes.forEach((s) => {
       if (s.source)
         s.source.assetId = remap[s.source.assetId] || s.source.assetId;
