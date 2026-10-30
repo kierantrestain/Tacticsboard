@@ -1,0 +1,29 @@
+{
+  "name": "fixture-tactics-studio",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "vitest run",
+    "data:refresh": "python3 scripts/import-football.py"
+  },
+  "dependencies": {
+    "konva": "^10.9.0",
+    "lucide-react": "^1.64.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-konva": "^19.3.2",
+    "zustand": "^5.0.16"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}
