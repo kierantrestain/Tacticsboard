@@ -1,0 +1,13 @@
+# Touchline Studio 4.0
+
+The default Create workspace guides preparation through Start, Explain and Finish. Large labelled tools cover player circles, passing arrows, runs, freehand drawing and space. Add a move captures the starting positions; drag players to the finish and choose Done. Saved moments retain the complete sequence and private presenter notes. Advanced controls remain available.
+
+Video preparation includes quick 6/10/15-second ranges, precise in/out points, explanation pauses and on-device person detection with manual checking. Explanation pauses are included in source playback and rendered video. Detection does not establish identities or reveal off-camera players. Still images use a five-second default presentation.
+
+Match intelligence opens the fixture as one report: score, both teams, all supplied team metrics, both lineups, player comparisons and the full supplied timeline. Search and category controls expose the available data. Full report HTML supports printing to PDF; player CSV and filtered season CSV downloads support further research. Season exploration includes all supplied metrics, custom columns, minimum minutes, ascending/descending rankings, per-90 calculations and two-player comparison. Missing data remains unknown. Pass completion is calculated from the source totals.
+
+TV graphics offer whole-match, individual player and two-player cards, selectable metrics, comparison bars and tiles. Saved moments freeze the report and graphic configuration.
+
+Two-tablet control uses the downloadable local Studio Hub on the show computer. Node.js 22+ is required. Both tablets join the same trusted LAN with separate one-use codes. The active host can draw, move players, play sequences, recall moments and hand over. Ownership epochs and command sequencing reject stale controls. Producer disconnect disarms the room; host disconnect relinquishes ownership. The show computer supplies TV output through a separate browser window. The Vercel workspace alone does not provide a cross-device relay. Export/import a project pack to transfer footage and preparation to the local hub.
+
+Validation: TypeScript and Vite build; 79 automated tests pass. The standalone hub archive builds successfully. This release does not claim an actual iPad/Wi-Fi/HDMI rehearsal, guaranteed optical tracking, licensed commercial event/tracking coverage or native SDI/NDI. Run a production rehearsal and maintain external project-pack backups before recording.

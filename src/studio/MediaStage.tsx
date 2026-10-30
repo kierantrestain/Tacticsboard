@@ -429,14 +429,23 @@ const MediaStage = forwardRef<
     }, [time, video, playing, asset?.duration]);
     useEffect(() => {
       if (!video) return;
-      let raf = 0;
+      let raf = 0, heldUntil = 0;
+      const stops = (desk.explainStops?.[asset?.id || ''] || []).filter(p=>p.time>=desk.trim.start && p.time<desk.trim.end).sort((a,b)=>a.time-b.time);
+      const visited = new Set(stops.filter(p=>p.time<video.currentTime-.08).map(p=>p.id));
       const draw = () => {
         if (playing) {
           stage.current?.batchDraw();
           if (!program) {
+            const now=performance.now();
+            if(heldUntil){
+              if(now<heldUntil){raf=requestAnimationFrame(draw);return;}
+              heldUntil=0;r.set({mediaHolding:false});void video.play().catch(()=>r.set({mediaPlaying:false}));
+            }
+            const stop=stops.find(p=>!visited.has(p.id) && video.currentTime>=p.time);
+            if(stop){visited.add(stop.id);video.pause();video.currentTime=stop.time;heldUntil=now+stop.hold*1000/Math.max(.1,rate);r.set({time:stop.time,mediaHolding:true});stage.current?.batchDraw();raf=requestAnimationFrame(draw);return;}
             const end = Math.min(asset?.duration || Infinity, desk.trim.end);
             if (video.currentTime >= end - 0.025) {
-              if (r.loopClip) video.currentTime = desk.trim.start;
+              if (r.loopClip) {video.currentTime = desk.trim.start;visited.clear();}
               else {
                 video.pause();
                 r.set({ time: end, mediaPlaying: false });
@@ -450,6 +459,7 @@ const MediaStage = forwardRef<
       return () => {
         cancelAnimationFrame(raf);
         video.pause();
+        if(!program)r.set({mediaHolding:false});
       };
     }, [
       video,
@@ -459,6 +469,8 @@ const MediaStage = forwardRef<
       desk.trim.start,
       desk.trim.end,
       r.loopClip,
+      rate,
+      JSON.stringify(desk.explainStops?.[asset?.id || '']),
     ]);
     useEffect(() => {
       drawing.current = false;
@@ -623,6 +635,7 @@ const MediaStage = forwardRef<
       pinch.current = 0;
       if (drawing.current && draftRef.current) {
         const d = draftRef.current;
+        if (d.type === 'ellipse' && Math.hypot(d.points.at(-2)!-d.points[0],d.points.at(-1)!-d.points[1]) < .006) { const [x,y]=d.points; d.points=[Math.max(0,x-.025),Math.max(0,y-.04),Math.min(1,x+.025),Math.min(1,y+.04)]; }
         if (
           Math.hypot(
             d.points.at(-2)! - d.points[0],

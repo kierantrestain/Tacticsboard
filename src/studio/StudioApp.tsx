@@ -50,6 +50,7 @@ import {
   Sparkles,
   Square,
   Target,
+  Tablet,
   Upload,
   Users,
   Video,
@@ -123,6 +124,11 @@ import Dialogs from "./Dialogs";
 import type { StudioCommand } from "./Dialogs";
 import type { ReplayHandle } from "./Pitch3D";
 import { cancelVision } from "./visionClient";
+import FilmBuilder, { FilmTimeline, QuickTools } from './FilmBuilder';
+import PairTablets from './host/PairTablets';
+import HostTablet from './host/HostTablet';
+import { useProducerRoom } from './host/producer';
+import { clipPlan } from './filmPlan';
 const Pitch3D = lazy(() => import("./Pitch3D"));
 function hydrate(data: Catalogue, details: Record<string, MatchDetails>) {
   for (const t of data.teams)
@@ -188,6 +194,7 @@ function Mark() {
   );
 }
 function Operator() {
+  useProducerRoom();
   const s = useStudio(),
     r = useRuntime(),
     { board: b, catalogue } = s;
@@ -399,14 +406,14 @@ function Operator() {
         type: "transport",
         snapshotId: r.program!.id,
         time: r.time,
-        playing: r.mediaPlaying,
+        playing: r.mediaPlaying && !r.mediaHolding,
         rate: r.rate,
         phaseTime: s.previewTime,
       };
       productionChannel?.postMessage(message);
       r.set({ program: transportProgram(r.program, message) });
     }
-  }, [r.time, r.mediaPlaying, r.rate, s.previewTime, r.follow, r.busy]);
+  }, [r.time, r.mediaPlaying, r.mediaHolding, r.rate, s.previewTime, r.follow, r.busy]);
   useEffect(() => {
     r.set({ activeCueId: null });
   }, [b?.id]);
@@ -767,16 +774,17 @@ function Operator() {
         (["footage", "split"].includes(runtime.view) ||
           (runtime.view === "replay" && !!board.studio?.tracking[a.id])),
       start = sourceMode ? board.studio?.trim.start || 0 : 0,
+      plan = clipPlan(board.studio?.trim || {start:0,end:a?.duration||20}, board.studio?.explainStops?.[a?.id||''] || []),
       duration =
         runtime.view === "stats"
           ? 5
           : sourceMode
-            ? Math.min(20, (board.studio?.trim.end || a!.duration) - start)
+            ? plan.duration
             : totalDuration(board);
     if (duration <= 0 || duration > 60) {
       r.set({
         error:
-          "Choose a source range up to 20 seconds, or a storyboard up to 60 seconds.",
+          "Keep the complete analysis, including explanation pauses, within 60 seconds.",
       });
       return;
     }
@@ -801,8 +809,8 @@ function Operator() {
         render: async (time) => {
           if (sourceMode) {
             if (runtime.view !== "replay")
-              await sourceRef.current?.seek(start + time);
-            flushSync(() => r.set({ time: start + time }));
+              await sourceRef.current?.seek(plan.sourceAt(time).time);
+            flushSync(() => r.set({ time: plan.sourceAt(time).time }));
           } else flushSync(() => s.set({ previewTime: time }));
           let raw: HTMLCanvasElement | null;
           if (runtime.view === "replay") {
@@ -811,7 +819,7 @@ function Operator() {
               board,
               view: runtime.view,
               camera: runtime.camera,
-              time: start + time,
+              time: sourceMode ? plan.sourceAt(time).time : start + time,
               playing: false,
               rate: 1,
               takenAt: 0,
@@ -957,7 +965,7 @@ function Operator() {
       view: r.view,
       camera: r.camera,
       time: r.time,
-      playing: r.mediaPlaying,
+      playing: r.mediaPlaying && !r.mediaHolding,
       rate: r.rate,
       takenAt: 0,
       black: false,
@@ -1119,7 +1127,7 @@ function Operator() {
   ] as const;
   return (
     <main
-      className={`tl-app ${r.presenter ? "tl-presenting" : ""} ${r.compactTimeline ? "ts-compact" : ""} ${r.view === "stats" ? "ts-data" : ""}`}
+      className={`tl-app ${r.simple ? 'film-workspace' : ''} ${r.presenter ? "tl-presenting" : ""} ${r.compactTimeline ? "ts-compact" : ""} ${r.view === "stats" ? "ts-data" : ""}`}
     >
       <header className="tl-header">
         <a
@@ -1137,6 +1145,7 @@ function Operator() {
           </span>
         </a>
         <span className="tl-header-divider" />
+        <div className="film-workspace-switch" aria-label="Workspace complexity">{[true,false].map(simple=><button key={String(simple)} aria-pressed={r.simple===simple} onClick={()=>{r.set({simple});localStorage.setItem('touchline.workspace',simple?'simple':'advanced');}}>{simple?'Create':'Advanced'}</button>)}</div>
         <div className="tl-project-title">
           <span>FOOTBALL SHOW DESK</span>
           <input
@@ -1170,6 +1179,7 @@ function Operator() {
           <kbd>⌘ K</kbd>
         </button>
         <div className="tl-header-actions">
+          <button className="film-tablet-button" onClick={()=>r.set({tabletPanel:true})}><Tablet size={18}/><span>Connect tablets</span></button>
           <button
             className="tl-secondary"
             onClick={() => importRef.current?.click()}
@@ -1301,7 +1311,7 @@ function Operator() {
           </button>
         </div>
         <div className="tl-viewport-shell">
-          <ToolRail />
+          {!r.simple && <ToolRail />}
           <div className="tl-viewport">
             <div className="ts-quickbar">
               <span>
@@ -1541,12 +1551,14 @@ function Operator() {
                 <i style={{ background: b.colors.away }} />
               </span>
             </div>
+            {r.simple && <QuickTools />}
           </div>
         </div>
-        <Transport asset={asset} source={sourceRef} />
+        {r.simple && ['board','footage'].includes(r.view) ? <FilmTimeline asset={asset}/> : <Transport asset={asset} source={sourceRef} />}
       </section>
       <section className="tl-inspector-shell">
         <ProductionDesk />
+        {r.simple ? <FilmBuilder onImport={()=>importRef.current?.click()} onFreeze={()=>void freezeFrame(asset,sourceRef.current)} onFilm={()=>void film()} source={sourceRef}/> : <>
         <div className="director-inspector-switch">
           <label htmlFor="workspace-panel">WORKSPACE</label>
           <select
@@ -1584,6 +1596,7 @@ function Operator() {
         ) : (
           <Rundown />
         )}
+        </>}
       </section>
       <footer className="tl-status">
         <span>
@@ -1781,6 +1794,7 @@ function Operator() {
         onInstall={install}
       />
       <Modals onPNG={still} onVideo={film} onJSON={json} />
+      {r.tabletPanel && <PairTablets />}
       <input
         ref={importRef}
         hidden
@@ -1821,7 +1835,7 @@ function RotateIcon() {
   );
 }
 export default function StudioApp() {
-  return new URLSearchParams(location.search).has("program") ? (
+  return new URLSearchParams(location.search).has('host') ? <HostTablet /> : new URLSearchParams(location.search).has("program") ? (
     <ProgramOutput />
   ) : (
     <Operator />

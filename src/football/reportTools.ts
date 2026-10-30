@@ -1,4 +1,5 @@
 import type { Match, MatchDetails } from "../types";
+import { formatMatchStat } from '../core';
 export function reportCoverage(details?: MatchDetails) {
   const players = details?.lineups.flatMap((l) => l.players) || [];
   return {
@@ -89,11 +90,13 @@ export function statCardRows(
   report: Pick<MatchDetails, "lineups" | "teamStats">,
   playerId?: string,
   match?: Pick<Match, "homeId" | "awayId">,
+  comparePlayerId?: string,
 ) {
   if (playerId) {
     const player = report.lineups
       .flatMap((l) => l.players)
       .find((p) => p.id === playerId);
+    const opponent = comparePlayerId ? report.lineups.flatMap(l=>l.players).find(p=>p.id===comparePlayerId) : undefined;
     const keeper =
       player?.positionCode === "G" || /Goalkeep/i.test(player?.position || "");
     const order = keeper
@@ -119,7 +122,7 @@ export function statCardRows(
           "redCards",
           "offsides",
         ];
-    return Object.entries(player?.stats || {})
+    return Object.entries({...opponent?.stats,...player?.stats})
       .filter(
         ([key]) =>
           keeper || !["saves", "shotsFaced", "goalsAgainst"].includes(key),
@@ -132,8 +135,8 @@ export function statCardRows(
       .map(([key, value]) => ({
         key,
         label: value.label,
-        home: String(value.display ?? value.value ?? "—"),
-        away: "",
+        home: String(player?.stats?.[key]?.display ?? player?.stats?.[key]?.value ?? "—"),
+        away: opponent ? String(opponent.stats?.[key]?.display ?? opponent.stats?.[key]?.value ?? '—') : "",
       }));
   }
   const home =
@@ -155,7 +158,7 @@ export function statCardRows(
     .map((key) => ({
       key,
       label: home[key]?.label || away[key]?.label || key,
-      home: home[key]?.display ?? "—",
-      away: away[key]?.display ?? "—",
+      home: formatMatchStat(home, key),
+      away: formatMatchStat(away, key),
     }));
 }

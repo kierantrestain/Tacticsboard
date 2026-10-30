@@ -1,4 +1,5 @@
-import type { Board, Drawing, Frame, Side, MatchDetails } from "../types";
+import type { Board, Drawing, Frame, Side, MatchDetails, Scene } from "../types";
+import type { ExplainStop } from './filmPlan';
 export type ViewMode = "board" | "footage" | "split" | "replay" | "stats";
 export type MatchStats = Pick<
   MatchDetails,
@@ -102,6 +103,8 @@ export const defaultBroadcast = (): BroadcastStyle => ({
 });
 /** A cue holds a frame, never a nested Board/StudioDocument. */
 export interface RundownCue {
+  sequence?: Scene[];
+  explainStops?: ExplainStop[];
   tracking?: TrackingSequence;
   broadcast?: BroadcastStyle;
   report?: MatchStats;
@@ -111,6 +114,8 @@ export interface RundownCue {
   sceneId?: string;
   statsReportId?: string;
   statsPlayerId?: string;
+  statsComparePlayerId?: string;
+  statsLayout?: "comparison" | "tiles";
   context?: Board["context"];
   homeTeamId?: string;
   awayTeamId?: string;
@@ -133,12 +138,15 @@ export interface RundownCue {
   lowerThird: string;
 }
 export interface StudioDocument {
+  explainStops?: Record<string, ExplainStop[]>;
   statsSnapshot?: MatchStats;
   statsFields?: string[];
   sourceRanges?: Record<string, { start: number; end: number }>;
   dataReports?: Record<string, MatchStats>;
   statsReportId?: string;
   statsPlayerId?: string;
+  statsComparePlayerId?: string;
+  statsLayout?: "comparison" | "tiles";
   version: 2;
   view?: ViewMode;
   assetId?: string;
@@ -211,6 +219,7 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
     record(d.landmarks) &&
     record(d.targets) &&
     record(d.tracking) &&
+    (d.explainStops === undefined || (record(d.explainStops) && Object.values(d.explainStops).every(validStops))) &&
     (d.statsFields === undefined || validFields(d.statsFields)) &&
     (d.statsSnapshot === undefined ||
       isStudioDocument({
@@ -230,6 +239,8 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
         ))) &&
     (d.statsReportId === undefined || typeof d.statsReportId === "string") &&
     (d.statsPlayerId === undefined || typeof d.statsPlayerId === "string") &&
+    (d.statsComparePlayerId === undefined || typeof d.statsComparePlayerId === "string") &&
+    (d.statsLayout === undefined || ["comparison", "tiles"].includes(d.statsLayout)) &&
     (d.dataReports === undefined ||
       (record(d.dataReports) &&
         Object.keys(d.dataReports).length <= 100 &&
@@ -306,6 +317,8 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
             [p.x, p.y].every((n) => Number.isFinite(n) && n >= 0 && n <= 1);
           return (
             !!c &&
+            (c.explainStops === undefined || validStops(c.explainStops)) &&
+            (c.sequence === undefined || (Array.isArray(c.sequence) && c.sequence.length > 0 && c.sequence.length <= 100 && new Set(c.sequence.map(s=>s.id)).size === c.sequence.length && c.sequence.every(s => typeof s.id === 'string' && typeof s.title === 'string' && s.title.length <= 120 && typeof s.note === 'string' && Number.isFinite(s.duration) && s.duration >= .25 && s.duration <= 60 && point(s.ball) && Array.isArray(s.players) && s.players.length <= 44 && new Set(s.players.map(p=>p.uid)).size === s.players.length && s.players.every(p=>point(p) && typeof p.uid === 'string' && typeof p.name === 'string' && typeof p.number === 'string' && typeof p.playerId === 'string' && ['home','away'].includes(p.side)) && Array.isArray(s.drawings) && s.drawings.length <= 500 && s.drawings.every(i=>i && typeof i.id === 'string' && typeof i.color === 'string' && Number.isFinite(i.width) && Number.isFinite(i.opacity) && Array.isArray(i.points) && i.points.length <= 20000 && i.points.every(Number.isFinite))))) &&
             (c.tracking === undefined ||
               isStudioDocument({
                 ...emptyStudio(),
@@ -319,6 +332,8 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
                 dataReports: { snapshot: c.report },
               })) &&
             (c.statsFields === undefined || validFields(c.statsFields)) &&
+            (c.statsComparePlayerId === undefined || typeof c.statsComparePlayerId === "string") &&
+            (c.statsLayout === undefined || ["comparison", "tiles"].includes(c.statsLayout)) &&
             (c.thumbnail === undefined ||
               (typeof c.thumbnail === "string" &&
                 c.thumbnail.length < 200000 &&
@@ -505,3 +520,4 @@ function validFields(fields: unknown): fields is string[] {
     new Set(fields).size === fields.length
   );
 }
+function validStops(stops: unknown): stops is ExplainStop[] { return Array.isArray(stops) && stops.length <= 20 && new Set(stops.map(s=>s?.id)).size === stops.length && stops.every(s=>s && typeof s.id === 'string' && Number.isFinite(s.time) && s.time >= 0 && Number.isFinite(s.hold) && s.hold >= .5 && s.hold <= 10); }

@@ -77,7 +77,7 @@ export function takeToAir({ capture = true }: { capture?: boolean } = {}) {
     camera: r.camera,
     time: r.time,
     phaseTime: s.previewTime,
-    playing: r.mediaPlaying,
+    playing: r.mediaPlaying && !r.mediaHolding,
     rate: r.rate,
     takenAt: Date.now(),
     black: false,

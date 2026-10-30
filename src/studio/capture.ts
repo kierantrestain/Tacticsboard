@@ -28,3 +28,9 @@ export function thumbnail(
   }
 }
 export const captureThumbnail = () => thumbnail(previewCapture?.() || null);
+
+/** Native-aspect preview for accurately placing tablet marks on footage. */
+export function captureHostPreview(): { image: string; aspect: number } | undefined {
+  const raw=previewCapture?.();if(!raw?.width||!raw.height)return;
+  try {const small=document.createElement('canvas'),scale=Math.min(640/raw.width,480/raw.height);small.width=Math.round(raw.width*scale);small.height=Math.round(raw.height*scale);small.getContext('2d')!.drawImage(raw,0,0,small.width,small.height);return {image:small.toDataURL('image/jpeg',.76),aspect:raw.width/raw.height};}catch{return;}
+}

@@ -8,12 +8,17 @@ import type {
 } from "./types";
 import { emptyStudio } from "./types";
 import { useStudio } from "../store";
+import type { Board } from "../types";
 interface Runtime {
+  simple: boolean;
+  tabletPanel: boolean;
+  movementDraft: { before: Board; sceneId: string } | null;
   view: ViewMode;
   camera: CameraPreset;
   assets: MediaAsset[];
   time: number;
   mediaPlaying: boolean;
+  mediaHolding: boolean;
   rate: number;
   muted: boolean;
   loopClip: boolean;
@@ -51,11 +56,15 @@ interface Runtime {
   set: (v: Partial<Runtime>) => void;
 }
 export const useRuntime = create<Runtime>((set) => ({
+  simple: localStorage.getItem('touchline.workspace') !== 'advanced',
+  tabletPanel: false,
+  movementDraft: null,
   view: "board",
   camera: "broadcast",
   assets: [],
   time: 0,
   mediaPlaying: false,
+  mediaHolding: false,
   rate: 1,
   muted: true,
   loopClip: false,
@@ -119,7 +128,7 @@ export function selectAsset(asset: MediaAsset) {
     d.view = "footage";
     d.trim = d.sourceRanges?.[asset.id] || {
       start: 0,
-      end: Math.min(20, asset.duration || 20),
+      end: asset.type === "image" ? 5 : Math.min(20, asset.duration || 20),
     };
     d.fps = asset.fps;
   });
@@ -127,6 +136,7 @@ export function selectAsset(asset: MediaAsset) {
     view: "footage",
     time: getDesk().trim.start,
     mediaPlaying: false,
+  mediaHolding: false,
     zoom: 1,
     pan: { x: 0, y: 0 },
     selectedInk: null,

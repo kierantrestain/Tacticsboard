@@ -86,10 +86,7 @@ export function inspectView(
             "This report belongs to a different match. Open the correct match report.",
         });
       if (
-        d?.statsPlayerId &&
-        !report.lineups.some((l) =>
-          l.players.some((p) => p.id === d.statsPlayerId),
-        )
+        [d?.statsPlayerId, d?.statsComparePlayerId].some(id => id && !report.lineups.some(l => l.players.some(p => p.id === id)))
       )
         issues.push({
           code: "missing-player",
@@ -97,7 +94,7 @@ export function inspectView(
           message:
             "This player is not in the saved report. Choose a player from this match.",
         });
-      const rows = statCardRows(report, d?.statsPlayerId, board.match).filter(
+      const rows = statCardRows(report, d?.statsPlayerId, board.match, d?.statsComparePlayerId).filter(
         (row) => !d?.statsFields || d.statsFields.includes(row.key),
       );
       if (!rows.length)

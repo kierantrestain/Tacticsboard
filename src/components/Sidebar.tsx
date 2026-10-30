@@ -143,7 +143,7 @@ export default function Sidebar() {
           </button>
         ))}
       </div>
-      <div className="side-switch">
+      {!["match", "settings"].includes(inspector) && <div className="side-switch">
         {(["home", "away"] as Side[]).map((x) => (
           <button
             className={side === x ? "active" : ""}
@@ -159,8 +159,9 @@ export default function Sidebar() {
           </button>
         ))}
       </div>
+      }
       <div className="sidebar-scroll" ref={scrollRef}>
-        <div className="team-inspector-heading">
+        {!["match", "settings"].includes(inspector) && <div className="team-inspector-heading">
           <TeamBadge team={team} />
           <div>
             <h2>{team.shortName}</h2>
@@ -174,6 +175,7 @@ export default function Sidebar() {
             <ArrowLeftRight size={15} />
           </button>
         </div>
+        }
         {inspector === "lineup" && (
           <>
             <div className="lineup-meta">

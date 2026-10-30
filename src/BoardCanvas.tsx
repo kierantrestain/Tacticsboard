@@ -64,8 +64,8 @@ function ink(hex: string) {
 function Pitch({ board }: { board: Board }) {
   const light = board.settings.theme === "light",
     grass = board.settings.theme === "grass";
-  const color = light ? "#4c9254" : grass ? "#2c7840" : "#307a43";
-  const line = "#eef4df";
+  const color = light ? "#d1dfd7" : grass ? "#2c7840" : "#1b353a";
+  const line = light ? "#4d6962" : "#c4d4cf";
   return (
     <Group listening={false}>
       <Rect
@@ -74,7 +74,7 @@ function Pitch({ board }: { board: Board }) {
         width={1160}
         height={734}
         cornerRadius={9}
-        fill={light ? "#397247" : grass ? "#1d4e2c" : "#173c27"}
+        fill={light ? "#b9cdc5" : grass ? "#1d4e2c" : "#111e23"}
       />
       <Rect x={PX} y={PY} width={PW} height={PH} fill={color} />
       {Array.from({ length: 10 }, (_, i) => (
@@ -697,6 +697,9 @@ const BoardCanvas = forwardRef<
     if (!drawing.current) return;
     drawing.current = false;
     const d = draftRef.current;
+    if (d?.type === 'ellipse' && Math.hypot(d.points.at(-2)!-d.points[0],d.points.at(-1)!-d.points[1]) < .006) {
+      const [x,y] = d.points; d.points = [clamp(x-.03),clamp(y-.045),clamp(x+.03),clamp(y+.045)];
+    }
     if (
       d &&
       d.points.length >= 4 &&
@@ -756,7 +759,7 @@ const BoardCanvas = forwardRef<
           <Rect
             width={W}
             height={H}
-            fill={board.settings.theme === "light" ? "#d4ded3" : "#0b1729"}
+            fill={board.settings.theme === "light" ? "#d4ded3" : "#0d171c"}
             cornerRadius={10}
           />
           <Group {...transform}>
@@ -1010,7 +1013,7 @@ const BoardCanvas = forwardRef<
                           width={Math.min(126, name.length * 7.6 + 16)}
                           height={21}
                           fill="#091427"
-                          cornerRadius={3}
+                          cornerRadius={6}
                           opacity={0.88}
                         />
                         <Text

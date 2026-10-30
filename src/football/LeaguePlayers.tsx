@@ -5,6 +5,8 @@ import { useFootball, checkedTime, requestFootball } from "./data";
 import type { Player, Stat, Team } from "../types";
 import { TeamBadge } from "./ClubBadge";
 import PlayerData from "./PlayerData";
+import { metricGroups, metricGroup, metricNumber, metricText, canPer90, type MetricGroup } from "./metrics";
+import { download, filename } from "../core";
 type Row = {
   id: string;
   name: string;
@@ -28,7 +30,13 @@ export default function LeaguePlayers({
     season = useFootball((s) => s.season),
     [q, setQ] = useState(""),
     [club, setClub] = useState("all"),
-    [sort, setSort] = useState("goals"),
+    [sort, setSort] = useState(""),
+    [group,setGroup]=useState<MetricGroup>("All"),
+    [per90,setPer90]=useState(false),
+    [minimum,setMinimum]=useState(0),
+    [ascending,setAscending]=useState(false),
+    [columns,setColumns]=useState<string[]|null>(null),
+    [compare,setCompare]=useState<string[]>([]),
     [expanded, setExpanded] = useState(""),
     [limit, setLimit] = useState(40);
   const historic =
@@ -105,37 +113,16 @@ export default function LeaguePlayers({
         })),
       );
   }, [catalogue, season?.players, league, historic, historicTeams]);
-  const keys = fpl
-    ? {
-        goals: "goals_scored",
-        assists: "assists",
-        minutes: "minutes",
-        xg: "expected_goals",
-      }
-    : {
-        goals: "totalGoals",
-        assists: "goalAssists",
-        minutes: "minutesPlayed",
-        xg: "expectedGoals",
-      };
-  const filtered = useMemo(
-    () =>
-      rows
-        .filter(
-          (p) =>
-            (club === "all" || p.team.id === club) &&
-            `${p.name} ${p.team.name}`.toLowerCase().includes(q.toLowerCase()),
-        )
-        .sort(
-          (a, b) =>
-            Number(b.stats[keys[sort as keyof typeof keys]]?.value ?? -1) -
-              Number(a.stats[keys[sort as keyof typeof keys]]?.value ?? -1) ||
-            a.name.localeCompare(b.name),
-        ),
-    [rows, club, q, sort, league],
-  );
-  const display = (r: Row, k: string) =>
-    r.stats[k]?.display ?? r.stats[k]?.value ?? "—";
+  const metrics=useMemo(()=>{const entries=new Map<string,string>();rows.forEach(r=>Object.entries(r.stats).forEach(([key,stat])=>entries.set(key,stat.label||key)));return [...entries].map(([key,label])=>({key,label})).sort((a,b)=>a.label.localeCompare(b.label));},[rows]);
+  const visibleMetrics=metrics.filter(m=>group==='All'||metricGroup(m.key,m.label)===group);
+  const defaultSort=fpl?'goals_scored':'totalGoals',sortKey=sort||defaultSort;
+  const defaultColumns=(fpl?['goals_scored','assists','minutes','expected_goals','expected_assists']:['totalGoals','goalAssists','minutesPlayed','totalShots','shotsOnTarget']).filter(k=>metrics.some(m=>m.key===k));
+  const shownColumns=[...new Set([sortKey,...(columns||defaultColumns)])].filter(k=>metrics.some(m=>m.key===k)).slice(0,6);
+  const filtered=useMemo(()=>rows.filter(p=>(club==='all'||p.team.id===club)&&`${p.name} ${p.team.name}`.toLowerCase().includes(q.toLowerCase())&&(minimum===0||(metricNumber(p.stats,fpl?'minutes':'minutesPlayed')??-1)>=minimum)).sort((a,b)=>{const av=metricNumber(a.stats,sortKey,per90),bv=metricNumber(b.stats,sortKey,per90);if(av===null&&bv===null)return a.name.localeCompare(b.name);if(av===null)return 1;if(bv===null)return -1;return (ascending?av-bv:bv-av)||a.name.localeCompare(b.name);}),[rows,club,q,sortKey,per90,minimum,ascending,fpl]);
+  useEffect(()=>setLimit(40),[q,club,sortKey,minimum,per90,ascending]);
+  const label=(key:string)=>{const name=metrics.find(m=>m.key===key)?.label||key;return name+(per90&&canPer90(key,name)?' /90':'');};
+  const grid={gridTemplateColumns:`minmax(190px,1.7fr) minmax(130px,1fr) repeat(${shownColumns.length},minmax(82px,.65fr)) 36px`};
+  const exportRows=()=>{const cell=(x:unknown)=>{let v=String(x??'');if(/^[=+@\-\t\r]/.test(v))v="'"+v;return '"'+v.replaceAll('"','""')+'"';};const csv=[['Player','Club',...shownColumns.map(label)],...filtered.map(r=>[r.name,r.team.name,...shownColumns.map(k=>metricText(r.stats,k,per90))])].map(row=>row.map(cell).join(',')).join('\r\n');download(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),filename(`${league}-${seasonYear||season?.seasonYear}-players`)+'.csv');};
   return (
     <section className={`fc-players-view ${fpl ? "" : "ucl"}`}>
       <div className="fc-player-tools">
@@ -169,21 +156,9 @@ export default function LeaguePlayers({
               </option>
             ))}
         </select>
-        <select
-          aria-label="Sort league player statistics"
-          value={sort}
-          onChange={(e) => setSort(e.target.value)}
-        >
-          <option value="goals">Most goals</option>
-          <option value="assists">Most assists</option>
-          {fpl && (
-            <>
-              <option value="minutes">Most minutes</option>
-              <option value="xg">Highest xG</option>
-            </>
-          )}
-        </select>
+        <button onClick={exportRows} disabled={!filtered.length}>Export filtered data</button>
       </div>
+      <div className="mi-explorer-controls"><div className="mi-chips">{metricGroups.filter(g=>g==='All'||metrics.some(m=>metricGroup(m.key,m.label)===g)).map(g=><button key={g} aria-pressed={group===g} onClick={()=>{setGroup(g);const first=metrics.find(m=>g==='All'||metricGroup(m.key,m.label)===g);if(g!=='All'&&first)setSort(first.key);}}>{g}</button>)}</div><div className="mi-explorer-options"><label>Rank by<select aria-label="Sort league player statistics" value={sortKey} onChange={e=>setSort(e.target.value)}>{visibleMetrics.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}</select></label><button onClick={()=>setAscending(!ascending)} aria-pressed={ascending}>{ascending?'Lowest first ↑':'Highest first ↓'}</button><label>Minimum minutes<select aria-label="Minimum minutes played" value={minimum} onChange={e=>setMinimum(+e.target.value)}>{[0,90,270,450,900,1800].map(n=><option key={n} value={n}>{n===0?'Any minutes':`${n}+ minutes`}</option>)}</select></label><div className="mi-segmented" aria-label="Player statistics basis"><button aria-pressed={!per90} onClick={()=>setPer90(false)}>Totals</button><button aria-pressed={per90} onClick={()=>setPer90(true)}>Per 90</button></div><details className="mi-column-picker"><summary>Choose columns</summary><div>{metrics.map(m=><label key={m.key}><input type="checkbox" checked={(columns||defaultColumns).includes(m.key)} disabled={!(columns||defaultColumns).includes(m.key)&&(columns||defaultColumns).length>=5} onChange={()=>{const current=columns||defaultColumns;setColumns(current.includes(m.key)?current.filter(k=>k!==m.key):[...current,m.key]);}}/>{m.label}</label>)}<button onClick={()=>setColumns(null)}>Reset columns</button></div></details></div><p className="mi-caption">{metrics.length} available metrics · The ranking metric stays visible. {per90?'Count statistics are divided by supplied minutes × 90; rates and percentages retain their original units. Players with no minutes show —.':'Select a player for match logs, season totals and career history.'}</p></div>
       <div className="fc-table-title">
         <div>
           <h2>
@@ -206,44 +181,16 @@ export default function LeaguePlayers({
             : "ESPN · roster source"}
         </span>
       </div>
-      <div className="fc-leader-head">
-        <span>Player</span>
-        <span>Club</span>
-        <span>Goals</span>
-        <span>{fpl ? "FPL assists" : "Assists"}</span>
-        {fpl && (
-          <>
-            <span>Minutes</span>
-            <span>xG</span>
-            <span>xA</span>
-          </>
-        )}
-        <span />
-      </div>
+      {compare.length>0&&<div className="mi-season-compare"><div className="mi-section-head"><h3>{compare.map(id=>rows.find(r=>r.id===id)?.name).join(' vs ')}{compare.length===1?' · select another player':''}</h3><button onClick={()=>setCompare([])}>Clear comparison</button></div>{compare.length===2&&<div className="mi-season-comparison-table">{metrics.map(m=><div key={m.key}><strong>{metricText(rows.find(r=>r.id===compare[0])!.stats,m.key,per90)}</strong><span>{label(m.key)}</span><strong>{metricText(rows.find(r=>r.id===compare[1])!.stats,m.key,per90)}</strong></div>)}</div>}</div>}
+      <div className="mi-leader-scroll"><div className="fc-leader-head" style={grid}><span>Player</span><span>Club</span>{shownColumns.map(k=><button key={k} onClick={()=>{if(sortKey===k)setAscending(!ascending);else{setSort(k);setAscending(false);}}}>{label(k)}{sortKey===k?(ascending?' ↑':' ↓'):''}</button>)}<span>VS</span></div>
       {filtered.slice(0, limit).map((r) => (
         <div key={r.id}>
-          <button
-            className="fc-leader-row"
-            aria-label={`Statistics for ${r.name}`}
-            aria-expanded={expanded === r.id}
-            onClick={() => setExpanded(expanded === r.id ? "" : r.id)}
-          >
-            <strong>{r.name}</strong>
-            <span className="fc-leader-club">
-              <TeamBadge team={r.team} size="small" />
-              {r.team.shortName}
-            </span>
-            <span>{display(r, keys.goals)}</span>
-            <span>{display(r, keys.assists)}</span>
-            {fpl && (
-              <>
-                <span>{display(r, "minutes")}</span>
-                <span>{display(r, "expected_goals")}</span>
-                <span>{display(r, "expected_assists")}</span>
-              </>
-            )}
-            <ChevronDown size={13} />
-          </button>
+          <div className="fc-leader-row mi-leader-row" style={grid}>
+            <button aria-label={`Statistics for ${r.name}`} aria-expanded={expanded===r.id} onClick={()=>setExpanded(expanded===r.id?'':r.id)}><strong>{r.name}</strong><ChevronDown size={13}/></button>
+            <span className="fc-leader-club"><TeamBadge team={r.team} size="small"/>{r.team.shortName}</span>
+            {shownColumns.map(k=><span key={k} className={sortKey===k?'mi-ranked':''}>{metricText(r.stats,k,per90)}</span>)}
+            <button aria-label={`Compare ${r.name}`} aria-pressed={compare.includes(r.id)} disabled={!compare.includes(r.id)&&compare.length===2} onClick={()=>setCompare(compare.includes(r.id)?compare.filter(id=>id!==r.id):[...compare,r.id])}>{compare.includes(r.id)?'✓':'+'}</button>
+          </div>
           {expanded === r.id && (
             <div className="fc-leader-details">
               {r.fplId ? (
@@ -281,6 +228,7 @@ export default function LeaguePlayers({
           )}
         </div>
       ))}
+      </div>
       {filtered.length > limit && (
         <button className="fc-more" onClick={() => setLimit((n) => n + 40)}>
           Show 40 more players

@@ -112,6 +112,7 @@ export async function exportPack(board: Board, assets: MediaAsset[]) {
         ...b.scenes.map((s) => s.source?.assetId),
         ...(b.studio?.bookmarks || []).map((m) => m.assetId),
         ...(b.studio?.cues || []).map((c) => c.assetId),
+        ...(b.studio?.cues || []).flatMap(c=>c.sequence?.map(s=>s.source?.assetId)||[]),
       ].filter(Boolean) as string[],
     ),
     included = assets.filter((a) => ids.has(a.id));
@@ -212,6 +213,7 @@ export async function importPack(file: File): Promise<Board> {
       "targets",
       "tracking",
       "sourceRanges",
+      "explainStops",
     ] as const) {
       const record = d[key] as Record<string, any> | undefined;
       if (!record) continue;
@@ -226,6 +228,7 @@ export async function importPack(file: File): Promise<Board> {
     if (d.assetId) d.assetId = remap[d.assetId] || d.assetId;
     d.bookmarks.forEach((m) => (m.assetId = remap[m.assetId] || m.assetId));
     d.cues?.forEach((c) => {
+      c.sequence?.forEach(s => { if(s.source) s.source.assetId = remap[s.source.assetId] || s.source.assetId; });
       if (c.assetId) c.assetId = remap[c.assetId] || c.assetId;
       if (c.tracking)
         c.tracking.assetId = remap[c.tracking.assetId] || c.tracking.assetId;

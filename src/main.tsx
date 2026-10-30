@@ -8,6 +8,7 @@ import "./studio/studio.css";
 import "./football/football.css";
 import "./studio/show.css";
 import "./studio/director.css";
+import "./studio/filming.css";
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { error: boolean }
@@ -40,3 +41,5 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {});
   });
 }
+
+import './football/intelligence.css';

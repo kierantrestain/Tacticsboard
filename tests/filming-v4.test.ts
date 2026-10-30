@@ -1,0 +1,15 @@
+import {describe,it,expect} from 'vitest';
+import {clipPlan,aroundMoment} from '../src/studio/filmPlan';
+import {metricNumber,numericMetric} from '../src/football/metrics';
+import {statCardRows} from '../src/football/reportTools';
+import {reportHTML} from '../src/football/reportExport';
+import {makeCue,cueBoard} from '../src/studio/cueModel';
+import {newBoard,copy,isBoard} from '../src/core';
+import catalogue from '../public/data/catalogue.json';
+import type {Team,Match,MatchDetails} from '../src/types';
+describe('filming and match intelligence',()=>{
+ it('adds explanation holds without skipping or extending source footage',()=>{const p=clipPlan({start:10,end:20},[{id:'one',time:12,hold:3},{id:'two',time:16,hold:2},{id:'outside',time:21,hold:4}]);expect(p.duration).toBe(15);expect(p.sourceAt(2)).toMatchObject({time:12,holding:true});expect(p.sourceAt(4.99).time).toBe(12);expect(p.sourceAt(5).time).toBe(12);expect(p.sourceAt(9)).toMatchObject({time:16,holding:true});expect(p.sourceAt(15).time).toBe(20);expect(aroundMoment(1,30,10)).toEqual({start:0,end:10});});
+ it('preserves missing values and uses actual minutes for per-90 statistics',()=>{const stats={totalGoals:{value:2,display:'2',label:'Goals'},minutesPlayed:{value:180,display:'180',label:'Minutes'}};expect(metricNumber(stats,'totalGoals',true)).toBe(1);expect(metricNumber({...stats,minutesPlayed:{value:0,display:'0',label:'Minutes'}},'totalGoals',true)).toBeNull();expect(numericMetric({display:'—',label:'Missing'})).toBeNull();});
+ it('recalls a complete saved movement sequence after later edits',()=>{const b=newBoard(catalogue.teams[0] as unknown as Team,catalogue.teams[1] as unknown as Team);const end={...copy(b.scenes[0]),id:'end',title:'Finish'};end.players[0].x=.85;b.scenes.push(end);b.studio!.cues=[makeCue(b,'board','broadcast',0)];b.scenes[1].players[0].x=.1;const result=cueBoard(b,b.studio!.cues[0]);expect(result.scenes[1].players[0].x).toBe(.85);expect(isBoard(result)).toBe(true);});
+ it('formats completion percentages from totals and compares both players with unknowns intact',()=>{const report={id:'m',events:[],lineups:[{teamId:'h',side:'home',players:[{id:'p',name:'One',starter:true,stats:{totalGoals:{value:0,display:'0',label:'Goals'}}},{id:'q',name:'Two',starter:false,stats:{totalShots:{value:4,display:'4',label:'Shots'}}}]}],teamStats:[{teamId:'h',stats:{passPct:{display:'0.8',label:'Pass completion %'},accuratePasses:{display:'320',label:'Completed passes'},totalPasses:{display:'400',label:'Passes'}}}]} as MatchDetails;const match={id:'m',name:'<script>alert(1)</script>',homeId:'h',awayId:'a',homeName:'Home',awayName:'Away',league:'eng.1',date:'2026-10-30',status:'FT',completed:true} as Match;expect(statCardRows(report,undefined,match).find(r=>r.key==='passPct')?.home).toBe('80.0%');expect(statCardRows(report,'p',match,'q').find(r=>r.key==='totalShots')).toMatchObject({home:'—',away:'4'});const html=reportHTML(match,report);expect(html).not.toContain('<script>alert');expect(html).toContain('Home');expect(html).toContain('Away');expect(html).toContain('80.0%');});
+});

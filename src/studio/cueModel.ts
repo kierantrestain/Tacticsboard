@@ -24,6 +24,8 @@ export function makeCue(
       ? desk.assetId
       : undefined;
   return {
+    sequence: !source && ['board','replay'].includes(view) ? copy(board.scenes) : undefined,
+    explainStops: source ? copy(desk.explainStops?.[source] || []) : undefined,
     tracking: source ? copy(desk.tracking[source]) : undefined,
     broadcast: copy({ ...defaultBroadcast(), ...desk.broadcast }),
     report:
@@ -39,6 +41,8 @@ export function makeCue(
     sceneId: board.activeScene,
     statsReportId: desk.statsReportId,
     statsPlayerId: desk.statsPlayerId,
+    statsComparePlayerId: desk.statsComparePlayerId,
+    statsLayout: desk.statsLayout,
     context: copy(board.context),
     homeTeamId: board.homeTeamId,
     awayTeamId: board.awayTeamId,
@@ -93,10 +97,11 @@ export function cueBoard(board: Board, cue: RundownCue): Board {
     formations: copy(cue.formations),
   });
   next.studio ||= emptyStudio();
+  if (cue.sequence?.length) next.scenes = copy(cue.sequence);
   const savedScene =
     next.scenes.find((s) => s.id === cue.sceneId) ||
     (!cue.sceneId ? next.scenes.find((s) => s.title === cue.title) : undefined);
-  if (!changedContext && savedScene) next.activeScene = savedScene.id;
+  if ((!changedContext || cue.sequence?.length) && savedScene) next.activeScene = savedScene.id;
   else if (changedContext || !savedScene) {
     const scene = {
       ...copy(cue.frame),
@@ -124,10 +129,13 @@ export function cueBoard(board: Board, cue: RundownCue): Board {
     next.studio.broadcast.headline = cue.lowerThird;
   next.studio.statsReportId = cue.statsReportId;
   next.studio.statsPlayerId = cue.statsPlayerId;
+  next.studio.statsComparePlayerId = cue.statsComparePlayerId;
+  next.studio.statsLayout = cue.statsLayout;
   next.studio.assetId = cue.assetId;
   next.studio.trim = copy(cue.trim);
   next.studio.lowerThird = cue.lowerThird;
   if (cue.assetId) {
+    (next.studio.explainStops ||= {})[cue.assetId] = copy(cue.explainStops || []);
     next.studio.ink[cue.assetId] = copy(cue.ink);
     if (cue.tracking) next.studio.tracking[cue.assetId] = copy(cue.tracking);
   }
@@ -165,7 +173,12 @@ export function cueContentKey(cue: RundownCue): string {
     cue.broadcast,
     cue.report,
     cue.statsFields,
+    cue.statsPlayerId,
+    cue.statsComparePlayerId,
+    cue.statsLayout,
     cue.match?.id,
     cue.tracking,
+    cue.sequence,
+    cue.explainStops,
   ]);
 }

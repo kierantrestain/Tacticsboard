@@ -395,6 +395,8 @@ export const useStudio = create<Studio>((set, get) => ({
         b.studio.view = "board";
         b.studio.statsReportId = undefined;
         b.studio.statsPlayerId = undefined;
+        b.studio.statsComparePlayerId = undefined;
+        b.studio.statsLayout = undefined;
         b.studio.statsSnapshot = undefined;
         b.studio.statsFields = undefined;
         b.studio.lowerThird = b.title;
@@ -444,6 +446,8 @@ export const useStudio = create<Studio>((set, get) => ({
         b.studio.view = "board";
         b.studio.statsReportId = m.id;
         b.studio.statsPlayerId = undefined;
+        b.studio.statsComparePlayerId = undefined;
+        b.studio.statsLayout = undefined;
         b.studio.statsSnapshot = undefined;
         b.studio.statsFields = undefined;
         if (d)

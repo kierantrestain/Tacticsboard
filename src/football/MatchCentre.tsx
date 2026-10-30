@@ -248,11 +248,10 @@ export default function MatchCentre() {
             FOOTBALL INTELLIGENCE / {year}/{String(year + 1).slice(-2)}
           </span>
           <h1>
-            Match centre<span>{all.length} fixtures</span>
+            Match intelligence<span>{all.length} fixtures</span>
           </h1>
           <p>
-            Match reports, player records and season archives. Source coverage
-            is shown for each view.
+            The whole match. Every available statistic. Your next talking point.
           </p>
         </div>
         <button
