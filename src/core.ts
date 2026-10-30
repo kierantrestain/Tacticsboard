@@ -1,3 +1,4 @@
+import { emptyStudio, isStudioDocument } from "./studio/types";
 import type {
   Board,
   BoardPlayer,
@@ -181,6 +182,7 @@ export function newBoard(home: Team, away: Team): Board {
   };
   return {
     version: 1,
+    studio: emptyStudio(),
     id: uid(),
     title: "The space between the lines",
     homeTeamId: home.id,
@@ -220,7 +222,7 @@ export function newBoard(home: Team, away: Team): Board {
       homeVisible: true,
       awayVisible: true,
       mediaVisible: true,
-      tokenStyle: "disc",
+      tokenStyle: "shirt",
     },
   };
 }
@@ -310,6 +312,8 @@ export function isBoard(value: unknown): value is Board {
           "ellipse",
           "triangle",
           "spotlight",
+          "measure",
+          "offside",
           "text",
         ].includes(d.type) &&
         Array.isArray(d.points) &&
@@ -334,6 +338,7 @@ export function isBoard(value: unknown): value is Board {
     );
   return (
     b.version === 1 &&
+    (!b.studio || isStudioDocument(b.studio)) &&
     typeof b.id === "string" &&
     typeof b.title === "string" &&
     typeof b.homeTeamId === "string" &&

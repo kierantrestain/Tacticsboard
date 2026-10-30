@@ -14,6 +14,7 @@ import {
   ChartNoAxesCombined,
 } from "lucide-react";
 import { useStudio } from "../store";
+import { editDesk } from "../studio/runtime";
 import { dateLabel, formatMatchStat, initials, shortName, uid } from "../core";
 import { FORMATIONS } from "../core";
 import type { Board, Player, Side, Team } from "../types";
@@ -654,6 +655,46 @@ export default function Sidebar() {
         )}
         {inspector === "settings" && (
           <>
+            <div className="section-heading">
+              <h3>Programme presentation</h3>
+            </div>
+            <label className="field-label">
+              Programme caption
+              <input
+                aria-label="Programme caption"
+                defaultValue={board.studio?.lowerThird || ""}
+                placeholder="Use the analysis title"
+                key={board.id}
+                onBlur={(e) =>
+                  editDesk((d) => {
+                    d.lowerThird = e.target.value.slice(0, 120);
+                  })
+                }
+              />
+            </label>
+            <Toggle
+              label="Player rings on source"
+              checked={board.studio?.showTracking ?? true}
+              onChange={() =>
+                editDesk((d) => {
+                  d.showTracking = !d.showTracking;
+                })
+              }
+            />
+            <Toggle
+              label="Source cutouts in 3D"
+              checked={!!board.studio?.useSourceCutouts}
+              onChange={() =>
+                editDesk((d) => {
+                  d.useSourceCutouts = !d.useSourceCutouts;
+                })
+              }
+            />
+            <p className="muted">
+              Cutouts use a single source pose with grass removal. Review their
+              edges; turn off for clean virtual players. Distance labels assume
+              a 105 × 68 m pitch and analyst calibration.
+            </p>
             {selectedDrawing && (
               <div className="object-inspector">
                 <div className="section-heading">

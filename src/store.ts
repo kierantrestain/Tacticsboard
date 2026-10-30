@@ -1,3 +1,4 @@
+import { saveProject, loadProject } from "./studio/assetStore";
 import { create } from "zustand";
 import type {
   Board,
@@ -19,7 +20,9 @@ import {
   makePlayers,
   isBoard,
 } from "./core";
-const IS_OUTPUT = new URLSearchParams(location.search).has("output");
+const IS_OUTPUT =
+  new URLSearchParams(location.search).has("output") ||
+  new URLSearchParams(location.search).has("program");
 const ACTIVE = "fixture.active-document";
 const PREFIX = "fixture.document.";
 const INDEX = "fixture.documents";
@@ -209,13 +212,22 @@ export const useStudio = create<Studio>((set, get) => ({
       previewTime: null,
     });
   },
-  save: () => {
+  save: async () => {
     const b = get().board;
     if (!b || IS_OUTPUT) return;
     try {
+      await saveProject(b);
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key?.startsWith(PREFIX) && key !== PREFIX + b.id) {
+          try {
+            const old = JSON.parse(localStorage.getItem(key) || "null");
+            if (isBoard(old)) await saveProject(old);
+            localStorage.removeItem(key);
+          } catch {}
+        }
+      }
       const at = new Date().toISOString();
-      localStorage.setItem(PREFIX + b.id, JSON.stringify(b));
-      localStorage.setItem(ACTIVE, b.id);
       const entry = {
         id: b.id,
         title: b.title,
@@ -224,23 +236,38 @@ export const useStudio = create<Studio>((set, get) => ({
         awayTeamId: b.awayTeamId,
         scenes: b.scenes.length,
       };
-      const lib = [entry, ...readIndex().filter((x) => x.id !== b.id)].slice(
-        0,
-        60,
-      );
-      localStorage.setItem(INDEX, JSON.stringify(lib));
-      set({ savedAt: at, saveError: false, library: lib });
+      const library = [
+        entry,
+        ...readIndex().filter((x) => x.id !== b.id),
+      ].slice(0, 100);
+      localStorage.setItem(INDEX, JSON.stringify(library));
+      if (get().board?.id === b.id) {
+        try {
+          localStorage.setItem(PREFIX + b.id, JSON.stringify(b));
+        } catch {
+          localStorage.removeItem(PREFIX + b.id);
+        }
+        localStorage.setItem(ACTIVE, b.id);
+        set({ savedAt: at, saveError: false, library });
+      }
     } catch {
       set({ saveError: true });
       get().notify(
-        "Browser storage is full. Export your analysis as JSON to keep it.",
+        "Autosave needs more browser storage. Export a project pack to keep this analysis.",
       );
     }
   },
-  load: (id) => {
+  load: async (id) => {
     try {
-      const b = JSON.parse(localStorage.getItem(PREFIX + id) || "null");
-      if (!isBoard(b)) throw Error();
+      const b =
+        (await loadProject(id)) ||
+        JSON.parse(localStorage.getItem(PREFIX + id) || "null");
+      if (
+        !isBoard(b) ||
+        !get().catalogue?.teams.some((t) => t.id === b.homeTeamId) ||
+        !get().catalogue?.teams.some((t) => t.id === b.awayTeamId)
+      )
+        throw Error();
       set({
         board: b,
         past: [],
@@ -248,6 +275,9 @@ export const useStudio = create<Studio>((set, get) => ({
         modal: null,
         playing: false,
         previewTime: null,
+        selected: [],
+        selectedShape: null,
+        profileId: null,
       });
       get().save();
       get().notify("Analysis opened");
@@ -520,7 +550,7 @@ if (!IS_OUTPUT) {
     }
   });
   window.addEventListener("beforeunload", () => useStudio.getState().save());
-} else {
+} else if (!new URLSearchParams(location.search).has("program")) {
   channel?.addEventListener("message", (e) => {
     const target = new URLSearchParams(location.search).get("session");
     if (

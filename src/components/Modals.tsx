@@ -50,7 +50,7 @@ function Shell({
       <div className="dialog-inner">
         <header className="dialog-heading">
           <div>
-            <span className="eyebrow">FIXTURE TACTICS STUDIO</span>
+            <span className="eyebrow">TOUCHLINE STUDIO</span>
             <h2>{title}</h2>
             <p>{subtitle}</p>
           </div>

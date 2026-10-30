@@ -8,3 +8,5 @@ playwright-report/
 *.log
 data-cache/
 *.tsbuildinfo
+public/vision/
+docs/studio-v2-*.jpg

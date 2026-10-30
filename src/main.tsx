@@ -1,7 +1,10 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App";
+import App from "./studio/StudioApp";
+import "@fontsource-variable/inter";
+import "@fontsource-variable/manrope";
 import "./styles.css";
+import "./studio/studio.css";
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { error: boolean }
@@ -13,7 +16,7 @@ class ErrorBoundary extends React.Component<
   render() {
     return this.state.error ? (
       <main className="error-screen">
-        <div className="brand-symbol">F</div>
+        <div className="brand-symbol">TL</div>
         <h1>Let’s recover the workspace.</h1>
         <p>Your last saved analysis remains in this browser.</p>
         <button onClick={() => location.reload()}>Reload studio</button>
@@ -28,3 +31,9 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </ErrorBoundary>,
 );
+
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}

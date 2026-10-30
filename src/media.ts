@@ -1,7 +1,11 @@
 export async function mediaDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const r = indexedDB.open("fixture-media", 1);
-    r.onupgradeneeded = () => r.result.createObjectStore("assets");
+    const r = indexedDB.open("fixture-media", 2);
+    r.onupgradeneeded = () => {
+      for (const name of ["assets", "meta", "projects"])
+        if (!r.result.objectStoreNames.contains(name))
+          r.result.createObjectStore(name);
+    };
     r.onsuccess = () => resolve(r.result);
     r.onerror = () => reject(r.error);
   });

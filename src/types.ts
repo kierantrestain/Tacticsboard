@@ -1,3 +1,4 @@
+import type { StudioDocument } from "./studio/types";
 export type Side = "home" | "away";
 export type Tool =
   | "select"
@@ -10,7 +11,9 @@ export type Tool =
   | "triangle"
   | "spotlight"
   | "text"
-  | "erase";
+  | "erase"
+  | "measure"
+  | "offside";
 export type Stat = { value?: number | null; display?: string; label: string };
 export interface Player {
   id: string;
@@ -117,6 +120,7 @@ export interface Catalogue {
   };
 }
 export interface BoardPlayer {
+  cutout?: string;
   uid: string;
   playerId: string;
   side: Side;
@@ -142,6 +146,7 @@ export interface Frame {
   ball: { x: number; y: number };
 }
 export interface Scene extends Frame {
+  source?: { assetId: string; time: number; review: boolean };
   id: string;
   title: string;
   duration: number;
@@ -149,6 +154,7 @@ export interface Scene extends Frame {
 }
 export interface Board extends Frame {
   version: 1;
+  studio?: StudioDocument;
   id: string;
   title: string;
   homeTeamId: string;
@@ -175,6 +181,7 @@ export interface Board extends Frame {
     awayVisible: boolean;
     mediaVisible: boolean;
     tokenStyle: "disc" | "shirt";
+    ballVisible?: boolean;
   };
 }
 export interface SavedBoard {

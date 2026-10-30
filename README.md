@@ -1,47 +1,54 @@
-# Fixture · Tactics Studio
+# Touchline Studio
 
-![Fixture tactics studio](docs/studio-preview.jpg)
+A standalone football analysis workspace for preparing and presenting studio segments. The V2 release adds still and short-clip telestration, assisted reconstruction, a virtual 3D pitch, a presenter rundown and an independently controlled clean programme window.
 
-A football analysis workspace for the Fixture weekly show, by Bang On Entertainment. Built for studio touchscreens, a mouse, and a clean second display or OBS browser source.
+## The analysis workflow
 
-## In the studio
+1. **Prepare the match.** Select clubs, load available match XIs, change formations or substitute players. The existing catalogue contains 20 Premier League and 36 UCL league-phase memberships, deduplicated into 51 clubs and 1,609 squad records. The snapshot date is 30 October 2026; these are not continuously verified live rosters.
+2. **Import a still or clip.** Sources remain on this computer. Use a browser-decodable MP4, WebM, MOV, JPG or PNG under 200 MB. Select up to 20 seconds; scrub the filmstrip, step nominal frames, slow playback, set in/out points and freeze a frame.
+3. **Explain the moment.** Draw arrows, runs, lines, freehand ink, areas, circles, passing triangles, spotlights, text, distance estimates and perspective reference lines. Adjust graphic colour, opacity, weight and visibility times. Zoom and pan the source. After calibration, attach graphics to the pitch to carry the same explanation into the replay.
+4. **Reconstruct the passage.** In Rebuild, identify four visible landmarks using the pitch or penalty-area template. Detect people locally or mark the feet of the relevant players. Confirm teams and assign real player identities yourself. Choose camera compensation or a locked shot, then track the selected passage. Scrub, inspect uncertainty flags and drag incorrect observations into place. Confirm the review before building an editable replay.
+5. **Present the explanation.** Compare the original with a top-down reconstruction, or open 3D replay. Use broadcast, overhead, goal or touchline cameras; orbit the pitch, move players and draw in perspective. Optional single-pose source cutouts are available in Display. Bookmark moments and add presenter notes to the rundown.
+6. **Control the programme.** Open the clean output on a second display or capture its window in OBS. Preview edits remain separate until **Take to programme**; Live follow and Presenter mode enable immediate updates. Blackout is available. Change the programme caption in Display.
+7. **Export and transfer.** Export a 4K PNG, a silent frame-timed 1080p/25 fps analysis film, an editable JSON document or a portable ZIP including its source files. Open a ZIP on another computer to restore the complete analysis. A JSON document alone does not include the media.
 
-1. **Choose teams** from the 20 Premier League clubs and 36 Champions League league-phase clubs for 2026/27. Five overlapping memberships are deduplicated into 51 clubs. The bundled catalogue contains 1,609 squad records.
-2. **Load a match** for its available confirmed starting XIs, formations, score, team statistics and key events. Recent selections are explicitly labelled when a confirmed match XI is unavailable. Search another fixture date through the live data route.
-3. **Build the explanation.** Drag players or the ball; Shift-click players to move a group. Draw pass arrows, dashed runs, connection lines, freehand marks, zones, circles, three-point areas, spotlights and text. Click an annotation in Select mode to edit its style in Display. Undo/redo works per completed action.
-4. **Use the inspector.** Lineup supports squad substitutions and 12 formation templates. Players opens profiles for every squad member, including the bench. Manager includes a short bio, separately sourced identity, observed starting formations and editable scouting notes. Match compares the supplied home/away statistics and key events.
-5. **Create the sequence.** Add a phase, move the players, name the moment and add a presenter note. Play, scrub, loop or change speed. The storyboard interpolates stable player identities and the ball between keyframes.
-6. **Send it to air.** TV output opens a clean synchronised window; move it to the studio display or capture that window in OBS. Present gives a touchscreen layout. Export a 3840×2160 PNG, a 1920×1080 animation, or an editable `.fixture.json` document.
+## What reconstruction means here
 
-Video export uses the browser's supported MediaRecorder format (usually WebM in Chromium; MP4 when available). It does not promise MP4 on every browser. Reference video is muted. Animations record in real time; keep the tab visible.
+This is an analyst-assisted interpretation. Local general-purpose people detection, manually verified identities, four-point pitch mapping, patch motion tracking and approximate camera compensation provide editable observations. It does not infer hidden/off-screen players, ball movement, skeletal motion or verified optical event data. Camera cuts stop tracking for recalibration; uncertain observations are marked for review rather than presented as reliable measurements. Source cutouts use grass-colour removal and one pose, not full video matting or photorealistic replay.
 
-### Controls
+Distance estimates assume a 105 × 68 m pitch and depend on the analyst's calibration. Perspective reference lines are explanatory graphics, not a certified VAR/offside system. Use the virtual-player view when cutout edges or kit colours key poorly.
+
+The app does not implement native SDI/NDI/EVS integration, cross-device control, multi-user cloud collaboration or a broadcast appliance SLA. Clean programme synchronisation uses windows in the **same browser profile on one computer**. No Sky Sports affiliation or parity certification is implied.
+
+## Controls
 
 | Key | Action |
 | --- | --- |
-| V / A / R / L | Select / pass arrow / movement / connection |
-| D / Z / O / G | Freehand / zone / circle / three-point zone |
-| H / T / E | Spotlight / text / erase annotation |
-| K / Space / F | New phase / play-pause / presenter mode |
-| Ctrl or Cmd + Z | Undo |
-| Ctrl or Cmd + Shift + Z | Redo |
+| V / A / R / L | Select / pass / run / connection |
+| D / Z / C / G | Freehand / space / circle / triangle |
+| H / U / T / E | Spotlight / distance / text / erase |
+| Space | Play or pause |
+| ← / → in a source | Step a nominal frame; Shift steps one second |
+| I / O | Set clip in / out |
+| F / M / P | Freeze frame / bookmark moment / presenter mode |
+| Ctrl or Cmd + K | Search commands |
+| Ctrl or Cmd + Z / Shift + Z | Undo / redo |
 | Ctrl or Cmd + S | Save |
-| Arrow keys / Shift + arrows | Nudge selected players / larger nudge |
-| Delete / Escape | Delete selection / clear selection |
+| Delete / Escape | Delete selection / leave current operation |
 
-## Data and persistence
+A mouse and touchscreen are supported. In 3D, drag a player to reposition it; drag empty space to orbit. Tooltips and the in-app help list presenter controls. Video frame stepping uses the selected nominal frame rate; variable-rate footage is not guaranteed frame-index accurate.
 
-The shipped snapshot was checked on **30 October 2026** and works without an API key. It contains 134 fixtures/results and 84 match summaries, plus competition-scoped player statistics. Use the in-app Data desk to inspect provenance and refresh a selected squad. The Vercel Function supports daily fixture lookup and additional match summaries. Source outages leave the bundled catalogue usable.
+## Local data and installation
 
-Player information includes supplied shirt number, position, nationality, birth date, height, weight and season statistics. Missing fields remain unknown. We do not manufacture preferred foot, injury status, xG, heatmaps or optical tracking. Manager identity comes from separately checked sources because roster coach fields can be stale. Formation frequency is a small match sample; the editorial analysis lens is a discussion prompt, not a measured metric.
+Projects autosave locally and sources live in IndexedDB. The project library retains up to 100 entries. Browser storage is not a cross-device backup: export a portable pack for handoff and retention. Importing a pack gives it new media/document IDs.
 
-Analyses autosave in this browser's local storage. The library retains up to 60 document entries. Export JSON for backup and transfer; imported documents receive new IDs. Attached reference images/video stay in IndexedDB in this browser. JSON exports contain their reference, not the media file, so reattach the original on a different device.
+Install Touchline through the browser's Install/Add to Dock menu on HTTPS. The app shell and catalogue cache for offline use after opening; vision engines and models cache after their first use. Data refresh and uncached assets require a connection. No footage leaves the browser for processing, and no paid API or secret is required. The football data route contacts its public upstream provider for requested fixture information.
 
-TV output uses same-origin BroadcastChannel and storage events. It synchronises windows in the **same browser profile on the same computer**. Cross-device remote operation and multi-user cloud collaboration are not implemented. An independently running OBS browser engine must load an exported/prepared analysis in its own profile; a window capture of the opened TV output mirrors the live operator immediately.
+The bundled data includes 134 fixtures/results and 84 match summaries, with supplied squad details, competition statistics, manager identities, observed formations and editable scouting notes. Missing fields remain unknown. See [data provenance](docs/DATA_PROVENANCE.md).
 
-## Run locally
+## Run and test
 
-Requires Node 24 (Node 22.12+ also supports the Vite build) and npm. Python 3.10+ is needed only to rebuild the data snapshot.
+Node 24 and npm are the deployment environment. Python 3.10+ is used only for catalogue refresh and the optional synthetic test generator; the latter also requires Pillow and ffmpeg.
 
 ```bash
 npm ci
@@ -50,22 +57,19 @@ npm test
 npm run build
 ```
 
-The Vite development server reuses `api/football.js`; deployment uses a native Vercel Function. No secrets or paid integrations are required.
-
-To rebuild the snapshot:
+The preparation script downloads checksum-pinned official vision models and copies runtime WASM files into ignored `public/vision/`. Allow the build to reach `storage.googleapis.com`. The graphics engine uses WebGL when available, with a Canvas 2D projection fallback. Vision uses MediaPipe with a TensorFlow WASM/CPU fallback. Codecs available through WebCodecs determine MP4 versus WebM exports; current Chromium over HTTPS is the primary production target. Export is frame-timed rather than real-time recording.
 
 ```bash
 npm run data:refresh
+python3 scripts/make-test-clip.py
 ```
 
-Raw source responses are cached in ignored `data-cache/`. Review `data/managers.json` against its identity sources whenever managers change. Rebuild, review coverage, run tests and commit the new snapshot before deploying it. Data refresh is explicit; no unattended schedule or provider SLA is implied.
+The synthetic test generator creates a controlled ten-second/25 fps clip in ignored `test-results/`; it contains no match footage. Do not commit private or unlicensed footage to this repository.
 
-## Deploy
+## Deployment
 
-Live app: [fixture-tactics-studio.vercel.app](https://fixture-tactics-studio.vercel.app/). Source: [kierantrestain/Tacticsboard](https://github.com/kierantrestain/Tacticsboard).
+[Open Touchline Studio](https://fixture-tactics-studio.vercel.app/) · [GitHub source](https://github.com/kierantrestain/Tacticsboard)
 
-The initial production release was deployed from the committed source through the Vercel API. Vercel’s Git integration returned `repo_no_access` for this repository, so automatic deployments from GitHub are not connected. The repository owner can grant Vercel access and connect this existing project in Settings → Git; do not create a duplicate project. See the production handoff for the exact project.
+Vercel project: `fixture-tactics-studio`, team `FRMX`. Use Vite, Node 24.x, `npm ci`, `npm run build`, output `dist`. The Vercel Function is `/api/football`. No environment variables are required. The production release is uploaded from the exact GitHub commit because Vercel's Git integration previously returned `repo_no_access`; automatic GitHub deployments are not connected. Grant that existing integration repository access before enabling automatic deployment. Do not create a duplicate project.
 
-Import this repository into Vercel with framework **Vite**, build `npm run build`, output `dist`, Node **24.x**. `vercel.json` supplies SPA routing and security headers; `/api/football` is deployed separately. No environment variables are needed. Production is the `main` branch. Run `npm test && npm run build` before promotion.
-
-See [the foundation review](docs/FOUNDATION_REVIEW.md), [data provenance](docs/DATA_PROVENANCE.md), [production handoff](docs/PRODUCTION.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
+See [production handoff](docs/PRODUCTION.md), [V2 workflow and verification](docs/STUDIO_V2.md), [foundation review](docs/FOUNDATION_REVIEW.md) and [third-party notices](THIRD_PARTY_NOTICES.md).

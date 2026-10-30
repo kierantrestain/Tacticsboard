@@ -60,8 +60,8 @@ function ink(hex: string) {
 function Pitch({ board }: { board: Board }) {
   const light = board.settings.theme === "light",
     grass = board.settings.theme === "grass";
-  const color = light ? "#dee7dd" : grass ? "#275f3e" : "#1c4433";
-  const line = light ? "#748775" : "#a2c3a8";
+  const color = light ? "#dee7dd" : grass ? "#275f3e" : "#1b3558";
+  const line = light ? "#748775" : "#96b2d3";
   return (
     <Group listening={false}>
       <Rect
@@ -70,7 +70,7 @@ function Pitch({ board }: { board: Board }) {
         width={1160}
         height={734}
         cornerRadius={9}
-        fill={light ? "#d4ded3" : grass ? "#234c34" : "#152e25"}
+        fill={light ? "#d4ded3" : grass ? "#234c34" : "#10233e"}
       />
       <Rect x={PX} y={PY} width={PW} height={PH} fill={color} />
       {Array.from({ length: 10 }, (_, i) => (
@@ -109,7 +109,7 @@ function Pitch({ board }: { board: Board }) {
           <Line
             key={n}
             points={[PX, sy(n), PX + PW, sy(n)]}
-            stroke="#d5f86a"
+            stroke="#63d9ff"
             opacity={0.24}
             strokeWidth={1.5}
             dash={[8, 8]}
@@ -220,18 +220,18 @@ function Pitch({ board }: { board: Board }) {
       <Text
         x={80}
         y={728}
-        text="FIXTURE  /  TACTICS STUDIO"
+        text="TOUCHLINE  /  TACTICAL REPLAY"
         fontSize={9}
         letterSpacing={2}
-        fill={light ? "#718572" : "#718b7a"}
+        fill={light ? "#718572" : "#6584aa"}
       />
       <Text
         x={1010}
         y={728}
-        text="ANALYST DIAGRAM"
+        text="EDITABLE RECONSTRUCTION"
         fontSize={9}
         letterSpacing={1.2}
-        fill={light ? "#718572" : "#718b7a"}
+        fill={light ? "#718572" : "#6584aa"}
       />
     </Group>
   );
@@ -261,27 +261,53 @@ function Shape({
     lineCap: "round" as const,
     lineJoin: "round" as const,
     hitStrokeWidth: 18,
-    shadowColor: selected ? "#d5f86a" : undefined,
+    shadowColor: selected ? "#63d9ff" : undefined,
     shadowBlur: selected ? 8 : 0,
   };
   let node;
   switch (d.type) {
     case "arrow":
     case "run":
+    case "measure":
       node = (
-        <Arrow
-          points={points}
-          {...shapeProps}
-          pointerLength={11}
-          pointerWidth={10}
-          fill={d.color}
-          dash={d.type === "run" ? [10, 8] : undefined}
-          tension={d.type === "run" ? 0.25 : 0}
-        />
+        <Group>
+          <Arrow
+            points={points}
+            {...shapeProps}
+            pointerLength={11}
+            pointerWidth={10}
+            fill={d.color}
+            dash={d.type === "run" ? [10, 8] : undefined}
+            tension={d.type === "run" ? 0.25 : 0}
+            pointerAtBeginning={d.type === "measure"}
+          />
+          {d.type === "measure" && (
+            <Group x={(a.x + b.x) / 2} y={(a.y + b.y) / 2}>
+              <Rect
+                x={-43}
+                y={-15}
+                width={86}
+                height={30}
+                fill="#09182d"
+                cornerRadius={6}
+              />
+              <Text
+                x={-42}
+                y={-8}
+                width={84}
+                text={`${Math.hypot((d.points[2] - d.points[0]) * 105, (d.points[3] - d.points[1]) * 68).toFixed(1)} m*`}
+                fill={d.color}
+                fontSize={15}
+                align="center"
+              />
+            </Group>
+          )}
+        </Group>
       );
       break;
     case "pen":
     case "line":
+    case "offside":
       node = (
         <Line
           points={points}
@@ -291,6 +317,19 @@ function Shape({
       );
       break;
     case "zone":
+      if (points.length >= 8) {
+        node = (
+          <Line
+            points={points}
+            closed
+            fill={d.color}
+            opacity={0.22}
+            stroke={d.color}
+            strokeWidth={d.width}
+          />
+        );
+        break;
+      }
       node = (
         <Rect
           x={Math.min(a.x, b.x)}
@@ -308,6 +347,18 @@ function Shape({
       break;
     case "ellipse":
     case "spotlight":
+      if (points.length > 4) {
+        node = (
+          <Line
+            points={points}
+            closed
+            {...shapeProps}
+            fill={d.type === "spotlight" ? d.color : undefined}
+            opacity={d.type === "spotlight" ? 0.22 : 1}
+          />
+        );
+        break;
+      }
       node = (
         <Group>
           <Circle
@@ -381,643 +432,644 @@ function Shape({
     </Group>
   );
 }
-const BoardCanvas = forwardRef<BoardHandle, { program?: boolean }>(
-  ({ program = false }, ref) => {
-    const studio = useStudio();
-    const {
-      board,
-      tool,
-      color,
-      stroke,
-      selected,
-      selectedShape,
-      playing,
-      previewTime,
-    } = studio;
-    const container = useRef<HTMLDivElement>(null),
-      stage = useRef<Konva.Stage>(null),
-      work = useRef<Konva.Group>(null);
-    const [size, setSize] = useState({ width: 1000, height: 633 });
-    const [draft, setDraft] = useState<Drawing | null>(null);
-    const draftRef = useRef<Drawing | null>(null);
-    const drawing = useRef(false);
-    useEffect(() => {
-      draftRef.current = null;
-      drawing.current = false;
-      setDraft(null);
-    }, [tool, board?.id, board?.activeScene]);
-    const drag = useRef<{
-      players: BoardPlayer[];
-      uids: string[];
-      origin: BoardPlayer;
-    } | null>(null);
-    const [media, setMedia] = useState<
-        HTMLImageElement | HTMLVideoElement | null
-      >(null),
-      [mediaError, setMediaError] = useState(false),
-      [videoPlaying, setVideoPlaying] = useState(false),
-      [mediaTime, setMediaTime] = useState(0),
-      [mediaDuration, setMediaDuration] = useState(0);
-    const isVideo = !!media && media instanceof HTMLVideoElement;
-    useImperativeHandle(
-      ref,
-      () => ({
-        stage: () => stage.current,
-        video: () => (media instanceof HTMLVideoElement ? media : null),
-      }),
-      [media],
-    );
-    useEffect(() => {
-      const el = container.current;
-      if (!el) return;
-      const update = () => {
-        const w = el.clientWidth,
-          h = el.clientHeight;
-        const scale = Math.min(w / W, h / H);
-        setSize({
-          width: Math.floor(W * scale),
-          height: Math.floor(H * scale),
-        });
-      };
-      const r = new ResizeObserver(update);
-      r.observe(el);
-      update();
-      return () => r.disconnect();
-    }, []);
-    useEffect(() => {
-      let alive = true,
-        url: string | undefined;
-      setMedia(null);
-      setMediaError(false);
-      if (!board?.media) return;
-      getMedia(board.media.id)
-        .then((blob) => {
-          if (!blob) {
-            setMediaError(true);
-            return;
-          }
-          url = URL.createObjectURL(blob);
-          const el =
-            board.media?.type === "video"
-              ? document.createElement("video")
-              : new window.Image();
-          if (el instanceof HTMLVideoElement) {
-            el.muted = true;
-            el.playsInline = true;
-            el.addEventListener("loadeddata", () => {
-              if (alive) {
-                setMedia(el);
-                setMediaDuration(el.duration || 0);
-              }
-            });
-            el.addEventListener("timeupdate", () =>
-              setMediaTime(el.currentTime),
-            );
-            el.addEventListener("ended", () => setVideoPlaying(false));
-          } else
-            el.onload = () => {
-              if (alive) setMedia(el);
-            };
-          el.onerror = () => setMediaError(true);
-          el.src = url;
-        })
-        .catch(() => setMediaError(true));
-      return () => {
-        alive = false;
-        if (url) URL.revokeObjectURL(url);
-      };
-    }, [board?.media?.id]);
-    useEffect(() => {
-      if (!(media instanceof HTMLVideoElement)) return;
-      let id: number;
-      const draw = () => {
-        stage.current?.batchDraw();
-        id = requestAnimationFrame(draw);
-      };
-      id = requestAnimationFrame(draw);
-      const onMessage = (e: MessageEvent) => {
-        if (e.data.type === "media" && e.data.id === board?.id) {
-          media.currentTime = e.data.time || 0;
-          if (e.data.play) media.play().catch(() => {});
-          else media.pause();
-        }
-      };
-      if (program) channel?.addEventListener("message", onMessage);
-      return () => {
-        cancelAnimationFrame(id);
-        if (program) channel?.removeEventListener("message", onMessage);
-        media.pause();
-      };
-    }, [media, program, board?.id]);
-    if (!board) return <div className="canvas-container" ref={container} />;
-    const scale = size.width / W;
-    const frame: Frame =
-      previewTime !== null ? frameAt(board, previewTime) : board;
-    const angle = board.settings.camera === "angle";
-    let transform: {
-      x: number;
-      y: number;
-      scaleX: number;
-      scaleY: number;
-      skewX?: number;
-    } = { x: 0, y: 0, scaleX: 1, scaleY: 1 };
-    if (angle)
-      transform = { x: 92, y: 82, scaleX: 0.94, scaleY: 0.78, skewX: -0.11 };
-    if (board.settings.view !== "full")
-      transform = {
-        x: board.settings.view === "right" ? -1090 : -22,
-        y: -316,
-        scaleX: 1.95,
-        scaleY: 1.9,
-      };
-    const pos = () => {
-      const p = work.current?.getRelativePointerPosition();
-      return p
-        ? { x: clamp((p.x - PX) / PW, 0, 1), y: clamp((p.y - PY) / PH, 0, 1) }
-        : null;
+const BoardCanvas = forwardRef<
+  BoardHandle,
+  { program?: boolean; externalFrame?: Frame }
+>(({ program = false, externalFrame }, ref) => {
+  const studio = useStudio();
+  const {
+    board,
+    tool,
+    color,
+    stroke,
+    selected,
+    selectedShape,
+    playing,
+    previewTime,
+  } = studio;
+  const container = useRef<HTMLDivElement>(null),
+    stage = useRef<Konva.Stage>(null),
+    work = useRef<Konva.Group>(null);
+  const [size, setSize] = useState({ width: 1000, height: 633 });
+  const [draft, setDraft] = useState<Drawing | null>(null);
+  const draftRef = useRef<Drawing | null>(null);
+  const drawing = useRef(false);
+  useEffect(() => {
+    draftRef.current = null;
+    drawing.current = false;
+    setDraft(null);
+  }, [tool, board?.id, board?.activeScene]);
+  const drag = useRef<{
+    players: BoardPlayer[];
+    uids: string[];
+    origin: BoardPlayer;
+  } | null>(null);
+  const [media, setMedia] = useState<
+      HTMLImageElement | HTMLVideoElement | null
+    >(null),
+    [mediaError, setMediaError] = useState(false),
+    [videoPlaying, setVideoPlaying] = useState(false),
+    [mediaTime, setMediaTime] = useState(0),
+    [mediaDuration, setMediaDuration] = useState(0);
+  const isVideo = !!media && media instanceof HTMLVideoElement;
+  useImperativeHandle(
+    ref,
+    () => ({
+      stage: () => stage.current,
+      video: () => (media instanceof HTMLVideoElement ? media : null),
+    }),
+    [media],
+  );
+  useEffect(() => {
+    const el = container.current;
+    if (!el) return;
+    const update = () => {
+      const w = el.clientWidth,
+        h = el.clientHeight;
+      const scale = Math.min(w / W, h / H);
+      setSize({
+        width: Math.floor(W * scale),
+        height: Math.floor(H * scale),
+      });
     };
-    const down = (
-      e: KonvaEventObject<MouseEvent | TouchEvent | PointerEvent>,
-    ) => {
-      if (program || playing) return;
-      const p = pos();
-      if (!p) return;
-      if (tool === "select") {
-        if (e.target === e.target.getStage() || e.target.name() === "board-hit")
-          studio.set({ selected: [], selectedShape: null });
-        return;
-      }
-      if (tool === "erase") return;
-      if (tool === "text") {
-        const d: Drawing = {
-          id: uid(),
-          type: "text",
-          points: [p.x, p.y],
-          color,
-          width: stroke,
-          opacity: 1,
-          text: "Tactical note",
-        };
-        studio.commit((b) => b.drawings.push(d));
-        studio.set({
-          selectedShape: d.id,
-          selected: [],
-          inspector: "settings",
-          tool: "select",
-        });
-        return;
-      }
-      if (tool === "triangle") {
-        const d = draftRef.current || {
-          id: uid(),
-          type: "triangle" as const,
-          points: [],
-          color,
-          width: stroke,
-          opacity: 1,
-        };
-        d.points = [...d.points, p.x, p.y];
-        if (d.points.length === 6) {
-          studio.commit((b) => b.drawings.push(copy(d)));
-          draftRef.current = null;
-          setDraft(null);
-        } else {
-          draftRef.current = copy(d);
-          setDraft(copy(d));
+    const r = new ResizeObserver(update);
+    r.observe(el);
+    update();
+    return () => r.disconnect();
+  }, []);
+  useEffect(() => {
+    let alive = true,
+      url: string | undefined;
+    setMedia(null);
+    setMediaError(false);
+    if (!board?.media) return;
+    getMedia(board.media.id)
+      .then((blob) => {
+        if (!blob) {
+          setMediaError(true);
+          return;
         }
-        return;
+        url = URL.createObjectURL(blob);
+        const el =
+          board.media?.type === "video"
+            ? document.createElement("video")
+            : new window.Image();
+        if (el instanceof HTMLVideoElement) {
+          el.muted = true;
+          el.playsInline = true;
+          el.addEventListener("loadeddata", () => {
+            if (alive) {
+              setMedia(el);
+              setMediaDuration(el.duration || 0);
+            }
+          });
+          el.addEventListener("timeupdate", () => setMediaTime(el.currentTime));
+          el.addEventListener("ended", () => setVideoPlaying(false));
+        } else
+          el.onload = () => {
+            if (alive) setMedia(el);
+          };
+        el.onerror = () => setMediaError(true);
+        el.src = url;
+      })
+      .catch(() => setMediaError(true));
+    return () => {
+      alive = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [board?.media?.id]);
+  useEffect(() => {
+    if (!(media instanceof HTMLVideoElement)) return;
+    let id: number;
+    const draw = () => {
+      stage.current?.batchDraw();
+      id = requestAnimationFrame(draw);
+    };
+    id = requestAnimationFrame(draw);
+    const onMessage = (e: MessageEvent) => {
+      if (e.data.type === "media" && e.data.id === board?.id) {
+        media.currentTime = e.data.time || 0;
+        if (e.data.play) media.play().catch(() => {});
+        else media.pause();
       }
-      drawing.current = true;
+    };
+    if (program) channel?.addEventListener("message", onMessage);
+    return () => {
+      cancelAnimationFrame(id);
+      if (program) channel?.removeEventListener("message", onMessage);
+      media.pause();
+    };
+  }, [media, program, board?.id]);
+  if (!board) return <div className="canvas-container" ref={container} />;
+  const scale = size.width / W;
+  const frame: Frame =
+    externalFrame ||
+    (previewTime !== null ? frameAt(board, previewTime) : board);
+  const angle = board.settings.camera === "angle";
+  let transform: {
+    x: number;
+    y: number;
+    scaleX: number;
+    scaleY: number;
+    skewX?: number;
+  } = { x: 0, y: 0, scaleX: 1, scaleY: 1 };
+  if (angle)
+    transform = { x: 92, y: 82, scaleX: 0.94, scaleY: 0.78, skewX: -0.11 };
+  if (board.settings.view !== "full")
+    transform = {
+      x: board.settings.view === "right" ? -1090 : -22,
+      y: -316,
+      scaleX: 1.95,
+      scaleY: 1.9,
+    };
+  const pos = () => {
+    const p = work.current?.getRelativePointerPosition();
+    return p
+      ? { x: clamp((p.x - PX) / PW, 0, 1), y: clamp((p.y - PY) / PH, 0, 1) }
+      : null;
+  };
+  const down = (
+    e: KonvaEventObject<MouseEvent | TouchEvent | PointerEvent>,
+  ) => {
+    if (program || playing) return;
+    const p = pos();
+    if (!p) return;
+    if (tool === "select") {
+      if (e.target === e.target.getStage() || e.target.name() === "board-hit")
+        studio.set({ selected: [], selectedShape: null });
+      return;
+    }
+    if (tool === "erase") return;
+    if (tool === "text") {
       const d: Drawing = {
         id: uid(),
-        type: tool,
-        points: [p.x, p.y, p.x, p.y],
+        type: "text",
+        points: [p.x, p.y],
+        color,
+        width: stroke,
+        opacity: 1,
+        text: "Tactical note",
+      };
+      studio.commit((b) => b.drawings.push(d));
+      studio.set({
+        selectedShape: d.id,
+        selected: [],
+        inspector: "settings",
+        tool: "select",
+      });
+      return;
+    }
+    if (tool === "offside") {
+      studio.commit((b) =>
+        b.drawings.push({
+          id: uid(),
+          type: "offside",
+          points: [p.x, 0, p.x, 1],
+          color,
+          width: stroke,
+          opacity: 1,
+        }),
+      );
+      return;
+    }
+    if (tool === "triangle") {
+      const d = draftRef.current || {
+        id: uid(),
+        type: "triangle" as const,
+        points: [],
         color,
         width: stroke,
         opacity: 1,
       };
-      draftRef.current = d;
-      setDraft(d);
-    };
-    const move = () => {
-      if (!drawing.current || !draftRef.current) return;
-      const p = pos();
-      if (!p) return;
-      const old = draftRef.current;
-      const next = {
-        ...old,
-        points:
-          old.type === "pen"
-            ? [...old.points, p.x, p.y]
-            : [old.points[0], old.points[1], p.x, p.y],
-      };
-      draftRef.current = next;
-      setDraft(next);
-    };
-    const up = () => {
-      if (!drawing.current) return;
-      drawing.current = false;
-      const d = draftRef.current;
-      if (
-        d &&
-        d.points.length >= 4 &&
-        Math.hypot(
-          d.points.at(-2)! - d.points[0],
-          d.points.at(-1)! - d.points[1],
-        ) > 0.006
-      ) {
+      d.points = [...d.points, p.x, p.y];
+      if (d.points.length === 6) {
         studio.commit((b) => b.drawings.push(copy(d)));
-        studio.set({ selectedShape: d.id, selected: [] });
+        draftRef.current = null;
+        setDraft(null);
+      } else {
+        draftRef.current = copy(d);
+        setDraft(copy(d));
       }
-      draftRef.current = null;
-      setDraft(null);
+      return;
+    }
+    drawing.current = true;
+    const d: Drawing = {
+      id: uid(),
+      type: tool,
+      points: [p.x, p.y, p.x, p.y],
+      color,
+      width: stroke,
+      opacity: 1,
     };
-    const chooseShape = (d: Drawing) => {
-      if (tool === "erase") {
-        studio.commit((b) => {
-          b.drawings = b.drawings.filter((x) => x.id !== d.id);
-        });
-        return;
+    draftRef.current = d;
+    setDraft(d);
+  };
+  const move = () => {
+    if (!drawing.current || !draftRef.current) return;
+    const p = pos();
+    if (!p) return;
+    const old = draftRef.current;
+    const next = {
+      ...old,
+      points:
+        old.type === "pen"
+          ? [...old.points, p.x, p.y]
+          : [old.points[0], old.points[1], p.x, p.y],
+    };
+    draftRef.current = next;
+    setDraft(next);
+  };
+  const up = () => {
+    if (!drawing.current) return;
+    drawing.current = false;
+    const d = draftRef.current;
+    if (
+      d &&
+      d.points.length >= 4 &&
+      Math.hypot(
+        d.points.at(-2)! - d.points[0],
+        d.points.at(-1)! - d.points[1],
+      ) > 0.006
+    ) {
+      studio.commit((b) => b.drawings.push(copy(d)));
+      studio.set({ selectedShape: d.id, selected: [] });
+    }
+    draftRef.current = null;
+    setDraft(null);
+  };
+  const chooseShape = (d: Drawing) => {
+    if (tool === "erase") {
+      studio.commit((b) => {
+        b.drawings = b.drawings.filter((x) => x.id !== d.id);
+      });
+      return;
+    }
+    if (tool === "select")
+      studio.set({
+        selectedShape: d.id,
+        selected: [],
+        inspector: "settings",
+      });
+  };
+  const allShapes = [...frame.drawings, ...(draft ? [draft] : [])];
+  return (
+    <div
+      className={`canvas-container ${tool !== "select" ? "drawing-cursor" : ""} ${program ? "program-canvas" : ""}`}
+      ref={container}
+      data-testid="tactics-canvas"
+      aria-label={
+        program
+          ? "Clean television tactics output"
+          : "Interactive tactics pitch. Drag a player to reposition them. Choose a drawing tool to annotate."
       }
-      if (tool === "select")
-        studio.set({
-          selectedShape: d.id,
-          selected: [],
-          inspector: "settings",
-        });
-    };
-    const allShapes = [...frame.drawings, ...(draft ? [draft] : [])];
-    return (
-      <div
-        className={`canvas-container ${tool !== "select" ? "drawing-cursor" : ""} ${program ? "program-canvas" : ""}`}
-        ref={container}
-        data-testid="tactics-canvas"
-        aria-label={
-          program
-            ? "Clean television tactics output"
-            : "Interactive tactics pitch. Drag a player to reposition them. Choose a drawing tool to annotate."
-        }
+    >
+      <Stage
+        ref={stage}
+        width={size.width}
+        height={size.height}
+        scaleX={scale}
+        scaleY={scale}
+        onMouseDown={down}
+        onTouchStart={down}
+        onMouseMove={move}
+        onTouchMove={move}
+        onMouseUp={up}
+        onTouchEnd={up}
+        onMouseLeave={up}
+        style={{ touchAction: "none" }}
       >
-        <Stage
-          ref={stage}
-          width={size.width}
-          height={size.height}
-          scaleX={scale}
-          scaleY={scale}
-          onMouseDown={down}
-          onTouchStart={down}
-          onMouseMove={move}
-          onTouchMove={move}
-          onMouseUp={up}
-          onTouchEnd={up}
-          onMouseLeave={up}
-          style={{ touchAction: "none" }}
-        >
-          <Layer listening={false}>
+        <Layer listening={false}>
+          <Rect
+            width={W}
+            height={H}
+            fill={board.settings.theme === "light" ? "#d4ded3" : "#0b1729"}
+            cornerRadius={10}
+          />
+          <Group {...transform}>
+            <Pitch board={board} />
+          </Group>
+        </Layer>
+        <Layer>
+          <Group ref={work} {...transform}>
             <Rect
-              width={W}
-              height={H}
-              fill={board.settings.theme === "light" ? "#d4ded3" : "#101b17"}
-              cornerRadius={10}
+              name="board-hit"
+              x={20}
+              y={13}
+              width={1160}
+              height={734}
+              fill="rgba(0,0,0,0.001)"
             />
-            <Group {...transform}>
-              <Pitch board={board} />
-            </Group>
-          </Layer>
-          <Layer>
-            <Group ref={work} {...transform}>
-              <Rect
-                name="board-hit"
-                x={20}
-                y={13}
-                width={1160}
-                height={734}
-                fill="rgba(0,0,0,0.001)"
+            {media && board.settings.mediaVisible && (
+              <CanvasImage
+                image={media}
+                x={PX}
+                y={PY}
+                width={PW}
+                height={PH}
+                listening={false}
               />
-              {media && board.settings.mediaVisible && (
-                <CanvasImage
-                  image={media}
-                  x={PX}
-                  y={PY}
-                  width={PW}
-                  height={PH}
-                  listening={false}
-                />
-              )}
-              {board.settings.trails &&
-                board.scenes.length > 1 &&
-                board.scenes.slice(1).flatMap((s, i) =>
-                  s.players.map((p) => {
-                    const before = board.scenes[i].players.find(
-                      (q) => q.uid === p.uid,
-                    );
-                    return before ? (
-                      <Arrow
-                        key={`${s.id}-${p.uid}`}
-                        points={[sx(before.x), sy(before.y), sx(p.x), sy(p.y)]}
-                        stroke={board.colors[p.side]}
-                        fill={board.colors[p.side]}
-                        strokeWidth={2}
-                        dash={[5, 6]}
-                        opacity={0.35}
-                        pointerWidth={6}
-                        pointerLength={6}
-                        listening={false}
-                      />
-                    ) : null;
-                  }),
-                )}
-              {allShapes.map((d) => (
-                <Shape
-                  key={d.id}
-                  drawing={d}
-                  selected={!program && selectedShape === d.id}
-                  interactive={!program && tool === "select" && !playing}
-                  onSelect={() => chooseShape(d)}
-                  onMove={(dx, dy) =>
-                    studio.commit((b) => {
-                      b.drawings = b.drawings.map((x) =>
-                        x.id === d.id ? moveDrawing(x, dx, dy) : x,
-                      );
-                    })
-                  }
-                  onErase={() => {
-                    if (tool === "erase")
-                      studio.commit((b) => {
-                        b.drawings = b.drawings.filter((x) => x.id !== d.id);
-                      });
-                  }}
-                />
-              ))}
-              {frame.players
-                .filter((p) =>
-                  p.side === "home"
-                    ? board.settings.homeVisible
-                    : board.settings.awayVisible,
-                )
-                .map((p) => {
-                  const c = board.colors[p.side],
-                    active = !program && selected.includes(p.uid);
-                  const name = shortName(p.name);
-                  return (
-                    <Group
-                      key={p.uid}
-                      name={`player-${p.uid}`}
-                      x={sx(p.x)}
-                      y={sy(p.y)}
-                      opacity={p.opacity ?? 1}
-                      draggable={!program && tool === "select" && !playing}
-                      onClick={(e) => {
-                        e.cancelBubble = true;
-                        if (tool === "select")
-                          studio.set({
-                            selected: e.evt.shiftKey
-                              ? [...new Set([...selected, p.uid])]
-                              : [p.uid],
-                            selectedShape: null,
-                            profileId: null,
-                            inspector: "players",
-                            side: p.side,
-                          });
-                      }}
-                      onTap={(e) => {
-                        e.cancelBubble = true;
-                        if (tool === "select")
-                          studio.set({
-                            selected: [p.uid],
-                            selectedShape: null,
-                            profileId: null,
-                            inspector: "players",
-                            side: p.side,
-                          });
-                      }}
-                      onDragStart={() => {
-                        const ids = selected.includes(p.uid)
-                          ? selected
-                          : [p.uid];
-                        drag.current = {
-                          players: copy(board.players),
-                          uids: ids,
-                          origin: copy(p),
-                        };
-                        studio.set({ selected: ids, selectedShape: null });
-                        studio.begin();
-                      }}
-                      onDragMove={(e) => {
-                        if (!drag.current) return;
-                        const x = clamp((e.target.x() - PX) / PW),
-                          y = clamp((e.target.y() - PY) / PH);
-                        e.target.position({ x: sx(x), y: sy(y) });
-                        const { origin, players, uids } = drag.current;
-                        studio.preview((b) => {
-                          b.players = b.players.map((q) => {
-                            const base = players.find((z) => z.uid === q.uid);
-                            return uids.includes(q.uid) && base
-                              ? {
-                                  ...q,
-                                  x: clamp(base.x + x - origin.x),
-                                  y: clamp(base.y + y - origin.y),
-                                }
-                              : q;
-                          });
-                        });
-                      }}
-                      onDragEnd={() => {
-                        drag.current = null;
-                        studio.end();
-                      }}
-                    >
-                      <Rect
-                        x={-31}
-                        y={-31}
-                        width={62}
-                        height={78}
-                        fill="rgba(0,0,0,.001)"
-                      />
-                      {active && (
-                        <Circle
-                          radius={26}
-                          stroke="#d5f86a"
-                          strokeWidth={2}
-                          opacity={0.95}
-                        />
-                      )}
-                      <Circle
-                        y={4}
-                        radius={21}
-                        fill="#020b07"
-                        opacity={0.45}
-                        listening={false}
-                      />
-                      {board.settings.tokenStyle === "shirt" ? (
-                        <Path
-                          data="M -12 -17 L -27 -8 L -20 3 L -14 0 L -14 21 L 14 21 L 14 0 L 20 3 L 27 -8 L 12 -17 L 6 -12 L -6 -12 Z"
-                          fill={c}
-                          stroke={mix(c, 0.45)}
-                          strokeWidth={1.7}
-                        />
-                      ) : (
-                        <Circle
-                          radius={20}
-                          fillRadialGradientStartPoint={{ x: -7, y: -9 }}
-                          fillRadialGradientEndPoint={{ x: 12, y: 16 }}
-                          fillRadialGradientStartRadius={0}
-                          fillRadialGradientEndRadius={32}
-                          fillRadialGradientColorStops={[
-                            0,
-                            mix(c, 0.3),
-                            0.55,
-                            c,
-                            1,
-                            mix(c, 0.02),
-                          ]}
-                          stroke={mix(c, 0.5)}
-                          strokeWidth={1.5}
-                        />
-                      )}
-                      {board.settings.numbers && (
-                        <Text
-                          x={-23}
-                          y={-8}
-                          width={46}
-                          text={p.number || "•"}
-                          fontSize={18}
-                          fontStyle="bold"
-                          align="center"
-                          fill={ink(c)}
-                          listening={false}
-                        />
-                      )}
-                      {board.settings.names && (
-                        <Group listening={false}>
-                          <Rect
-                            x={-Math.min(63, name.length * 3.8 + 8)}
-                            y={28}
-                            width={Math.min(126, name.length * 7.6 + 16)}
-                            height={21}
-                            fill="#0c1713"
-                            cornerRadius={3}
-                            opacity={0.88}
-                          />
-                          <Text
-                            x={-63}
-                            y={32}
-                            width={126}
-                            text={
-                              name.length > 17 ? name.slice(0, 16) + "…" : name
-                            }
-                            fontSize={12.5}
-                            align="center"
-                            fill="#f0f5ee"
-                            fontStyle="bold"
-                          />
-                        </Group>
-                      )}
-                    </Group>
+            )}
+            {board.settings.trails &&
+              board.scenes.length > 1 &&
+              board.scenes.slice(1).flatMap((s, i) =>
+                s.players.map((p) => {
+                  const before = board.scenes[i].players.find(
+                    (q) => q.uid === p.uid,
                   );
-                })}
-              <Group
-                x={sx(frame.ball.x)}
-                y={sy(frame.ball.y)}
-                draggable={!program && tool === "select" && !playing}
-                onDragStart={() => studio.begin()}
-                onDragMove={(e) => {
-                  const x = clamp((e.target.x() - PX) / PW),
-                    y = clamp((e.target.y() - PY) / PH);
-                  e.target.position({ x: sx(x), y: sy(y) });
-                  studio.preview((b) => {
-                    b.ball = { x, y };
-                  });
-                }}
-                onDragEnd={() => studio.end()}
-              >
-                <Circle y={3} radius={11} fill="#000" opacity={0.35} />
-                <Circle
-                  radius={9}
-                  fill="#f0f3ed"
-                  stroke="#a1afa5"
-                  strokeWidth={1}
-                />
-                <Circle radius={3} fill="#35493d" />
-                <Line
-                  points={[-7, -3, -3, -2, -1, -7]}
-                  stroke="#35493d"
-                  strokeWidth={1}
-                />
-                <Line
-                  points={[7, 3, 3, 2, 1, 7]}
-                  stroke="#35493d"
-                  strokeWidth={1}
-                />
-              </Group>
-            </Group>
-          </Layer>
-        </Stage>
-        {mediaError && !program && (
-          <div className="media-warning">
-            <ImageOff size={14} />
-            This media file is not available in this browser. Reattach it from
-            your original file.
-          </div>
-        )}
-        {isVideo && !program && (
-          <div className="media-controls">
-            <button
-              title={
-                videoPlaying ? "Pause reference video" : "Play reference video"
-              }
-              onClick={() => {
-                const v = media as HTMLVideoElement;
-                if (v.paused) {
-                  v.play()
-                    .then(() => setVideoPlaying(true))
-                    .catch(() =>
-                      studio.notify(
-                        "The video cannot be played in this browser.",
-                      ),
+                  return before ? (
+                    <Arrow
+                      key={`${s.id}-${p.uid}`}
+                      points={[sx(before.x), sy(before.y), sx(p.x), sy(p.y)]}
+                      stroke={board.colors[p.side]}
+                      fill={board.colors[p.side]}
+                      strokeWidth={2}
+                      dash={[5, 6]}
+                      opacity={0.35}
+                      pointerWidth={6}
+                      pointerLength={6}
+                      listening={false}
+                    />
+                  ) : null;
+                }),
+              )}
+            {allShapes.map((d) => (
+              <Shape
+                key={d.id}
+                drawing={d}
+                selected={!program && selectedShape === d.id}
+                interactive={!program && tool === "select" && !playing}
+                onSelect={() => chooseShape(d)}
+                onMove={(dx, dy) =>
+                  studio.commit((b) => {
+                    b.drawings = b.drawings.map((x) =>
+                      x.id === d.id ? moveDrawing(x, dx, dy) : x,
                     );
-                } else {
-                  v.pause();
-                  setVideoPlaying(false);
+                  })
                 }
-                channel?.postMessage({
-                  type: "media",
-                  id: board.id,
-                  time: v.currentTime,
-                  play: !videoPlaying,
+                onErase={() => {
+                  if (tool === "erase")
+                    studio.commit((b) => {
+                      b.drawings = b.drawings.filter((x) => x.id !== d.id);
+                    });
+                }}
+              />
+            ))}
+            {frame.players
+              .filter((p) =>
+                p.side === "home"
+                  ? board.settings.homeVisible
+                  : board.settings.awayVisible,
+              )
+              .map((p) => {
+                const c = board.colors[p.side],
+                  active = !program && selected.includes(p.uid);
+                const name = shortName(p.name);
+                return (
+                  <Group
+                    key={p.uid}
+                    name={`player-${p.uid}`}
+                    x={sx(p.x)}
+                    y={sy(p.y)}
+                    opacity={p.opacity ?? 1}
+                    draggable={!program && tool === "select" && !playing}
+                    onClick={(e) => {
+                      e.cancelBubble = true;
+                      if (tool === "select")
+                        studio.set({
+                          selected: e.evt.shiftKey
+                            ? [...new Set([...selected, p.uid])]
+                            : [p.uid],
+                          selectedShape: null,
+                          profileId: null,
+                          inspector: "players",
+                          side: p.side,
+                        });
+                    }}
+                    onTap={(e) => {
+                      e.cancelBubble = true;
+                      if (tool === "select")
+                        studio.set({
+                          selected: [p.uid],
+                          selectedShape: null,
+                          profileId: null,
+                          inspector: "players",
+                          side: p.side,
+                        });
+                    }}
+                    onDragStart={() => {
+                      const ids = selected.includes(p.uid) ? selected : [p.uid];
+                      drag.current = {
+                        players: copy(board.players),
+                        uids: ids,
+                        origin: copy(p),
+                      };
+                      studio.set({ selected: ids, selectedShape: null });
+                      studio.begin();
+                    }}
+                    onDragMove={(e) => {
+                      if (!drag.current) return;
+                      const x = clamp((e.target.x() - PX) / PW),
+                        y = clamp((e.target.y() - PY) / PH);
+                      e.target.position({ x: sx(x), y: sy(y) });
+                      const { origin, players, uids } = drag.current;
+                      studio.preview((b) => {
+                        b.players = b.players.map((q) => {
+                          const base = players.find((z) => z.uid === q.uid);
+                          return uids.includes(q.uid) && base
+                            ? {
+                                ...q,
+                                x: clamp(base.x + x - origin.x),
+                                y: clamp(base.y + y - origin.y),
+                              }
+                            : q;
+                        });
+                      });
+                    }}
+                    onDragEnd={() => {
+                      drag.current = null;
+                      studio.end();
+                    }}
+                  >
+                    <Rect
+                      x={-31}
+                      y={-31}
+                      width={62}
+                      height={78}
+                      fill="rgba(0,0,0,.001)"
+                    />
+                    {active && (
+                      <Circle
+                        radius={26}
+                        stroke="#63d9ff"
+                        strokeWidth={2}
+                        opacity={0.95}
+                      />
+                    )}
+                    <Circle
+                      y={4}
+                      radius={21}
+                      fill="#020b07"
+                      opacity={0.45}
+                      listening={false}
+                    />
+                    {board.settings.tokenStyle === "shirt" ? (
+                      <Path
+                        data="M -12 -17 L -27 -8 L -20 3 L -14 0 L -14 21 L 14 21 L 14 0 L 20 3 L 27 -8 L 12 -17 L 6 -12 L -6 -12 Z"
+                        fill={c}
+                        stroke={mix(c, 0.45)}
+                        strokeWidth={1.7}
+                      />
+                    ) : (
+                      <Circle
+                        radius={20}
+                        fill={c}
+                        stroke={mix(c, 0.5)}
+                        strokeWidth={1.5}
+                      />
+                    )}
+                    {board.settings.numbers && (
+                      <Text
+                        x={-23}
+                        y={-8}
+                        width={46}
+                        text={p.number || "•"}
+                        fontSize={20}
+                        fontStyle="bold"
+                        align="center"
+                        fill={ink(c)}
+                        listening={false}
+                      />
+                    )}
+                    {board.settings.names && (
+                      <Group listening={false}>
+                        <Rect
+                          x={-Math.min(63, name.length * 3.8 + 8)}
+                          y={28}
+                          width={Math.min(126, name.length * 7.6 + 16)}
+                          height={21}
+                          fill="#091427"
+                          cornerRadius={3}
+                          opacity={0.88}
+                        />
+                        <Text
+                          x={-63}
+                          y={32}
+                          width={126}
+                          text={
+                            name.length > 17 ? name.slice(0, 16) + "…" : name
+                          }
+                          fontSize={15}
+                          align="center"
+                          fill="#f0f5ee"
+                          fontStyle="bold"
+                        />
+                      </Group>
+                    )}
+                  </Group>
+                );
+              })}
+            <Group
+              visible={board.settings.ballVisible !== false}
+              x={sx(frame.ball.x)}
+              y={sy(frame.ball.y)}
+              draggable={!program && tool === "select" && !playing}
+              onDragStart={() => studio.begin()}
+              onDragMove={(e) => {
+                const x = clamp((e.target.x() - PX) / PW),
+                  y = clamp((e.target.y() - PY) / PH);
+                e.target.position({ x: sx(x), y: sy(y) });
+                studio.preview((b) => {
+                  b.ball = { x, y };
                 });
               }}
+              onDragEnd={() => studio.end()}
             >
-              {videoPlaying ? <Pause size={15} /> : <Play size={15} />}
-            </button>
-            <input
-              aria-label="Reference video position"
-              type="range"
-              min="0"
-              max={mediaDuration || 1}
-              step=".04"
-              value={mediaTime}
-              onChange={(e) => {
-                const v = media as HTMLVideoElement;
-                v.currentTime = Number(e.target.value);
-                setMediaTime(v.currentTime);
-                channel?.postMessage({
-                  type: "media",
-                  id: board.id,
-                  time: v.currentTime,
-                  play: videoPlaying,
-                });
-              }}
-            />
-            <span>
-              {Math.floor(mediaTime / 60)}:
-              {String(Math.floor(mediaTime % 60)).padStart(2, "0")}
-            </span>
-            <VolumeX size={13} />
-          </div>
-        )}
-      </div>
-    );
-  },
-);
+              <Circle y={3} radius={11} fill="#000" opacity={0.35} />
+              <Circle
+                radius={9}
+                fill="#f0f3ed"
+                stroke="#a1afa5"
+                strokeWidth={1}
+              />
+              <Circle radius={3} fill="#35493d" />
+              <Line
+                points={[-7, -3, -3, -2, -1, -7]}
+                stroke="#35493d"
+                strokeWidth={1}
+              />
+              <Line
+                points={[7, 3, 3, 2, 1, 7]}
+                stroke="#35493d"
+                strokeWidth={1}
+              />
+            </Group>
+          </Group>
+        </Layer>
+      </Stage>
+      {mediaError && !program && (
+        <div className="media-warning">
+          <ImageOff size={14} />
+          This media file is not available in this browser. Reattach it from
+          your original file.
+        </div>
+      )}
+      {isVideo && !program && (
+        <div className="media-controls">
+          <button
+            title={
+              videoPlaying ? "Pause reference video" : "Play reference video"
+            }
+            onClick={() => {
+              const v = media as HTMLVideoElement;
+              if (v.paused) {
+                v.play()
+                  .then(() => setVideoPlaying(true))
+                  .catch(() =>
+                    studio.notify(
+                      "The video cannot be played in this browser.",
+                    ),
+                  );
+              } else {
+                v.pause();
+                setVideoPlaying(false);
+              }
+              channel?.postMessage({
+                type: "media",
+                id: board.id,
+                time: v.currentTime,
+                play: !videoPlaying,
+              });
+            }}
+          >
+            {videoPlaying ? <Pause size={15} /> : <Play size={15} />}
+          </button>
+          <input
+            aria-label="Reference video position"
+            type="range"
+            min="0"
+            max={mediaDuration || 1}
+            step=".04"
+            value={mediaTime}
+            onChange={(e) => {
+              const v = media as HTMLVideoElement;
+              v.currentTime = Number(e.target.value);
+              setMediaTime(v.currentTime);
+              channel?.postMessage({
+                type: "media",
+                id: board.id,
+                time: v.currentTime,
+                play: videoPlaying,
+              });
+            }}
+          />
+          <span>
+            {Math.floor(mediaTime / 60)}:
+            {String(Math.floor(mediaTime % 60)).padStart(2, "0")}
+          </span>
+          <VolumeX size={13} />
+        </div>
+      )}
+    </div>
+  );
+});
 export default BoardCanvas;
