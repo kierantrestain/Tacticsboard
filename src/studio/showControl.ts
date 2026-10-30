@@ -12,6 +12,7 @@ export function saveCue() {
     r = useRuntime.getState(),
     b = s.board;
   if (!b) return;
+  if(r.movementDraft){s.notify("Finish or cancel the movement first.");return;}
   if ((b.studio?.cues?.length || 0) >= 80) {
     s.notify("This rundown has 80 shots. Remove a shot before saving another.");
     return;
@@ -37,6 +38,7 @@ export function recallCue(id: string, take = false) {
     b = s.board;
   const cue = b?.studio?.cues?.find((c) => c.id === id);
   if (!b || !cue) return;
+  if(r.movementDraft){s.notify("Finish or cancel the movement first.");return;}
   if (cue.assetId && !r.assets.some((a) => a.id === cue.assetId)) {
     s.notify(
       "Source missing. The shot is open for inspection; restore its media before taking it to programme.",
@@ -55,6 +57,7 @@ export function recallCue(id: string, take = false) {
     camera: cue.camera,
     time: cue.time,
     mediaPlaying: false,
+    mediaHolding: false,
     selectedInk: null,
     activeCueId: id,
     cueClock: { startedAt: null, elapsed: 0 },
@@ -80,6 +83,7 @@ export function updateCue() {
     b = s.board;
   const previous = b?.studio?.cues?.find((c) => c.id === r.activeCueId);
   if (!b || !previous) return;
+  if(r.movementDraft){s.notify("Finish or cancel the movement first.");return;}
   const current = makeCue(
     b,
     r.view,

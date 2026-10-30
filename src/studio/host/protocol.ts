@@ -23,6 +23,9 @@ export interface HostState {
   previewAspect?: number;
   visibleInk?: Drawing[];
   mediaName?: string;
+  mediaType?: "video" | "image";
+  availableViews?: ViewMode[];
+  rate?: number;
   canUndo: boolean;
   canRedo: boolean;
 }
@@ -38,9 +41,10 @@ export type HostCommand =
   | { type: 'scene'; id: string }
   | { type: 'cue'; id: string }
   | { type: 'seek'; time: number }
-  | { type: 'view'; view: 'board' | 'footage' | 'replay' }
+  | { type: 'view'; view: 'board' | 'footage' | 'replay' | 'stats' }
   | { type: 'camera'; camera: CameraPreset }
   | { type: 'duration'; seconds: number }
-  | { type: 'clip-in' | 'clip-out' | 'undo' | 'redo' | 'clear' | 'play' | 'restart' | 'start-move' | 'finish-move' | 'cancel-move' | 'cancel-gesture' | 'save-shot' };
+  | { type: 'rate'; value: number }
+  | { type: 'clip-in' | 'clip-out' | 'undo' | 'redo' | 'clear' | 'play' | 'restart' | 'start-move' | 'finish-move' | 'cancel-move' | 'cancel-gesture' | 'save-shot' | 'update-shot' | 'pause-explain' };
 export interface CommandEnvelope { role: HostRole; epoch: number; seq: number; boardId: string; sceneId: string; command: HostCommand }
 export const roleName = (role: RoomRole | null) => role === 'host1' ? 'Host 1' : role === 'host2' ? 'Host 2' : 'Producer';

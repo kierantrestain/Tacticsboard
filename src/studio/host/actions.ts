@@ -2,8 +2,9 @@ import { clamp, copy, frameAt, totalDuration, uid } from '../../core';
 import type { Board, Drawing } from '../../types';
 import { useStudio } from '../../store';
 import { editDesk, useRuntime } from '../runtime';
-import { recallCue, saveCue } from '../showControl';
+import { recallCue, saveCue, updateCue } from '../showControl';
 import type { HostCommand } from './protocol';
+import { availableHostViews, explanationPause } from './tabletModel';
 
 export function createMovement(board: Board): Board {
   const next = copy(board), index = next.scenes.findIndex(s => s.id === next.activeScene);
@@ -68,12 +69,18 @@ export function executeHostCommand(command: HostCommand) {
   }
   if (command.type === 'finish-move') { if (!r.movementDraft) return; r.set({ movementDraft: null }); s.save(); s.notify('Move saved. Play the sequence or add the next move.'); return; }
   if (command.type === 'cancel-move') { if (r.movementDraft) s.commit(board => Object.assign(board, r.movementDraft!.before)); r.set({ movementDraft: null }); return; }
-  if (r.movementDraft && ['scene', 'cue', 'view', 'undo', 'redo', 'save-shot', 'play', 'restart'].includes(command.type)) throw Error('Finish or cancel the move first.');
+  if (r.movementDraft && ['scene', 'cue', 'view', 'undo', 'redo', 'save-shot', 'update-shot', 'play', 'restart'].includes(command.type)) throw Error('Finish or cancel the move first.');
   if (command.type === 'scene') { if (!b.scenes.some(scene => scene.id === command.id)) throw Error('That step is no longer in this sequence.'); s.selectScene(command.id); return; }
   if (command.type === 'cue') { if (!b.studio?.cues?.some(cue => cue.id === command.id)) throw Error('That moment is no longer in this show.'); recallCue(command.id); return; }
-  if (command.type === 'view') { if (!['board', 'footage', 'replay'].includes(command.view)) return; editDesk(d => { d.view = command.view; }); r.set({ view: command.view, mediaPlaying: false }); s.set({ playing: false, previewTime: null }); return; }
+  if (command.type === 'view') { if (!availableHostViews(b,r.assets,r.assetAvailability).includes(command.view)) throw Error('Prepare that view on the show computer first.'); editDesk(d => { d.view = command.view; }); r.set({ view: command.view, mediaPlaying: false, mediaHolding:false, ...(command.view==='footage'?{time:b.studio?.trim.start||0}:{}) }); s.set({ playing: false, previewTime: null }); return; }
   if (command.type === 'camera') { if (['broadcast', 'overhead', 'endline', 'touchline'].includes(command.camera)) r.set({ camera: command.camera }); return; }
   if (command.type === 'duration') { const n = Number(command.seconds); if (!Number.isFinite(n)) return; s.commit(board => { const scene = board.scenes.find(x => x.id === board.activeScene); if (scene) scene.duration = Math.max(.5, Math.min(10, n)); }); return; }
+  if (command.type === 'rate') { if(![.25,.5,1,2].includes(command.value))throw Error('Choose a supported playback speed.'); r.set({rate:command.value}); return; }
+  if (command.type === 'pause-explain') {
+    const asset=r.assets.find(a=>a.id===b.studio?.assetId);if(r.view!=='footage'||asset?.type!=='video')throw Error('Open a video moment first.');
+    const pause=explanationPause(b.studio!.trim,r.time,b.studio!.explainStops?.[asset.id]||[],uid());
+    editDesk(d=>{(d.explainStops||={})[asset.id]=pause.stops;});r.set({time:pause.time,mediaPlaying:false,mediaHolding:false});return;
+  }
   if (command.type === 'clip-in' || command.type === 'clip-out') {
     if (!b.studio?.assetId) throw Error('Choose a clip first.');
     const a = r.assets.find(x => x.id === b.studio?.assetId);
@@ -89,6 +96,7 @@ export function executeHostCommand(command: HostCommand) {
   }
   if (command.type === 'undo') s.undo();
   else if (command.type === 'redo') s.redo();
+  else if (command.type === 'update-shot') { if(!b.studio?.cues?.some(c=>c.id===r.activeCueId))throw Error('Open a saved moment first.');updateCue(); }
   else if (command.type === 'save-shot') saveCue();
   else if (command.type === 'clear') { if (r.view === 'footage' && b.studio?.assetId) editDesk(d => { d.ink[d.assetId!] = []; }); else s.commit(board => { board.drawings = []; board.settings.focusPlayer = undefined; }); }
 }
