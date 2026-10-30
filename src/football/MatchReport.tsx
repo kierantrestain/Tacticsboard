@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, ExternalLink, ChevronDown } from "lucide-react";
 import { useStudio } from "../store";
-import { formatMatchStat } from "../core";
+import { download, filename, formatMatchStat } from "../core";
 import type { Match, MatchDetails } from "../types";
 import { TeamBadge } from "./ClubBadge";
 import { checkedTime, loadReport } from "./data";
+import PlayerData from "./PlayerData";
+import { matchDigest, playerReportCSV, reportCoverage } from "./reportTools";
+import { presentMatchData } from "../studio/StatsStage";
 const priority = [
   "possessionPct",
   "totalShots",
@@ -26,7 +29,9 @@ export default function MatchReport({
 }) {
   const catalogue = useStudio((s) => s.catalogue),
     details = useStudio((s) => s.summaries[match.id]);
-  const [tab, setTab] = useState<"team" | "players" | "events">("team"),
+  const [tab, setTab] = useState<"report" | "team" | "players" | "events">(
+      "report",
+    ),
     [side, setSide] = useState(match.homeId),
     [expanded, setExpanded] = useState(""),
     [filter, setFilter] = useState(""),
@@ -90,6 +95,8 @@ export default function MatchReport({
     events = details?.commentary?.length
       ? details.commentary
       : details?.events || [];
+  const coverage = reportCoverage(details),
+    digest = matchDigest(match, details);
   const display = (v: MatchDetails | undefined, key: string, pid: string) => {
     const p = v?.lineups.flatMap((l) => l.players).find((p) => p.id === pid),
       stat = p?.stats?.[key];
@@ -149,12 +156,22 @@ export default function MatchReport({
         </button>
       </div>
       {error && <p className="fc-source-note">{error}</p>}
+      <div className="fp-coverage">
+        <span>{coverage.lineups}/2 confirmed XIs</span>
+        <span>{coverage.teamFields} team fields</span>
+        <span>
+          {coverage.playersWithStats}/{coverage.players} player records with
+          stats
+        </span>
+        <span>{coverage.commentary} commentary/events</span>
+      </div>
       <div
         className="fc-report-tabs"
         role="tablist"
         aria-label="Match report sections"
       >
         {[
+          ["report", "Report"],
           ["team", "Team stats"],
           ["players", "Players"],
           ["events", "Commentary"],
@@ -172,6 +189,78 @@ export default function MatchReport({
           </button>
         ))}
       </div>
+      <button
+        className="fp-present-data"
+        disabled={busy || !details?.teamStats.length}
+        onClick={() =>
+          void presentMatchData(match).catch(() =>
+            setError("The data card could not be prepared."),
+          )
+        }
+      >
+        Present match statistics on TV
+      </button>
+      {tab === "report" && (
+        <div className="fp-match-digest">
+          <h3>Match report at a glance</h3>
+          {digest.length ? (
+            <ul>
+              {digest.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="fc-source-note">
+              A factual report will appear when scores and statistics are
+              supplied.
+            </p>
+          )}
+          <p className="fc-source-note">
+            This summary uses the supplied numbers. Tactical causes, ratings and
+            missing tracking measurements are not inferred.
+          </p>
+          {!!details?.events.length && (
+            <>
+              <h4>Key moments</h4>
+              {details.events.map((e, i) => (
+                <div className="fp-key-event" key={i}>
+                  <b>{e.minute || "·"}</b>
+                  <span>{e.text}</span>
+                </div>
+              ))}
+            </>
+          )}
+          {details && (
+            <div className="fp-report-downloads">
+              <button
+                onClick={() =>
+                  download(
+                    new Blob(
+                      [JSON.stringify({ match, report: details }, null, 2)],
+                      { type: "application/json" },
+                    ),
+                    filename(match.name) + ".report.json",
+                  )
+                }
+              >
+                Download full report JSON
+              </button>
+              <button
+                onClick={() =>
+                  download(
+                    new Blob(["\ufeff" + playerReportCSV(match, details)], {
+                      type: "text/csv;charset=utf-8",
+                    }),
+                    filename(match.name) + ".players.csv",
+                  )
+                }
+              >
+                Download player stats CSV
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       {tab === "team" && (
         <>
           <input
@@ -265,16 +354,50 @@ export default function MatchReport({
                 )}
               </button>
               {expanded === p.id && (
-                <div className="fc-player-expanded">
-                  {Object.entries(p.stats || {}).map(([k, v]) => (
-                    <div key={k}>
-                      <span>{v.label}</span>
-                      <strong>{v.display ?? v.value ?? "—"}</strong>
-                    </div>
-                  ))}
-                  {!Object.keys(p.stats || {}).length && (
-                    <p>No individual numbers were supplied.</p>
-                  )}
+                <div className="fp-player-detail">
+                  <button
+                    className="fp-present-data"
+                    onClick={() =>
+                      void presentMatchData(match, p.id).catch(() =>
+                        setError("The player data card could not be prepared."),
+                      )
+                    }
+                  >
+                    Present this player on TV
+                  </button>
+                  <PlayerData
+                    player={
+                      catalogue.teams
+                        .flatMap((t) => t.players)
+                        .find((x) => x.id === p.id) || {
+                        id: p.id,
+                        name: p.name,
+                        number: p.number,
+                        statsByCompetition: {},
+                      }
+                    }
+                    team={
+                      catalogue.teams.find((t) => t.id === side) || {
+                        id: side,
+                        name:
+                          side === match.homeId
+                            ? match.homeName
+                            : match.awayName,
+                        shortName:
+                          side === match.homeId
+                            ? match.homeName
+                            : match.awayName,
+                        abbreviation: "",
+                        color: "#9ec98e",
+                        alternateColor: "#ffffff",
+                        competitions: [match.league],
+                        players: [],
+                      }
+                    }
+                    league={match.league}
+                    match={match}
+                    matchPlayer={p}
+                  />
                 </div>
               )}
             </div>

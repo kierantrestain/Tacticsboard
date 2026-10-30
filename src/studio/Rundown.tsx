@@ -22,6 +22,7 @@ import { copy, uid } from "../core";
 import { recallCue, saveCue, stepCue } from "./showControl";
 import MiniPitch from "./MiniPitch";
 const labels = {
+  stats: "Match data card",
   board: "Tactical board",
   footage: "Source footage",
   split: "Source + board",

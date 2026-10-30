@@ -23,6 +23,8 @@ describe("football route", () => {
       ["GET", "/api/football?action=summary&league=other&event=12", 400],
       ["GET", "/api/football?action=summary&event=https://example.com", 400],
       ["GET", "/api/football?action=fixtures&date=2026", 400],
+      ["GET", "/api/football?action=career&player=../secret", 400],
+      ["GET", "/api/football?action=archive&season=1991", 400],
     ]) {
       const res = response();
       await handler({ method, url }, res);
@@ -120,5 +122,97 @@ describe("football route", () => {
     );
     expect(res.statusCode).toBe(503);
     expect(JSON.parse(res.body).error).toContain("saved catalogue");
+  });
+  it("deduplicates historical club schedules, ignores dates outside the requested season and reports partial coverage", async () => {
+    const event = (id, date) => ({
+      id,
+      date,
+      competitions: [
+        {
+          competitors: [
+            {
+              id: "1",
+              homeAway: "home",
+              team: { id: "1", displayName: "One" },
+              score: "2",
+            },
+            {
+              id: "2",
+              homeAway: "away",
+              team: { id: "2", displayName: "Two" },
+              score: "1",
+            },
+          ],
+          status: {
+            type: { state: "post", completed: true, description: "Full Time" },
+          },
+        },
+      ],
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url) => {
+        if (url.includes("scoreboard")) return { ok: false };
+        if (url.includes("standings"))
+          return {
+            ok: true,
+            json: async () => ({
+              season: { year: 2025 },
+              standings: {
+                entries: [
+                  { team: { id: "1" }, stats: [] },
+                  { team: { id: "2" }, stats: [] },
+                ],
+              },
+            }),
+          };
+        return {
+          ok: true,
+          json: async () => ({
+            season: { year: 2026 },
+            events: [
+              event("old", "2024-10-01"),
+              event("correct", "2025-10-01"),
+              event("future", "2026-08-01"),
+            ],
+          }),
+        };
+      }),
+    );
+    const res = response();
+    await handler(
+      { method: "GET", url: "/api/football?action=archive&season=2025" },
+      res,
+    );
+    const result = JSON.parse(res.body);
+    expect(res.statusCode).toBe(200);
+    expect(result.matches.map((m) => m.id)).toEqual(["correct"]);
+    expect(result.matches[0].seasonYear).toBe(2025);
+    expect(result.coverage).toMatchObject({
+      returned: 1,
+      expected: 380,
+      complete: false,
+      schedulesChecked: 2,
+      schedulesUnavailable: 0,
+    });
+  });
+  it("rejects a historical table when the provider returns a different or unknown season", async () => {
+    for (const season of [{ year: 2026 }, undefined]) {
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValue({
+            ok: true,
+            json: async () => ({ season, standings: { entries: [] } }),
+          }),
+      );
+      const res = response();
+      await handler(
+        { method: "GET", url: "/api/football?action=standings&season=2025" },
+        res,
+      );
+      expect(res.statusCode).toBe(503);
+    }
   });
 });

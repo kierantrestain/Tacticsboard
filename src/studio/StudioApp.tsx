@@ -9,6 +9,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import {
   ArrowDownToLine,
+  BarChart3,
   ArrowLeftRight,
   ArrowRight,
   ArrowUpRight,
@@ -73,6 +74,8 @@ import {
   totalDuration,
   isBoard,
   uid,
+  catalogueWithBoardTeams,
+  activeSceneTime,
 } from "../core";
 import type { Catalogue, MatchDetails, Tool, Frame } from "../types";
 import { useRuntime, editDesk, selectAsset } from "./runtime";
@@ -100,6 +103,8 @@ import {
 } from "./production";
 import TacticsPanel from "./TacticsPanel";
 import BroadcastPanel from "./BroadcastPanel";
+import StatsStage from "./StatsStage";
+import type { StatsHandle } from "./StatsStage";
 import { recallCue, saveCue, stepCue } from "./showControl";
 import MediaStage from "./MediaStage";
 import MediaLibrary from "./MediaLibrary";
@@ -184,6 +189,7 @@ function Operator() {
     r = useRuntime(),
     { board: b, catalogue } = s;
   const sourceRef = useRef<SourceHandle>(null),
+    statsRef = useRef<StatsHandle>(null),
     boardRef = useRef<BoardHandle>(null),
     replayRef = useRef<ReplayHandle>(null),
     importRef = useRef<HTMLInputElement>(null),
@@ -236,12 +242,16 @@ function Operator() {
     ])
       .then(([data, matches, assets, saved]) => {
         if (!active) return;
-        s.init(hydrate(data, matches), matches);
+        const restoredCatalogue =
+          saved && isBoard(saved)
+            ? catalogueWithBoardTeams(hydrate(data, matches), saved)
+            : hydrate(data, matches);
+        s.init(restoredCatalogue, matches);
         if (
           saved &&
           isBoard(saved) &&
-          data.teams.some((t: any) => t.id === saved.homeTeamId) &&
-          data.teams.some((t: any) => t.id === saved.awayTeamId)
+          restoredCatalogue.teams.some((t: any) => t.id === saved.homeTeamId) &&
+          restoredCatalogue.teams.some((t: any) => t.id === saved.awayTeamId)
         )
           useStudio.setState({ board: saved });
         const old = useStudio.getState().board!;
@@ -338,12 +348,16 @@ function Operator() {
   }, [r.view, r.mediaPlaying, r.rate, asset?.id]);
   useEffect(() => {
     let lastSeen = 0;
-    const heartbeat = setInterval(()=>{
-      const connected=Date.now()-lastSeen<10000;
-      if(useRuntime.getState().outputConnected!==connected) r.set({outputConnected:connected});
-    },2000);
+    const heartbeat = setInterval(() => {
+      const connected = Date.now() - lastSeen < 10000;
+      if (useRuntime.getState().outputConnected !== connected)
+        r.set({ outputConnected: connected });
+    }, 2000);
     const listener = (e: MessageEvent) => {
-      if(e.data.type==="output-alive"){lastSeen=Date.now();r.set({outputConnected:true});}
+      if (e.data.type === "output-alive") {
+        lastSeen = Date.now();
+        r.set({ outputConnected: true });
+      }
       if (e.data.type === "request-program") {
         const program = useRuntime.getState().program;
         if (program)
@@ -355,7 +369,10 @@ function Operator() {
       }
     };
     productionChannel?.addEventListener("message", listener);
-    return () => {clearInterval(heartbeat);productionChannel?.removeEventListener("message", listener);};
+    return () => {
+      clearInterval(heartbeat);
+      productionChannel?.removeEventListener("message", listener);
+    };
   }, []);
   useEffect(() => {
     if (!r.follow || !r.program) return;
@@ -460,7 +477,7 @@ function Operator() {
         } else if (board.scenes.length > 1)
           state.set({
             playing: !state.playing,
-            playhead: state.previewTime ?? 0,
+            playhead: state.previewTime ?? activeSceneTime(board),
           });
         return;
       }
@@ -609,6 +626,7 @@ function Operator() {
   };
   const capture = () => {
     const state = useRuntime.getState();
+    if (state.view === "stats") return statsRef.current?.capture() || null;
     if (state.view === "split") {
       const source = sourceRef.current?.composite(),
         replay = boardRef.current?.stage()?.toCanvas({ pixelRatio: 2 });
@@ -657,7 +675,11 @@ function Operator() {
         raw.width,
         raw.height,
         board.studio?.lowerThird || board.title,
-        r.view === "footage" ? "MATCH ANALYSIS" : "TACTICAL REPLAY",
+        r.view === "stats"
+          ? "MATCH INTELLIGENCE"
+          : r.view === "footage"
+            ? "MATCH ANALYSIS"
+            : "TACTICAL REPLAY",
         { ...defaultBroadcast(), ...board.studio?.broadcast },
         {
           home:
@@ -696,9 +718,12 @@ function Operator() {
     const a = runtime.assets.find((a) => a.id === board.studio?.assetId),
       sourceMode = !!a && ["footage", "split", "replay"].includes(runtime.view),
       start = sourceMode ? board.studio?.trim.start || 0 : 0,
-      duration = sourceMode
-        ? Math.min(20, (board.studio?.trim.end || a!.duration) - start)
-        : totalDuration(board);
+      duration =
+        runtime.view === "stats"
+          ? 5
+          : sourceMode
+            ? Math.min(20, (board.studio?.trim.end || a!.duration) - start)
+            : totalDuration(board);
     if (duration <= 0 || duration > 60) {
       r.set({
         error:
@@ -757,7 +782,11 @@ function Operator() {
             raw.width,
             raw.height,
             board.studio?.lowerThird || board.title,
-            runtime.view === "footage" ? "MATCH ANALYSIS" : "TACTICAL REPLAY",
+            runtime.view === "stats"
+              ? "MATCH INTELLIGENCE"
+              : runtime.view === "footage"
+                ? "MATCH ANALYSIS"
+                : "TACTICAL REPLAY",
             { ...defaultBroadcast(), ...board.studio?.broadcast },
             {
               home:
@@ -1033,7 +1062,7 @@ function Operator() {
   ] as const;
   return (
     <main
-      className={`tl-app ${r.presenter ? "tl-presenting" : ""} ${r.compactTimeline ? "ts-compact" : ""}`}
+      className={`tl-app ${r.presenter ? "tl-presenting" : ""} ${r.compactTimeline ? "ts-compact" : ""} ${r.view === "stats" ? "ts-data" : ""}`}
     >
       <header className="tl-header">
         <a
@@ -1181,6 +1210,7 @@ function Operator() {
               ["footage", "Footage", Clapperboard],
               ["split", "Compare", Columns2],
               ["replay", "3D replay", Box],
+              ["stats", "Data cards", BarChart3],
             ].map(([view, label, Icon]) => {
               const I = Icon as typeof Box;
               return (
@@ -1248,13 +1278,15 @@ function Operator() {
                 EDITOR PREVIEW
               </span>
               <span className="tl-stage-context">
-                {r.view === "footage"
-                  ? asset?.name || "SOURCE ANALYSIS"
-                  : r.view === "replay"
-                    ? "VIRTUAL STADIUM"
-                    : r.view === "split"
-                      ? "SOURCE ↔ RECONSTRUCTION"
-                      : active.title}
+                {r.view === "stats"
+                  ? "MATCH DATA CARD"
+                  : r.view === "footage"
+                    ? asset?.name || "SOURCE ANALYSIS"
+                    : r.view === "replay"
+                      ? "VIRTUAL STADIUM"
+                      : r.view === "split"
+                        ? "SOURCE ↔ RECONSTRUCTION"
+                        : active.title}
               </span>
               <div className="tl-viewport-controls">
                 <button
@@ -1337,7 +1369,9 @@ function Operator() {
                   </span>
                 )}
               </div>
-              {r.view === "replay" ? (
+              {r.view === "stats" ? (
+                <StatsStage ref={statsRef} />
+              ) : r.view === "replay" ? (
                 <Suspense
                   fallback={
                     <div className="tl-stage-message">
@@ -1427,13 +1461,15 @@ function Operator() {
                 {home?.shortName} <ArrowRight size={12} />
               </span>
               <p>
-                {r.view === "replay"
-                  ? "Drag to orbit · scroll to move closer"
-                  : r.view === "footage"
-                    ? "Draw to explain · use ← / → to step through the moment"
-                    : r.view === "split"
-                      ? "Observe the source. Explain the structure."
-                      : "Drag a player · Shift-click to group · draw the next move"}
+                {r.view === "stats"
+                  ? "Choose a team or player card · M saves this view"
+                  : r.view === "replay"
+                    ? "Drag to orbit · scroll to move closer"
+                    : r.view === "footage"
+                      ? "Draw to explain · use ← / → to step through the moment"
+                      : r.view === "split"
+                        ? "Observe the source. Explain the structure."
+                        : "Drag a player · Shift-click to group · draw the next move"}
               </p>
               <span>
                 <ArrowRight size={12} />
@@ -1525,12 +1561,13 @@ function Operator() {
               <i />
               {r.program?.black
                 ? "OUTPUT BLACKED OUT"
-                : !r.outputConnected ? "OPEN TV OUTPUT"
-                : r.program
-                  ? r.follow
-                    ? "LIVE FOLLOW ON"
-                    : "PROGRAMME HELD"
-                  : "TV OUTPUT READY"}
+                : !r.outputConnected
+                  ? "OPEN TV OUTPUT"
+                  : r.program
+                    ? r.follow
+                      ? "LIVE FOLLOW ON"
+                      : "PROGRAMME HELD"
+                    : "TV OUTPUT READY"}
             </span>
             <button
               className={r.follow ? "is-active" : ""}
@@ -1637,7 +1674,10 @@ function Operator() {
                 if (asset && r.view !== "board")
                   r.set({ mediaPlaying: !r.mediaPlaying });
                 else
-                  s.set({ playing: !s.playing, playhead: s.previewTime ?? 0 });
+                  s.set({
+                    playing: !s.playing,
+                    playhead: s.previewTime ?? activeSceneTime(b),
+                  });
               }}
             >
               {r.mediaPlaying || s.playing ? (

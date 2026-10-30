@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { useStudio } from "../store";
-import { totalDuration, uid } from "../core";
+import { activeSceneTime, totalDuration, uid } from "../core";
 import { useRuntime, editDesk } from "./runtime";
 import type { MediaAsset, SourceHandle } from "./types";
 import { emptyStudio, timecode } from "./types";
@@ -67,7 +67,7 @@ export default function Transport({
         (r.view === "replay" && !!d.tracking[asset.id]));
   const [filmstrip, setFilmstrip] = useState<string[]>([]);
   const duration = isSource ? asset!.duration || d.trim.end : totalDuration(b),
-    time = isSource ? r.time : (s.previewTime ?? 0),
+    time = isSource ? r.time : (s.previewTime ?? activeSceneTime(b)),
     playing = isSource ? r.mediaPlaying : s.playing;
   useEffect(() => {
     let alive = true;
@@ -152,6 +152,16 @@ export default function Transport({
       s.set({ playing: !s.playing, playhead: time >= duration ? 0 : time });
     }
   };
+  if (r.view === "stats")
+    return (
+      <section className="tl-transport ts-data-transport">
+        <strong>Match data card</strong>
+        <span>
+          Choose a team comparison or player above. Save to your rundown with M.
+          Export a 4K still or a five-second film.
+        </span>
+      </section>
+    );
   return (
     <section
       className="tl-transport"

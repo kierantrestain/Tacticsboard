@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { newBoard, copy, isBoard } from "../src/core";
+import { newBoard, copy, isBoard, activeSceneTime, frameAt } from "../src/core";
 import {
   applyPreset,
   analysisFrame,
@@ -73,6 +73,41 @@ describe("show preparation and recall", () => {
     b.studio!.cues = [cue, copy(cue)];
     expect(isBoard(b)).toBe(false);
   });
+  it("restores the saved phase and starts playback at that phase rather than the first scene", () => {
+    const b = board(),
+      first = copy(b.scenes[0]);
+    b.scenes.push({
+      ...copy(first),
+      id: "second",
+      title: "High press",
+      duration: 4,
+    });
+    b.activeScene = "second";
+    b.players[1].x = 0.7;
+    b.scenes[1].players = copy(b.players);
+    const cue = makeCue(b, "board", "broadcast", 0);
+    b.activeScene = first.id;
+    const recalled = cueBoard(b, cue);
+    expect(recalled.activeScene).toBe("second");
+    expect(activeSceneTime(recalled)).toBe(first.duration);
+    expect(
+      frameAt(recalled, activeSceneTime(recalled)).players[1].x,
+    ).toBeCloseTo(0.7);
+    b.scenes = b.scenes.filter((s) => s.id !== "second");
+    const missing = cueBoard(b, cue);
+    expect(
+      missing.scenes.find((s) => s.id === missing.activeScene)?.title,
+    ).toBe("High press");
+  });
+  it("does not attach unrelated footage to a stats card or a manual board replay", () => {
+    const b = board();
+    b.studio!.assetId = "unrelated-video";
+    expect(makeCue(b, "stats", "broadcast", 0).assetId).toBeUndefined();
+    expect(makeCue(b, "replay", "broadcast", 0).assetId).toBeUndefined();
+    expect(makeCue(b, "footage", "broadcast", 0).assetId).toBe(
+      "unrelated-video",
+    );
+  });
 });
 describe("tactical setups and dynamic guides", () => {
   it("preserves identities and mirrors the exact setup for the opposite team", () => {
@@ -87,10 +122,15 @@ describe("tactical setups and dynamic guides", () => {
       expect(home.players.filter((p) => p.side === "away")).toEqual(opponents);
       const h = home.players.filter((p) => p.side === "home"),
         a = away.players.filter((p) => p.side === "away");
-      h.forEach((p, i) => {
-        expect(p.x + a[i].x).toBeCloseTo(1);
-        expect(p.y + a[i].y).toBeCloseTo(1);
-      });
+      const positions = (ps: typeof h, mirror = false) =>
+        ps
+          .map(
+            (p) =>
+              `${(mirror ? 1 - p.x : p.x).toFixed(4)}:${(mirror ? 1 - p.y : p.y).toFixed(4)}`,
+          )
+          .sort();
+      expect(positions(h)).toEqual(positions(a, true));
+      expect(h[0].x).toBeCloseTo(preset.points[0][0]);
       expect(isBoard(home)).toBe(true);
       expect(isBoard(away)).toBe(true);
     }

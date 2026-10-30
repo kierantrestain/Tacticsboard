@@ -1,4 +1,31 @@
-import type { Match, Stat } from "../types";
+import type { Match, Stat, Team } from "../types";
+export interface CareerData {
+  playerId: string;
+  league: string;
+  updatedAt: string;
+  sourceUrl: string;
+  seasons: {
+    seasonYear: number;
+    season: string;
+    teamId?: string;
+    team: string;
+    stats: Record<string, Stat>;
+  }[];
+}
+export interface SeasonArchive {
+  table?: LeagueTable;
+  seasonYear: number;
+  league: string;
+  matches: Match[];
+  teams: Team[];
+  updatedAt: string;
+  sourceUrl: string;
+  coverage: {
+    returned: number;
+    expected: number | null;
+    complete: boolean | null;
+  };
+}
 export interface StandingRow {
   teamId: string;
   rank: number;

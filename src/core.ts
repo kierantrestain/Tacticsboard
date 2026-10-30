@@ -9,6 +9,7 @@ import type {
   Player,
   Side,
   Team,
+  Catalogue,
 } from "./types";
 export const FORMATIONS = [
   "4-3-3",
@@ -184,6 +185,7 @@ export function newBoard(home: Team, away: Team): Board {
     ball: { x: 0.5, y: 0.5 },
   };
   return {
+    context: boardContext(home, away),
     version: 1,
     studio: emptyStudio(),
     id: uid(),
@@ -229,6 +231,54 @@ export function newBoard(home: Team, away: Team): Board {
     },
   };
 }
+export function boardContext(
+  home: Team,
+  away: Team,
+): NonNullable<Board["context"]> {
+  const identity = (t: Team) => ({
+    id: t.id,
+    name: t.name,
+    shortName: t.shortName,
+    abbreviation: t.abbreviation,
+    color: t.color,
+    alternateColor: t.alternateColor,
+    badgeUrl: t.badgeUrl,
+    competitions: [...t.competitions],
+  });
+  return { home: identity(home), away: identity(away) };
+}
+export function catalogueWithBoardTeams(
+  catalogue: Catalogue,
+  board: Board,
+): Catalogue {
+  const identities = [
+    ...Object.values(board.context || {}),
+    ...(board.studio?.cues || []).flatMap((c) =>
+      Object.values(c.context || {}),
+    ),
+  ];
+  const teams = [...catalogue.teams],
+    ids = new Set(teams.map((t) => t.id));
+  for (const t of identities) {
+    if (ids.has(t.id)) continue;
+    teams.push({
+      ...t,
+      archived: true,
+      players: board.players
+        .filter((p) => p.side === (t.id === board.homeTeamId ? "home" : "away"))
+        .map((p) => ({
+          id: p.playerId,
+          name: p.name,
+          number: p.number,
+          statsByCompetition: {},
+        })),
+    });
+    ids.add(t.id);
+  }
+  return teams.length === catalogue.teams.length
+    ? catalogue
+    : { ...catalogue, teams };
+}
 export function syncScene(board: Board) {
   const s = board.scenes.find((s) => s.id === board.activeScene);
   if (s) {
@@ -268,6 +318,12 @@ export function frameAt(board: Board, time: number): Frame {
 }
 export const totalDuration = (board: Board) =>
   board.scenes.reduce((n, s) => n + s.duration, 0);
+export const activeSceneTime = (board: Board) => {
+  const index = board.scenes.findIndex((s) => s.id === board.activeScene);
+  return board.scenes
+    .slice(0, Math.max(0, index))
+    .reduce((time, scene) => time + scene.duration, 0);
+};
 export function isBoard(value: unknown): value is Board {
   if (!value || typeof value !== "object") return false;
   const b = value as Board;
@@ -346,6 +402,25 @@ export function isBoard(value: unknown): value is Board {
     typeof b.title === "string" &&
     typeof b.homeTeamId === "string" &&
     typeof b.awayTeamId === "string" &&
+    (b.context === undefined ||
+      (!!b.context &&
+        ["home", "away"].every((side) => {
+          const t = b.context?.[side as Side];
+          return (
+            !!t &&
+            t.id === (side === "home" ? b.homeTeamId : b.awayTeamId) &&
+            [
+              t.id,
+              t.name,
+              t.shortName,
+              t.abbreviation,
+              t.color,
+              t.alternateColor,
+            ].every((v) => typeof v === "string" && v.length <= 200) &&
+            Array.isArray(t.competitions) &&
+            t.competitions.every((c) => typeof c === "string")
+          );
+        }))) &&
     validPlayers(b.players) &&
     validDrawings(b.drawings) &&
     point(b.ball) &&

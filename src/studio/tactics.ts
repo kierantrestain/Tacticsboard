@@ -135,12 +135,75 @@ export type PresetId = (typeof TACTICAL_PRESETS)[number]["id"];
 export function applyPreset(board: Board, id: PresetId, side: Side) {
   const preset = TACTICAL_PRESETS.find((p) => p.id === id)!;
   const players = board.players.filter((p) => p.side === side);
-  players.forEach((player, index) => {
-    const point = preset.points[index];
-    if (!point) return;
-    player.x = side === "home" ? point[0] : 1 - point[0];
-    player.y = side === "home" ? point[1] : 1 - point[1];
-  });
+  if (players.length !== 11)
+    throw Error("Load a complete XI before applying a tactical setup.");
+  const mirrored = preset.points.map((point) => ({
+    x: side === "home" ? point[0] : 1 - point[0],
+    y: side === "home" ? point[1] : 1 - point[1],
+  }));
+  // Match outfield players to slots with minimal movement and a positional
+  // preference, rather than assigning by array index after a formation change.
+  const slots =
+    id === "build"
+      ? ["D", "D", "D", "M", "M", "W", "W", "F", "F", "F"]
+      : id === "block"
+        ? ["D", "D", "D", "D", "W", "M", "M", "W", "F", "F"]
+        : ["D", "D", "D", "D", "M", "M", "M", "F", "F", "F"];
+  const role = (p: BoardPlayer) =>
+    /Goalkeeper|^GK?$/.test(p.position || "")
+      ? "G"
+      : /Defend|back|^D$/i.test(p.position || "")
+        ? "D"
+        : /Forward|Strik|Winger|^F$/i.test(p.position || "")
+          ? "F"
+          : "M";
+  const keeper =
+      players.find((p) => role(p) === "G") ||
+      [...players].sort((a, b) => (side === "home" ? a.x - b.x : b.x - a.x))[0],
+    outfield = players.filter((p) => p !== keeper);
+  const cost = outfield.map((p) =>
+    mirrored.slice(1).map((target, j) => {
+      const r = role(p),
+        want = slots[j];
+      const penalty =
+        want === "W"
+          ? r === "D" || r === "M"
+            ? 0
+            : 0.15
+          : r === want
+            ? 0
+            : r === "F" && want === "D"
+              ? 0.9
+              : r === "D" && want === "F"
+                ? 0.7
+                : 0.25;
+      return (p.x - target.x) ** 2 + (p.y - target.y) ** 2 + penalty;
+    }),
+  );
+  const dp = new Array(1 << 10).fill(Infinity),
+    choice = new Array(1 << 10).fill(-1);
+  dp[0] = 0;
+  for (let mask = 0; mask < dp.length; mask++) {
+    let index = 0;
+    for (let bits = mask; bits; bits &= bits - 1) index++;
+    if (index >= 10) continue;
+    for (let slot = 0; slot < 10; slot++)
+      if (!(mask & (1 << slot))) {
+        const next = mask | (1 << slot),
+          value = dp[mask] + cost[index][slot];
+        if (value < dp[next]) {
+          dp[next] = value;
+          choice[next] = slot;
+        }
+      }
+  }
+  Object.assign(keeper, mirrored[0]);
+  let mask = (1 << 10) - 1;
+  for (let index = 9; index >= 0; index--) {
+    const slot = choice[mask];
+    Object.assign(outfield[index], mirrored[slot + 1]);
+    mask ^= 1 << slot;
+  }
   board.formations[side] = preset.formation;
   board.ball = {
     x: side === "home" ? preset.ball[0] : 1 - preset.ball[0],
@@ -202,7 +265,10 @@ export function analysisFrame(board: Board, frame: Frame): Frame {
     return frame;
   const side = settings.shapeSide || "home",
     color = board.colors[side];
-  const outfield = frame.players.filter((p) => p.side === side).slice(1);
+  const team = frame.players.filter((p) => p.side === side);
+  const outfield = team.filter(
+    (p) => !/Goalkeeper|^GK?$/i.test(p.position || ""),
+  );
   const drawings: Drawing[] = [];
   const guide = (
     id: string,

@@ -78,6 +78,31 @@ describe("portable analysis handoff", () => {
     ];
     board.scenes[0].source = { assetId: id, time: 0, review: false };
     d.cues = [makeCue(board, "footage", "endline", 4)];
+    d.dataReports = {
+      "match-1": {
+        id: "match-1",
+        lineups: [
+          {
+            teamId: board.homeTeamId,
+            side: "home",
+            players: [
+              {
+                id: "p1",
+                name: "Saved player",
+                starter: true,
+                stats: {
+                  totalGoals: { label: "Goals", value: 1, display: "1" },
+                },
+              },
+            ],
+          },
+        ],
+        teamStats: [],
+      },
+    };
+    d.statsReportId = "match-1";
+    d.statsPlayerId = "p1";
+    d.cues.push(makeCue(board, "stats", "broadcast", 0));
     const result = await exportPack(board, [asset]);
     const restored = await importPack(
       new File([result.blob], "project.touchline.zip"),
@@ -96,6 +121,11 @@ describe("portable analysis handoff", () => {
     expect(restored.studio!.cues![0].assetId).toBe(next);
     expect(restored.studio!.cues![0].ink[0].assetId).toBe(next);
     expect(restored.studio!.cues![0].camera).toBe("endline");
+    expect(restored.studio!.dataReports!["match-1"]).toEqual(
+      d.dataReports["match-1"],
+    );
+    expect(restored.studio!.cues![1].statsPlayerId).toBe("p1");
+    expect(restored.studio!.cues![1].assetId).toBeUndefined();
     expect(records.has(next)).toBe(true);
   });
   it("refuses an archive whose referenced source is missing", async () => {

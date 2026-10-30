@@ -20,6 +20,8 @@ import {
   formationPoints,
   makePlayers,
   isBoard,
+  boardContext,
+  catalogueWithBoardTeams,
 } from "./core";
 const IS_OUTPUT =
   new URLSearchParams(location.search).has("output") ||
@@ -129,6 +131,7 @@ export const useStudio = create<Studio>((set, get) => ({
   loading: false,
   init: (catalogue, summaries) => {
     const old = get().board;
+    if (old) catalogue = catalogueWithBoardTeams(catalogue, old);
     const h = catalogue.teams.find((t) => t.id === "359") || catalogue.teams[0];
     const a = catalogue.teams.find((t) => t.id === "382") || catalogue.teams[1];
     set({
@@ -263,13 +266,18 @@ export const useStudio = create<Studio>((set, get) => ({
       const b =
         (await loadProject(id)) ||
         JSON.parse(localStorage.getItem(PREFIX + id) || "null");
+      const catalogue =
+        isBoard(b) && get().catalogue
+          ? catalogueWithBoardTeams(get().catalogue!, b)
+          : null;
       if (
         !isBoard(b) ||
-        !get().catalogue?.teams.some((t) => t.id === b.homeTeamId) ||
-        !get().catalogue?.teams.some((t) => t.id === b.awayTeamId)
+        !catalogue?.teams.some((t) => t.id === b.homeTeamId) ||
+        !catalogue.teams.some((t) => t.id === b.awayTeamId)
       )
         throw Error();
       set({
+        catalogue,
         board: b,
         past: [],
         future: [],
@@ -288,7 +296,10 @@ export const useStudio = create<Studio>((set, get) => ({
   },
   importBoard: (value) => {
     if (!isBoard(value)) return false;
-    const teams = get().catalogue?.teams;
+    const catalogue = get().catalogue
+      ? catalogueWithBoardTeams(get().catalogue!, value)
+      : null;
+    const teams = catalogue?.teams;
     if (
       !teams?.some((t) => t.id === value.homeTeamId) ||
       !teams.some((t) => t.id === value.awayTeamId)
@@ -298,6 +309,7 @@ export const useStudio = create<Studio>((set, get) => ({
     b.id = uid();
     b.managerNotes = b.managerNotes || {};
     set({
+      catalogue,
       board: b,
       selected: [],
       selectedShape: null,
@@ -358,6 +370,7 @@ export const useStudio = create<Studio>((set, get) => ({
     get().commit((b) => {
       const next = newBoard(ht, at);
       b.homeTeamId = h;
+      b.context = boardContext(ht, at);
       b.awayTeamId = a;
       b.competition = next.competition;
       b.ball = copy(next.ball);
@@ -379,10 +392,7 @@ export const useStudio = create<Studio>((set, get) => ({
     const ht = catalogue.teams.find((t) => t.id === m.homeId),
       at = catalogue.teams.find((t) => t.id === m.awayId);
     if (!ht || !at) {
-      get().notify(
-        "This fixture includes a club outside the loaded catalogue.",
-      );
-      return;
+      throw Error("This fixture includes a club outside the loaded catalogue.");
     }
     set({ loading: true });
     let d = get().summaries[m.id];
@@ -393,6 +403,7 @@ export const useStudio = create<Studio>((set, get) => ({
     } else void loadReport(m).catch(() => {});
     get().commit((b) => {
       b.homeTeamId = ht.id;
+      b.context = boardContext(ht, at);
       b.awayTeamId = at.id;
       b.competition = m.league;
       if (b.studio) {
@@ -416,13 +427,22 @@ export const useStudio = create<Studio>((set, get) => ({
         b.players = b.players
           .filter((p) => p.side !== side)
           .concat(
-            makePlayers(t, side, b.formations[side], confirmed ? l : undefined),
+            m.seasonYear && m.seasonYear !== catalogue.seasonYear && !confirmed
+              ? []
+              : makePlayers(
+                  t,
+                  side,
+                  b.formations[side],
+                  confirmed ? l : undefined,
+                ),
           );
         b.lineupSource[side] = confirmed
           ? "Confirmed match XI"
-          : m.completed
-            ? "Recent XI · match lineup unavailable"
-            : "Recent XI · match lineup pending";
+          : m.seasonYear && m.seasonYear !== catalogue.seasonYear
+            ? "Historical lineup unavailable · no current XI substituted"
+            : m.completed
+              ? "Recent XI · match lineup unavailable"
+              : "Recent XI · match lineup pending";
       }
       const scene = {
         id: uid(),

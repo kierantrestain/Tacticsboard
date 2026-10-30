@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, ChevronDown } from "lucide-react";
 import { useStudio } from "../store";
-import { useFootball, checkedTime } from "./data";
+import { useFootball, checkedTime, requestFootball } from "./data";
 import type { Player, Stat, Team } from "../types";
 import { TeamBadge } from "./ClubBadge";
 import PlayerData from "./PlayerData";
@@ -15,7 +15,15 @@ type Row = {
   status?: string;
   news?: string;
 };
-export default function LeaguePlayers({ league }: { league: string }) {
+export default function LeaguePlayers({
+  league,
+  seasonYear,
+  archiveTeams,
+}: {
+  league: string;
+  seasonYear?: number;
+  archiveTeams?: Team[];
+}) {
   const catalogue = useStudio((s) => s.catalogue),
     season = useFootball((s) => s.season),
     [q, setQ] = useState(""),
@@ -23,7 +31,46 @@ export default function LeaguePlayers({ league }: { league: string }) {
     [sort, setSort] = useState("goals"),
     [expanded, setExpanded] = useState(""),
     [limit, setLimit] = useState(40);
-  const fpl = league === "eng.1";
+  const historic =
+    !!seasonYear &&
+    seasonYear !== (season?.seasonYear || catalogue?.seasonYear);
+  const [historicTeams, setHistoricTeams] = useState<Team[]>([]),
+    [rosterBusy, setRosterBusy] = useState(false),
+    [rosterFailures, setRosterFailures] = useState(0);
+  useEffect(() => {
+    if (!historic || !archiveTeams?.length) return;
+    let active = true;
+    setRosterBusy(true);
+    setRosterFailures(0);
+    setHistoricTeams([]);
+    void (async () => {
+      const loaded: Team[] = [];
+      let failed = 0;
+      for (let i = 0; i < archiveTeams.length; i += 4) {
+        const results = await Promise.allSettled(
+          archiveTeams.slice(i, i + 4).map(async (t) => {
+            const r = await requestFootball(
+              `action=roster&league=${league}&team=${t.id}&season=${seasonYear}`,
+              3600000,
+            );
+            return { ...t, players: r.players };
+          }),
+        );
+        if (!active) return;
+        for (const result of results) {
+          if (result.status === "fulfilled") loaded.push(result.value);
+          else failed++;
+        }
+        setHistoricTeams([...loaded]);
+        setRosterFailures(failed);
+      }
+      if (active) setRosterBusy(false);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [historic, league, seasonYear, archiveTeams]);
+  const fpl = league === "eng.1" && !historic;
   const rows = useMemo<Row[]>(() => {
     if (!catalogue) return [];
     const lookup = new Map(catalogue.teams.map((t) => [t.id, t]));
@@ -44,8 +91,10 @@ export default function LeaguePlayers({ league }: { league: string }) {
             ]
           : [];
       });
-    return catalogue.teams
-      .filter((t) => t.competitions.includes(league))
+    return (historic ? historicTeams : catalogue.teams)
+      .filter(
+        (t) => t.competitions.includes(league) && (historic || !t.archived),
+      )
       .flatMap((t) =>
         t.players.map((p) => ({
           id: p.id + ":" + t.id,
@@ -55,7 +104,7 @@ export default function LeaguePlayers({ league }: { league: string }) {
           player: p,
         })),
       );
-  }, [catalogue, season?.players, league]);
+  }, [catalogue, season?.players, league, historic, historicTeams]);
   const keys = fpl
     ? {
         goals: "goals_scored",
@@ -111,7 +160,8 @@ export default function LeaguePlayers({ league }: { league: string }) {
           }}
         >
           <option value="all">All clubs</option>
-          {catalogue?.teams
+          {(historic ? historicTeams : catalogue?.teams)
+            ?.filter((t) => historic || !t.archived)
             .filter((t) => t.competitions.includes(league))
             .map((t) => (
               <option key={t.id} value={t.id}>
@@ -137,15 +187,17 @@ export default function LeaguePlayers({ league }: { league: string }) {
       <div className="fc-table-title">
         <div>
           <h2>
-            {fpl
+            {league === "eng.1"
               ? "Premier League player statistics"
               : "Champions League player statistics"}
           </h2>
           <p>
             {filtered.length} players ·{" "}
-            {fpl
-              ? "FPL registered players; registration can differ from the current club squad."
-              : "ESPN competition-scoped squad records."}
+            {historic
+              ? `${seasonYear}/${String((seasonYear || 0) + 1).slice(-2)} · ${historicTeams.length}/${archiveTeams?.length || 0} historical squads${rosterBusy ? " loading" : " checked"}${rosterFailures ? ` · ${rosterFailures} unavailable` : ""}`
+              : fpl
+                ? "FPL registered players; registration can differ from the current club squad."
+                : "ESPN competition-scoped squad records."}
           </p>
         </div>
         <span>
@@ -209,16 +261,21 @@ export default function LeaguePlayers({ league }: { league: string }) {
                     },
                   }}
                   team={r.team}
+                  league={league}
                 />
               ) : (
-                <div className="detail-stats">
-                  {Object.entries(r.stats).map(([k, v]) => (
-                    <div key={k}>
-                      <span>{v.label}</span>
-                      <strong>{v.display ?? v.value ?? "—"}</strong>
-                    </div>
-                  ))}
-                </div>
+                <PlayerData
+                  player={
+                    r.player || {
+                      id: r.id,
+                      name: r.name,
+                      statsByCompetition: { [league]: r.stats },
+                    }
+                  }
+                  team={r.team}
+                  league={league}
+                  seasonYear={seasonYear}
+                />
               )}
             </div>
           )}

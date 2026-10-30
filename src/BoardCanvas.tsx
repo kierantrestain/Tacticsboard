@@ -28,6 +28,7 @@ import { clamp, copy, frameAt, moveDrawing, shortName, uid } from "./core";
 import type { Board, BoardPlayer, Drawing, Frame } from "./types";
 import { getMedia } from "./media";
 import { analysisFrame } from "./studio/tactics";
+import { playerNameOffsets } from "./studio/labelLayout";
 const W = 1200,
   H = 760,
   PX = 65,
@@ -570,6 +571,14 @@ const BoardCanvas = forwardRef<
     externalFrame ||
       (previewTime !== null ? frameAt(board, previewTime) : board),
   );
+  const labelOffsets = playerNameOffsets(
+    frame.players.filter((p) =>
+      p.side === "home"
+        ? board.settings.homeVisible
+        : board.settings.awayVisible,
+    ),
+    board.settings.markerScale || 1,
+  );
   const angle = board.settings.camera === "angle";
   let transform: {
     x: number;
@@ -994,7 +1003,7 @@ const BoardCanvas = forwardRef<
                       />
                     )}
                     {board.settings.names && (
-                      <Group listening={false}>
+                      <Group listening={false} y={labelOffsets.get(p.uid) || 0}>
                         <Rect
                           x={-Math.min(63, name.length * 3.8 + 8)}
                           y={28}

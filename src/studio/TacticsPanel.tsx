@@ -79,11 +79,20 @@ export default function TacticsPanel() {
           />{" "}
           Add each setup as a new phase
         </label>
+        {b.players.filter((player) => player.side === side).length !== 11 && (
+          <p className="ts-note">
+            Load a complete XI to use starting-point templates. The
+            reconstructed visible players stay as observed.
+          </p>
+        )}
         <div className="ts-preset-grid">
           {TACTICAL_PRESETS.map((p) => (
             <button
               key={p.id}
               title={p.description}
+              disabled={
+                b.players.filter((player) => player.side === side).length !== 11
+              }
               onClick={() => {
                 if (newPhase && b.scenes.length >= 100) {
                   s.notify("This storyboard has reached 100 phases.");

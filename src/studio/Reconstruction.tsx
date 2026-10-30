@@ -1,4 +1,5 @@
 import { playerCutout } from "./cutouts";
+import StillSequence from "./StillSequence";
 import { useState } from "react";
 import {
   Check,
@@ -339,6 +340,11 @@ export default function Reconstruction({
         <Waypoints size={20} />
       </div>
       <div className="tl-reconstruction-scroll">
+        <p className="ts-reconstruction-note">
+          Analyst-assisted reconstruction. The pitch map locates visible
+          players; team and identity suggestions need confirmation. Hidden
+          players and the ball are not reconstructed automatically.
+        </p>
         <div className="tl-workflow-step">
           <span className={`tl-step-number ${map ? "complete" : ""}`}>
             {map ? <Check size={14} /> : 1}
@@ -486,6 +492,10 @@ export default function Reconstruction({
             <option value="away">Away</option>
           </select>
         </div>
+        <p className="tl-small-note">
+          Team colours are an initial suggestion. Confirm the team and real
+          identity of each marker.
+        </p>
         <div className="tl-target-list">
           {targets.map((t, i) => (
             <div className="tl-target-row" key={t.id}>
@@ -686,6 +696,7 @@ export default function Reconstruction({
             official optical tracking.
           </p>
         </div>
+        <StillSequence />
       </div>
     </aside>
   );

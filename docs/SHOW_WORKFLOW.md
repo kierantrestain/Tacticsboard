@@ -11,6 +11,18 @@ This release keeps the existing match centre, source annotation, assisted recons
 5. Press **M** or **Save shot**. A shot retains its frame, graphics, source/time, nominal clip range, colours, display settings and selected 3D camera preset. Use **Rundown** to name, reorder, duplicate or remove shots and add presenter notes and planned seconds.
 6. Open **TV design** to set the channel identity, accent, headline and segment label. Header, team/score bug and lower third can be switched independently. Bang On Sports is the default output identity; the analysis workspace remains Touchline Studio.
 
+## Reconstruct from video or pictures
+
+A broadcast image does not contain perfect pitch coordinates. The analyst maps four visible pitch landmarks, checks detected/marked feet, confirms each player's team and identity, then reviews uncertain tracking. Do not infer off-screen players. A camera cut requires a new calibration. The ball remains manually editable.
+
+For pictures, import the stills, complete mapping and identity review for each, then open **Still sequence** in Rebuild. Order two to twenty reviewed images and choose their phase duration. The same confirmed player ID is linked between images; intermediate motion is illustrative. Every resulting phase keeps its original still as a source reference. Presets require a full XI and will not fill unseen players into a partial reconstruction.
+
+## Match intelligence
+
+Open **Matches** and choose competition/season. Reports include a factual summary, explicit source coverage, every supplied team/player field, events and commentary. Expand a player for game, season and history tabs. PL advanced statistics and logs use FPL; published career totals use ESPN competition rows. These sources are labelled separately. Historical archive coverage varies; a missing squad is never replaced with today's XI.
+
+Use **Present match numbers on TV** or a player's TV button to create a team or individual data card. Change the selected player above the card, save it with **M**, or export a 4K PNG/five-second film. The card's report snapshot travels with the project/portable pack, so prepared show graphics remain available if a source is offline. Download full report JSON or all player statistics as CSV from the report.
+
 ## Present
 
 - Open the clean output in the same browser profile on this computer. Move it to the studio display, or capture the window in OBS. The desk reports when it has received a heartbeat from the output.
@@ -30,6 +42,6 @@ A cue stores a frame, never a nested project. The shared media library, tracking
 
 Live updates use a coalesced animation-frame send instead of a debounce that waits for movement to stop. Recovery storage is delayed separately, and the full saved-shot library is excluded from programme snapshots. The output refreshes media metadata when its source changes rather than reading IndexedDB on every drawing update.
 
-The test suite covers cue isolation and recall, malformed cues, all six setups for both teams, bounded unit movement, moving guides, spotlighting and portable cue media remapping alongside the existing football, API, reconstruction and export checks.
+The test suite covers cue isolation, correct phase/time and cross-match recall, malformed cues, all six setups for both teams, bounded unit movement, moving guides, spotlighting, portable cue media remapping, historical season/source guards, paired career table parsing, sparse stats, CSV safety, reviewed still identities and saved-data recovery alongside the existing football, API, reconstruction and export checks.
 
 The local environment cannot reach the Google model host. TypeScript and the Vite build can be checked independently; the unchanged full prebuild still prepares and verifies the pinned detector models in Vercel. The new show workflow does not require detection. Vision, the physical touchscreen and the final studio capture chain still need rehearsal on the production computer.

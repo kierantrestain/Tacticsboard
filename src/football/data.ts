@@ -1,7 +1,14 @@
 import { create } from "zustand";
 import { useStudio } from "../store";
 import type { Catalogue, Match, MatchDetails, Player, Team } from "../types";
-import type { SeasonData, LeagueTable, PlayerHistory } from "./types";
+import type {
+  SeasonData,
+  LeagueTable,
+  PlayerHistory,
+  CareerData,
+  SeasonArchive,
+} from "./types";
+import { getRecord, putRecord } from "../studio/assetStore";
 const pending = new Map<string, Promise<any>>(),
   recent = new Map<string, { at: number; value: any }>();
 export async function requestFootball(
@@ -13,7 +20,11 @@ export async function requestFootball(
     hit = recent.get(key);
   if (!force && hit && Date.now() - hit.at < ttl) return hit.value;
   if (pending.has(key)) return pending.get(key);
-  const work = fetch(key, { signal: AbortSignal.timeout(12000) })
+  const work = fetch(key, {
+    signal: AbortSignal.timeout(
+      query.startsWith("action=archive") ? 55000 : 15000,
+    ),
+  })
     .then(async (r) => {
       if (!r.ok)
         throw Error(
@@ -34,6 +45,8 @@ interface FootballState {
   error: string;
   checkedAt: string;
   history: Record<number, PlayerHistory>;
+  careers: Record<string, CareerData>;
+  archives: Record<string, SeasonArchive>;
   set: (v: Partial<FootballState>) => void;
   tab: "fixtures" | "table" | "players";
 }
@@ -43,6 +56,8 @@ export const useFootball = create<FootballState>((set) => ({
   error: "",
   checkedAt: "",
   history: {},
+  careers: {},
+  archives: {},
   tab: "fixtures",
   set,
 }));
@@ -107,7 +122,17 @@ export async function bootFootball() {
   try {
     const r = await fetch("/data/season.json");
     if (!r.ok) throw Error();
-    const season: SeasonData = await r.json();
+    let season: SeasonData = await r.json();
+    const saved = await getRecord<SeasonData>(
+      "projects",
+      "football-season:" + season.seasonYear,
+    ).catch(() => null);
+    if (
+      saved?.seasonYear === season.seasonYear &&
+      Array.isArray(saved.players) &&
+      Date.parse(saved.updatedAt) > Date.parse(season.updatedAt)
+    )
+      season = saved;
     const catalogue = useStudio.getState().catalogue;
     if (catalogue) {
       useStudio.setState({ catalogue: applyAdvanced(catalogue, season) });
@@ -168,6 +193,10 @@ export async function refreshFootball() {
         ? "Some sources could not refresh. Their last saved data remains available."
         : "",
   });
+  if (successes)
+    void putRecord("projects", "football-season:" + year, season).catch(
+      () => {},
+    );
 }
 export async function refreshMatchday(date: string, league: string) {
   const result = await requestFootball(
@@ -205,7 +234,7 @@ export async function loadReport(
   force = false,
 ): Promise<MatchDetails> {
   if (reports.has(m.id)) return reports.get(m.id)!;
-  const cached = useStudio.getState().summaries[m.id];
+  let cached: MatchDetails | undefined = useStudio.getState().summaries[m.id];
   if (
     !force &&
     cached?.updatedAt &&
@@ -219,9 +248,23 @@ export async function loadReport(
       force,
     ).then((d: MatchDetails) => {
       acceptReport(m, d);
+      void putRecord("projects", "football-report:" + m.id, d).catch(() => {});
       return d;
     });
   const work = (async () => {
+    cached ||=
+      (await getRecord<MatchDetails>(
+        "projects",
+        "football-report:" + m.id,
+      ).catch(() => null)) || undefined;
+    if (cached?.id !== m.id) cached = undefined;
+    if (cached) {
+      acceptReport(m, cached);
+      if (!force) {
+        void network().catch(() => {});
+        return cached;
+      }
+    }
     if (!force && /^\d+$/.test(m.id)) {
       try {
         const r = await fetch(`/data/reports/${m.id}.json`);
@@ -244,20 +287,97 @@ export async function loadReport(
   return work;
 }
 export async function loadPlayerHistory(id: number, force = false) {
-  const state = useFootball.getState();
+  const state = useFootball.getState(),
+    cached =
+      state.history[id] ||
+      (await getRecord<PlayerHistory>(
+        "projects",
+        "football-player:" + id,
+      ).catch(() => null));
+  if (cached)
+    useFootball.setState((s) => ({ history: { ...s.history, [id]: cached } }));
   if (
     !force &&
-    state.history[id] &&
-    Date.now() - new Date(state.history[id].updatedAt).getTime() < 120000
+    cached &&
+    Date.now() - new Date(cached.updatedAt).getTime() < 120000
   )
-    return state.history[id];
-  const data: PlayerHistory = await requestFootball(
-    "action=player&player=" + id,
-    120000,
-    force,
-  );
-  useFootball.setState((s) => ({ history: { ...s.history, [id]: data } }));
-  return data;
+    return cached;
+  try {
+    const data: PlayerHistory = await requestFootball(
+      "action=player&player=" + id,
+      120000,
+      force,
+    );
+    useFootball.setState((s) => ({ history: { ...s.history, [id]: data } }));
+    void putRecord("projects", "football-player:" + id, data).catch(() => {});
+    return data;
+  } catch (e) {
+    if (cached) return cached;
+    throw e;
+  }
+}
+export async function loadCareer(
+  id: string,
+  league: string,
+  force = false,
+): Promise<CareerData> {
+  const key = league + ":" + id,
+    state = useFootball.getState(),
+    cached =
+      state.careers[key] ||
+      (await getRecord<CareerData>("projects", "career:" + key).catch(
+        () => null,
+      ));
+  if (cached)
+    useFootball.setState((s) => ({ careers: { ...s.careers, [key]: cached } }));
+  if (!force && cached && Date.now() - Date.parse(cached.updatedAt) < 3600000)
+    return cached;
+  try {
+    const data: CareerData = await requestFootball(
+      `action=career&league=${league}&player=${id}`,
+      3600000,
+      force,
+    );
+    useFootball.setState((s) => ({ careers: { ...s.careers, [key]: data } }));
+    void putRecord("projects", "career:" + key, data).catch(() => {});
+    return data;
+  } catch (e) {
+    if (cached) return cached;
+    throw e;
+  }
+}
+export async function loadArchive(
+  year: number,
+  league: string,
+  force = false,
+): Promise<SeasonArchive> {
+  const key = league + ":" + year,
+    state = useFootball.getState(),
+    cached =
+      state.archives[key] ||
+      (await getRecord<SeasonArchive>(
+        "projects",
+        "season-archive:" + key,
+      ).catch(() => null));
+  if (cached)
+    useFootball.setState((s) => ({
+      archives: { ...s.archives, [key]: cached },
+    }));
+  if (!force && cached && Date.now() - Date.parse(cached.updatedAt) < 3600000)
+    return cached;
+  try {
+    const data: SeasonArchive = await requestFootball(
+      `action=archive&league=${league}&season=${year}`,
+      3600000,
+      force,
+    );
+    useFootball.setState((s) => ({ archives: { ...s.archives, [key]: data } }));
+    void putRecord("projects", "season-archive:" + key, data).catch(() => {});
+    return data;
+  } catch (e) {
+    if (cached) return cached;
+    throw e;
+  }
 }
 export async function refreshTeam(teamId: string, league: string) {
   const s = useStudio.getState(),

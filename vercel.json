@@ -22,5 +22,10 @@
         }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/football.js": {
+      "maxDuration": 60
+    }
+  }
 }

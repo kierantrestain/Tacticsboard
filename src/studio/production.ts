@@ -26,12 +26,17 @@ export function takeToAir(black = false) {
   if (!s.board) return;
   // Cues contain saved frames for the desk. Never copy that whole library into
   // every live update or store it again inside a programme snapshot.
-  const { cues, bookmarks, ...desk } = s.board.studio || emptyStudio();
+  const { cues, bookmarks, dataReports, ...desk } =
+    s.board.studio || emptyStudio();
   const board = copy({
     ...s.board,
     studio: s.board.studio ? { ...desk, bookmarks: [] } : undefined,
   });
   const snapshot: ProgramSnapshot = {
+    report:
+      r.view === "stats" && desk.statsReportId
+        ? copy(dataReports?.[desk.statsReportId])
+        : undefined,
     id: uid(),
     board,
     view: r.view,
@@ -79,7 +84,7 @@ export function queueLiveTake() {
   });
 }
 export function openProgram() {
-  takeToAir();
+  takeToAir(!!useRuntime.getState().program?.black);
   const w = window.open(
     "/?program=1",
     "touchline-program",

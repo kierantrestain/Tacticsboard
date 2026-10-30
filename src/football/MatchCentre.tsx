@@ -17,6 +17,7 @@ import {
   refreshFootball,
   refreshMatchday,
   useFootball,
+  loadArchive,
 } from "./data";
 import { TeamBadge } from "./ClubBadge";
 import MatchReport from "./MatchReport";
@@ -44,6 +45,46 @@ export default function MatchCentre() {
     [limit, setLimit] = useState(40),
     [reportError, setReportError] = useState(""),
     [analysing, setAnalysing] = useState(false);
+  const currentYear = season?.seasonYear || catalogue?.seasonYear || 2026;
+  const [year, setYear] = useState(catalogue?.seasonYear || 2026),
+    [archiveBusy, setArchiveBusy] = useState(false),
+    [archiveError, setArchiveError] = useState("");
+  const historic = year !== currentYear;
+  const archive = useFootball((s) => s.archives[league + ":" + year]);
+  useEffect(() => {
+    if (!historic) return;
+    let active = true;
+    setArchiveBusy(true);
+    setArchiveError("");
+    void loadArchive(year, league)
+      .catch(() => {
+        if (active)
+          setArchiveError(
+            "The source could not supply this historical season. Current-season records have not been substituted.",
+          );
+      })
+      .finally(() => {
+        if (active) setArchiveBusy(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [year, league, historic]);
+  useEffect(() => {
+    if (!archive) return;
+    const s = useStudio.getState();
+    if (s.catalogue) {
+      const ids = new Set(s.catalogue.teams.map((t) => t.id));
+      const extra = archive.teams.filter((t) => !ids.has(t.id));
+      if (extra.length)
+        useStudio.setState({
+          catalogue: {
+            ...s.catalogue,
+            teams: [...s.catalogue.teams, ...extra],
+          },
+        });
+    }
+  }, [archive]);
   useEffect(() => {
     ref.current?.showModal();
     const today = new Date().toISOString().slice(0, 10);
@@ -61,7 +102,9 @@ export default function MatchCentre() {
         "all",
     );
   }, [season, focus]);
-  const all = season?.fixtures || catalogue?.matches || [],
+  const all = historic
+      ? archive?.matches || []
+      : season?.fixtures || catalogue?.matches || [],
     teams = catalogue?.teams || [],
     lookup = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
   const filtered = useMemo(
@@ -101,6 +144,7 @@ export default function MatchCentre() {
     if (!focus || !season) return;
     const target = season.fixtures.find((m) => m.id === focus);
     if (target) {
+      setYear(currentYear);
       initialized.current = true;
       setLeague(target.league);
       setWeek(target.matchweek || "all");
@@ -113,6 +157,7 @@ export default function MatchCentre() {
     useFootball.setState({ focusMatchId: undefined });
   }, [focus, season]);
   useEffect(() => {
+    if (historic) return;
     if (!season) return;
     const days = [
       ...new Set(
@@ -129,12 +174,17 @@ export default function MatchCentre() {
     ].filter(Boolean);
     if (days.length <= 4)
       void Promise.allSettled(days.map((day) => refreshMatchday(day, league)));
-  }, [league, week, date]);
+  }, [league, week, date, historic]);
   const match = all.find((m) => m.id === selected),
     rounds =
       league === "eng.1"
-        ? Array.from({ length: 38 }, (_, i) => i + 1)
-        : Array.from({ length: 8 }, (_, i) => i + 1);
+        ? historic
+          ? []
+          : Array.from({ length: 38 }, (_, i) => i + 1)
+        : historic
+          ? []
+          : Array.from({ length: 8 }, (_, i) => i + 1);
+  const table = historic ? archive?.table : season?.standings[league];
   const chooseLeague = (value: string) => {
     setLeague(value);
     setClub("all");
@@ -142,11 +192,13 @@ export default function MatchCentre() {
     setDate("");
     setStatus("all");
     setWeek(
-      value === "eng.1"
-        ? season?.weeks.find((w) => w.next)?.id || "all"
-        : all
-            .filter((m) => m.league === value && !m.completed)
-            .sort((a, b) => a.date.localeCompare(b.date))[0]?.matchweek ||
+      historic
+        ? "all"
+        : value === "eng.1"
+          ? season?.weeks.find((w) => w.next)?.id || "all"
+          : all
+              .filter((m) => m.league === value && !m.completed)
+              .sort((a, b) => a.date.localeCompare(b.date))[0]?.matchweek ||
             "all",
     );
   };
@@ -193,14 +245,14 @@ export default function MatchCentre() {
       <header className="fc-header">
         <div>
           <span className="tl-eyebrow">
-            FOOTBALL INTELLIGENCE / {catalogue?.season}
+            FOOTBALL INTELLIGENCE / {year}/{String(year + 1).slice(-2)}
           </span>
           <h1>
             Match centre<span>{all.length} fixtures</span>
           </h1>
           <p>
-            The full Premier League season. Every published UCL league-phase
-            fixture.
+            Match reports, player records and season archives. Source coverage
+            is shown for each view.
           </p>
         </div>
         <button
@@ -212,6 +264,30 @@ export default function MatchCentre() {
         </button>
       </header>
       <div className="fc-toolbar">
+        <select
+          className="fp-season-picker"
+          aria-label="Match centre season"
+          value={year}
+          onChange={(e) => {
+            setYear(+e.target.value);
+            setWeek("all");
+            setSelected("");
+            setClub("all");
+            setDate("");
+            setStatus("all");
+            setQ("");
+          }}
+        >
+          {Array.from(
+            { length: currentYear - 1991 },
+            (_, i) => currentYear - i,
+          ).map((y) => (
+            <option key={y} value={y}>
+              {y}/{String(y + 1).slice(-2)}
+              {y === currentYear ? " · current" : ""}
+            </option>
+          ))}
+        </select>
         <div className="fc-competitions">
           {[
             ["eng.1", "Premier League"],
@@ -252,6 +328,12 @@ export default function MatchCentre() {
         <button
           className="fc-refresh"
           onClick={() => {
+            if (historic) {
+              void loadArchive(year, league, true).catch(() =>
+                setArchiveError("The historical source could not refresh."),
+              );
+              return;
+            }
             void refreshFootball();
             if (date) void refreshMatchday(date, league);
             if (match) void loadReport(match, true).catch(() => {});
@@ -262,6 +344,16 @@ export default function MatchCentre() {
           {refreshing ? "Checking…" : "Refresh data"}
         </button>
       </div>
+      {historic && (
+        <div className="fp-archive-status" role="status">
+          {archiveBusy
+            ? "Checking the historical season…"
+            : archiveError || archive
+              ? archiveError ||
+                `${archive!.matches.length} published matches${archive!.coverage.expected ? ` / ${archive!.coverage.expected} expected` : ""} · checked ${checkedTime(archive!.updatedAt)} · historical squad and report coverage can vary.`
+              : "No archive loaded."}
+        </div>
+      )}
       {tab === "fixtures" ? (
         <>
           <div className="fc-filterbar">
@@ -287,7 +379,11 @@ export default function MatchCentre() {
             >
               <option value="all">All clubs</option>
               {teams
-                .filter((t) => t.competitions.includes(league))
+                .filter((t) =>
+                  historic
+                    ? all.some((m) => m.homeId === t.id || m.awayId === t.id)
+                    : t.competitions.includes(league) && !t.archived,
+                )
                 .map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.shortName}
@@ -464,16 +560,19 @@ export default function MatchCentre() {
           </div>
         </>
       ) : tab === "players" ? (
-        <LeaguePlayers league={league} />
+        <LeaguePlayers
+          key={league + year}
+          league={league}
+          seasonYear={year}
+          archiveTeams={archive?.teams}
+        />
       ) : (
         <div className="fc-table-scroll">
-          {season?.standings[league]?.groups.map((g, i) => (
+          {table?.groups.map((g, i) => (
             <section key={i}>
               <div className="fc-table-title">
                 <h2>{g.name}</h2>
-                <span>
-                  Checked {checkedTime(season.standings[league].updatedAt)}
-                </span>
+                <span>Checked {checkedTime(table.updatedAt)}</span>
               </div>
               <table className="fc-league-table">
                 <thead>
@@ -557,7 +656,13 @@ export default function MatchCentre() {
                 </tbody>
               </table>
             </section>
-          )) || <p>Opening the league tables…</p>}
+          )) || (
+            <p className="fc-empty">
+              {historic
+                ? "No table was supplied for this historical season."
+                : "Opening the league tables…"}
+            </p>
+          )}
         </div>
       )}
       <footer className="fc-footer">
@@ -569,9 +674,11 @@ export default function MatchCentre() {
           {error ? " · Saved values retained for unavailable sources." : ""}
         </span>
         <span>
-          {league === "eng.1"
-            ? "380 fixtures · 38 official gameweeks"
-            : "144 league-phase fixtures · Knockout pairings appear after the draw"}{" "}
+          {historic
+            ? `${archive?.matches.length || 0} published historical matches · ${year}/${String(year + 1).slice(-2)}`
+            : league === "eng.1"
+              ? "380 fixtures · 38 official gameweeks"
+              : "144 league-phase fixtures · Knockout pairings appear after the draw"}{" "}
           · ESPN + Premier League FPL
         </span>
       </footer>

@@ -161,22 +161,25 @@ SOFTWARE.
 
 ## V2 media, replay and vision dependencies
 
-| Dependency | Version | Licence / included notice | Corresponding source |
-| --- | --- | --- | --- |
-| three | 0.186.1 | MIT, [notice](public/licenses/three.txt) | https://github.com/mrdoob/three.js |
-| fflate | 0.8.3 | MIT, [notice](public/licenses/fflate.txt) | https://github.com/101arrowz/fflate |
-| mediabunny | 1.64.0 | MPL-2.0, [full licence](public/licenses/mediabunny.txt) | [Exact npm source distribution](https://registry.npmjs.org/mediabunny/-/mediabunny-1.64.0.tgz), includes `src/` |
-| @mediapipe/tasks-vision | 1.2.0 | Apache-2.0, [licence](public/licenses/mediapipe.txt) | https://github.com/google-ai-edge/mediapipe |
-| @tensorflow/tfjs-core, tfjs-converter, tfjs-backend-cpu, tfjs-backend-wasm | 4.22.0 | Apache-2.0, [licence](public/licenses/tensorflow.txt) | https://github.com/tensorflow/tfjs |
-| @tensorflow-models/coco-ssd | 2.2.3 | Apache-2.0, [licence](public/licenses/tensorflow.txt) | https://github.com/tensorflow/tfjs-models/tree/master/coco-ssd |
-| Inter Variable | 5.3.0 | SIL OFL-1.1, [licence](public/licenses/inter.txt) | https://github.com/rsms/inter |
-| Manrope Variable | 5.3.0 | SIL OFL-1.1, [licence](public/licenses/manrope.txt) | https://github.com/sharanda/manrope |
+| Dependency                                                                 | Version | Licence / included notice                               | Corresponding source                                                                                            |
+| -------------------------------------------------------------------------- | ------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| three                                                                      | 0.186.1 | MIT, [notice](public/licenses/three.txt)                | https://github.com/mrdoob/three.js                                                                              |
+| fflate                                                                     | 0.8.3   | MIT, [notice](public/licenses/fflate.txt)               | https://github.com/101arrowz/fflate                                                                             |
+| mediabunny                                                                 | 1.64.0  | MPL-2.0, [full licence](public/licenses/mediabunny.txt) | [Exact npm source distribution](https://registry.npmjs.org/mediabunny/-/mediabunny-1.64.0.tgz), includes `src/` |
+| @mediapipe/tasks-vision                                                    | 1.2.0   | Apache-2.0, [licence](public/licenses/mediapipe.txt)    | https://github.com/google-ai-edge/mediapipe                                                                     |
+| @tensorflow/tfjs-core, tfjs-converter, tfjs-backend-cpu, tfjs-backend-wasm | 4.22.0  | Apache-2.0, [licence](public/licenses/tensorflow.txt)   | https://github.com/tensorflow/tfjs                                                                              |
+| @tensorflow-models/coco-ssd                                                | 2.2.3   | Apache-2.0, [licence](public/licenses/tensorflow.txt)   | https://github.com/tensorflow/tfjs-models/tree/master/coco-ssd                                                  |
+| Inter Variable                                                             | 5.3.0   | SIL OFL-1.1, [licence](public/licenses/inter.txt)       | https://github.com/rsms/inter                                                                                   |
+| Manrope Variable                                                           | 5.3.0   | SIL OFL-1.1, [licence](public/licenses/manrope.txt)     | https://github.com/sharanda/manrope                                                                             |
 
 Mediabunny is distributed unmodified in executable form. Its MPL-covered source files are available in the exact source distribution linked above. This application does not change those files; the MPL does not relicense unrelated application files. Full runtime notices are also served at `/licenses/` on the deployment.
 
 Official vision model downloads are generated during build rather than committed as application source. EfficientDet Lite2 is pinned by SHA-256 in `scripts/prepare-vision.mjs`; SSD Lite MobileNet V2 is pinned in `scripts/coco-model.json`. These TensorFlow/MediaPipe assets use Apache-2.0. The models detect generic COCO categories; model use does not establish rights to a user's imported footage.
 
-
 ## Football data and club marks
 
 ESPN public football JSON and the official Premier League FPL public feeds provide the source-attributed football data described in `docs/DATA_PROVENANCE.md`. Club crest images load from ESPN-supplied URLs; their copyrights and trademarks remain with their respective owners. They are not relicensed under the application's open-source dependency notices. No third-party match footage is committed or deployed.
+
+## Version 3 server-side HTML adapter
+
+Cheerio 1.1.2 (MIT) parses the public, source-attributed ESPN competition career tables in the football function. Its licence and transitive dependency notices remain with the deployed npm package; it is not bundled into the browser.

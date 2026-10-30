@@ -10,6 +10,7 @@ import { frameAt, isBoard } from "../core";
 import { sampleTracking } from "./geometry";
 import type { ProgramSnapshot, MediaAsset } from "./types";
 import { defaultBroadcast, timecode } from "./types";
+import StatsStage from "./StatsStage";
 const Pitch3D = lazy(() => import("./Pitch3D"));
 export function reconstructedFrame(
   snapshot: ProgramSnapshot,
@@ -90,7 +91,10 @@ export default function ProgramOutput() {
     productionChannel?.addEventListener("message", onMessage);
     productionChannel?.postMessage({ type: "request-program" });
     productionChannel?.postMessage({ type: "output-alive" });
-    const heartbeat=setInterval(()=>productionChannel?.postMessage({type:"output-alive"}),2000);
+    const heartbeat = setInterval(
+      () => productionChannel?.postMessage({ type: "output-alive" }),
+      2000,
+    );
     const key = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === "f")
         document.documentElement.requestFullscreen?.().catch(() => {});
@@ -137,11 +141,13 @@ export default function ProgramOutput() {
                     <small>{style.programme}</small>
                   </span>
                   <span className="tl-program-source">
-                    {snapshot.view === "footage"
-                      ? "MATCH ANALYSIS"
-                      : snapshot.view === "replay"
-                        ? "VIRTUAL REPLAY"
-                        : "TACTICAL ANALYSIS"}{" "}
+                    {snapshot.view === "stats"
+                      ? "MATCH INTELLIGENCE"
+                      : snapshot.view === "footage"
+                        ? "MATCH ANALYSIS"
+                        : snapshot.view === "replay"
+                          ? "VIRTUAL REPLAY"
+                          : "TACTICAL ANALYSIS"}{" "}
                     <i />
                     {asset && snapshot.view !== "board"
                       ? timecode(snapshot.time, b.studio?.fps)
@@ -186,7 +192,9 @@ export default function ProgramOutput() {
                 <div className="tl-stage-message">Preparing replay…</div>
               }
             >
-              {snapshot.view === "replay" ? (
+              {snapshot.view === "stats" ? (
+                <StatsStage board={b} report={snapshot.report} program />
+              ) : snapshot.view === "replay" ? (
                 <Pitch3D
                   board={b}
                   frame={frame}

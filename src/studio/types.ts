@@ -1,5 +1,9 @@
-import type { Board, Drawing, Frame, Side } from "../types";
-export type ViewMode = "board" | "footage" | "split" | "replay";
+import type { Board, Drawing, Frame, Side, MatchDetails } from "../types";
+export type ViewMode = "board" | "footage" | "split" | "replay" | "stats";
+export type MatchStats = Pick<
+  MatchDetails,
+  "id" | "lineups" | "teamStats" | "updatedAt" | "sourceUrl"
+>;
 export type CameraPreset = "broadcast" | "overhead" | "endline" | "touchline";
 export interface Point {
   x: number;
@@ -98,6 +102,14 @@ export const defaultBroadcast = (): BroadcastStyle => ({
 });
 /** A cue holds a frame, never a nested Board/StudioDocument. */
 export interface RundownCue {
+  sceneId?: string;
+  statsReportId?: string;
+  statsPlayerId?: string;
+  context?: Board["context"];
+  homeTeamId?: string;
+  awayTeamId?: string;
+  competition?: string;
+  match?: Board["match"];
   id: string;
   title: string;
   note: string;
@@ -115,6 +127,9 @@ export interface RundownCue {
   lowerThird: string;
 }
 export interface StudioDocument {
+  dataReports?: Record<string, MatchStats>;
+  statsReportId?: string;
+  statsPlayerId?: string;
   version: 2;
   view?: ViewMode;
   assetId?: string;
@@ -133,6 +148,7 @@ export interface StudioDocument {
   cues?: RundownCue[];
 }
 export interface ProgramSnapshot {
+  report?: MatchStats;
   id: string;
   board: Board;
   view: ViewMode;
@@ -171,7 +187,7 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
   return (
     d.version === 2 &&
     (d.view === undefined ||
-      ["board", "footage", "split", "replay"].includes(d.view)) &&
+      ["board", "footage", "split", "replay", "stats"].includes(d.view)) &&
     !!d.trim &&
     Number.isFinite(d.trim.start) &&
     Number.isFinite(d.trim.end) &&
@@ -182,6 +198,53 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
     record(d.landmarks) &&
     record(d.targets) &&
     record(d.tracking) &&
+    (d.statsReportId === undefined || typeof d.statsReportId === "string") &&
+    (d.statsPlayerId === undefined || typeof d.statsPlayerId === "string") &&
+    (d.dataReports === undefined ||
+      (record(d.dataReports) &&
+        Object.keys(d.dataReports).length <= 100 &&
+        Object.values(d.dataReports).every(
+          (report) =>
+            !!report &&
+            typeof report.id === "string" &&
+            Array.isArray(report.lineups) &&
+            report.lineups.length <= 2 &&
+            report.lineups.every(
+              (line) =>
+                !!line &&
+                typeof line.teamId === "string" &&
+                Array.isArray(line.players) &&
+                line.players.length <= 44 &&
+                line.players.every(
+                  (p) =>
+                    !!p &&
+                    typeof p.id === "string" &&
+                    typeof p.name === "string" &&
+                    typeof p.starter === "boolean" &&
+                    (!p.stats ||
+                      (record(p.stats) &&
+                        Object.keys(p.stats).length <= 200 &&
+                        Object.values(p.stats).every(
+                          (v) => !!v && typeof v.label === "string",
+                        ))),
+                ),
+            ) &&
+            Array.isArray(report.teamStats) &&
+            report.teamStats.length <= 2 &&
+            report.teamStats.every(
+              (t) =>
+                !!t &&
+                typeof t.teamId === "string" &&
+                record(t.stats) &&
+                Object.keys(t.stats).length <= 200 &&
+                Object.values(t.stats).every(
+                  (v) =>
+                    !!v &&
+                    typeof v.display === "string" &&
+                    typeof v.label === "string",
+                ),
+            ),
+        ))) &&
     Array.isArray(d.bookmarks) &&
     d.bookmarks.length <= 500 &&
     typeof d.lowerThird === "string" &&
@@ -213,13 +276,38 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
             [p.x, p.y].every((n) => Number.isFinite(n) && n >= 0 && n <= 1);
           return (
             !!c &&
+            (c.sceneId === undefined || typeof c.sceneId === "string") &&
+            (c.statsReportId === undefined ||
+              typeof c.statsReportId === "string") &&
+            (c.statsPlayerId === undefined ||
+              typeof c.statsPlayerId === "string") &&
+            (c.context === undefined ||
+              (record(c.context) &&
+                ["home", "away"].every((side) => {
+                  const t = c.context?.[side as Side];
+                  return (
+                    !!t &&
+                    typeof t.id === "string" &&
+                    typeof t.name === "string" &&
+                    typeof t.shortName === "string" &&
+                    typeof t.abbreviation === "string" &&
+                    typeof t.color === "string" &&
+                    typeof t.alternateColor === "string" &&
+                    Array.isArray(t.competitions) &&
+                    t.competitions.every((l) => typeof l === "string")
+                  );
+                }))) &&
+            (c.homeTeamId === undefined || typeof c.homeTeamId === "string") &&
+            (c.awayTeamId === undefined || typeof c.awayTeamId === "string") &&
+            (c.competition === undefined ||
+              typeof c.competition === "string") &&
             typeof c.id === "string" &&
             typeof c.title === "string" &&
             c.title.length <= 80 &&
             typeof c.note === "string" &&
             c.note.length <= 4000 &&
             typeof c.lowerThird === "string" &&
-            ["board", "footage", "split", "replay"].includes(c.view) &&
+            ["board", "footage", "split", "replay", "stats"].includes(c.view) &&
             ["broadcast", "overhead", "endline", "touchline"].includes(
               c.camera,
             ) &&

@@ -4,6 +4,7 @@ import type { Board, Frame, Drawing } from "../types";
 import type { CameraPreset } from "./types";
 import type { ReplayHandle } from "./Pitch3D";
 import { replayInteraction } from "./replayInteraction";
+import { analysisFrame } from "./tactics";
 const presets: Record<CameraPreset, [number, number, number]> = {
   broadcast: [8, 75, 88],
   overhead: [0, 124, 0.1],
@@ -31,7 +32,8 @@ const SoftwarePitch3D = forwardRef<
         out.getContext("2d")!.drawImage(raw, 0, 0);
         return out;
       },
-      renderFrame: (f) => renderRef.current?.(f) || null,
+      renderFrame: (f) =>
+        renderRef.current?.(analysisFrame(latest.current.board, f)) || null,
     }),
     [],
   );
@@ -361,6 +363,12 @@ const SoftwarePitch3D = forwardRef<
       const players = f.players
         .map((p) => ({ p, base: dot(p.x * 105 - 52.5, 0, p.y * 68 - 34) }))
         .sort((a, b) => b.base.z - a.base.z);
+      const labels: {
+        left: number;
+        right: number;
+        top: number;
+        bottom: number;
+      }[] = [];
       for (const { p, base } of players) {
         if (
           p.side === "home" ? !b.settings.homeVisible : !b.settings.awayVisible
@@ -368,22 +376,31 @@ const SoftwarePitch3D = forwardRef<
           continue;
         const x = p.x * 105 - 52.5,
           z = p.y * 68 - 34,
-          markerScale = Math.max(.7,Math.min(1.6,b.settings.markerScale || 1)),
-          head = dot(x, 2.3*markerScale, z),
-          top = dot(x, 1.9*markerScale, z),
-          foot = dot(x, 0.3*markerScale, z),
-          side = dot(x + right.x * 0.8*markerScale, 1.2*markerScale, z + right.z * 0.8*markerScale),
-          centre = dot(x, 1.2*markerScale, z),
+          markerScale = Math.max(
+            0.7,
+            Math.min(1.6, b.settings.markerScale || 1),
+          ),
+          head = dot(x, 2.3 * markerScale, z),
+          top = dot(x, 1.9 * markerScale, z),
+          foot = dot(x, 0.3 * markerScale, z),
+          side = dot(
+            x + right.x * 0.8 * markerScale,
+            1.2 * markerScale,
+            z + right.z * 0.8 * markerScale,
+          ),
+          centre = dot(x, 1.2 * markerScale, z),
           radius = Math.max(
             2,
             Math.hypot(side.x - centre.x, side.y - centre.y),
           ),
           color =
-            p.opacity !== undefined && p.opacity < 0.8 && !b.settings.focusPlayer
+            p.opacity !== undefined &&
+            p.opacity < 0.8 &&
+            !b.settings.focusPlayer
               ? "#ddb06d"
               : b.colors[p.side];
         ctx.save();
-        ctx.globalAlpha=p.opacity??1;
+        ctx.globalAlpha = p.opacity ?? 1;
         ctx.fillStyle = "#02091470";
         ctx.beginPath();
         ctx.ellipse(
@@ -466,11 +483,59 @@ const SoftwarePitch3D = forwardRef<
           const font = Math.max(8, Math.min(13, el.width / 100));
           ctx.font = `600 ${font}px Inter,Arial`;
           const tw = ctx.measureText(text).width;
+          let lift = 0,
+            best = Infinity;
+          for (let step = 0; step < 7; step++) {
+            const candidate = step * (font + 11),
+              rect = {
+                left: head.x - tw / 2 - 6,
+                right: head.x + tw / 2 + 6,
+                top: head.y - font - 12 - candidate,
+                bottom: head.y - 5 - candidate,
+              };
+            let score = step * 0.01 + (rect.top < 10 ? 100 : 0);
+            for (const label of labels)
+              if (
+                rect.left < label.right + 4 &&
+                rect.right > label.left - 4 &&
+                rect.top < label.bottom + 4 &&
+                rect.bottom > label.top - 4
+              )
+                score += 10;
+            for (const other of players)
+              if (
+                other.p.uid !== p.uid &&
+                other.base.x + 10 > rect.left &&
+                other.base.x - 10 < rect.right &&
+                other.base.y > rect.top &&
+                other.base.y - 28 < rect.bottom
+              )
+                score += 5;
+            if (score < best) {
+              best = score;
+              lift = candidate;
+            }
+          }
+          labels.push({
+            left: head.x - tw / 2 - 6,
+            right: head.x + tw / 2 + 6,
+            top: head.y - font - 12 - lift,
+            bottom: head.y - 5 - lift,
+          });
+          if (lift) {
+            ctx.strokeStyle = "#b7cbb777";
+            ctx.lineWidth = 0.8;
+            path([
+              { x: head.x, y: head.y - 4 },
+              { x: head.x, y: head.y - 5 - lift },
+            ]);
+            ctx.stroke();
+          }
           ctx.fillStyle = "#071324e8";
           ctx.beginPath();
           ctx.roundRect(
             head.x - tw / 2 - 6,
-            head.y - font - 12,
+            head.y - font - 12 - lift,
             tw + 12,
             font + 7,
             4,
@@ -478,7 +543,7 @@ const SoftwarePitch3D = forwardRef<
           ctx.fill();
           ctx.fillStyle = "#d9eafd";
           ctx.textAlign = "center";
-          ctx.fillText(text, head.x, head.y - 8);
+          ctx.fillText(text, head.x, head.y - 8 - lift);
         }
         ctx.restore();
       }

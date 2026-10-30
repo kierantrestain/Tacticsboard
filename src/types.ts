@@ -69,6 +69,7 @@ export interface Manager {
   tacticsBasis: string;
 }
 export interface Team {
+  archived?: boolean;
   badgeUrl?: string;
   fplId?: number;
   rosterCheckedAt?: string;
@@ -92,6 +93,7 @@ export interface Team {
   }[];
 }
 export interface Match {
+  seasonYear?: number;
   fplId?: number;
   matchweek?: number;
   stage?: string;
@@ -185,6 +187,20 @@ export interface Scene extends Frame {
   note: string;
 }
 export interface Board extends Frame {
+  context?: Record<
+    Side,
+    Pick<
+      Team,
+      | "id"
+      | "name"
+      | "shortName"
+      | "abbreviation"
+      | "color"
+      | "alternateColor"
+      | "badgeUrl"
+      | "competitions"
+    >
+  >;
   version: 1;
   studio?: StudioDocument;
   id: string;

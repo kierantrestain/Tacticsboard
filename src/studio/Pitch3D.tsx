@@ -44,6 +44,7 @@ function label(text: string, color: string) {
   );
   sprite.scale.set(9.8, 2.05, 1);
   sprite.position.y = 4;
+  sprite.userData.playerLabel = true;
   return sprite;
 }
 function dispose(node: THREE.Object3D) {
@@ -417,7 +418,10 @@ const Pitch3D = forwardRef<
           !item ||
           item.color !== color ||
           item.name !==
-            p.name + String(b.settings.names) + String(b.settings.numbers) ||
+            p.name +
+              p.number +
+              String(b.settings.names) +
+              String(b.settings.numbers) ||
           item.cutout !== p.cutout
         ) {
           if (item) {
@@ -434,7 +438,10 @@ const Pitch3D = forwardRef<
           item = {
             node,
             name:
-              p.name + String(b.settings.names) + String(b.settings.numbers),
+              p.name +
+              p.number +
+              String(b.settings.names) +
+              String(b.settings.numbers),
             color,
             cutout: p.cutout,
           };
@@ -458,6 +465,75 @@ const Pitch3D = forwardRef<
           p.side === "home" ? b.settings.homeVisible : b.settings.awayVisible;
       }
       ball.visible = b.settings.ballVisible !== false;
+      camera3.updateMatrixWorld();
+      scene.updateMatrixWorld(true);
+      const labelRects: {
+        left: number;
+        right: number;
+        top: number;
+        bottom: number;
+      }[] = [];
+      for (const item of players.values()) {
+        const sprite = item.node.children.find(
+          (n) => n.userData.playerLabel,
+        ) as THREE.Sprite | undefined;
+        if (!sprite || !item.node.visible) continue;
+        let best = Infinity,
+          height = 4;
+        for (let step = 0; step < 7; step++) {
+          const world = item.node.position.clone();
+          world.y += (4 + step * 2.7) * item.node.scale.y;
+          const projected = world.clone().project(camera3),
+            distance = world.distanceTo(camera3.position),
+            factor =
+              host.clientHeight /
+              (2 *
+                Math.tan(THREE.MathUtils.degToRad(camera3.fov / 2)) *
+                distance),
+            w = 9.8 * item.node.scale.x * factor,
+            h = 2.05 * item.node.scale.y * factor,
+            x = ((projected.x + 1) * host.clientWidth) / 2,
+            y = ((1 - projected.y) * host.clientHeight) / 2;
+          const rect = {
+            left: x - w / 2,
+            right: x + w / 2,
+            top: y - h / 2,
+            bottom: y + h / 2,
+          };
+          let score = step * 0.01 + (rect.top < 8 ? 100 : 0);
+          for (const other of labelRects)
+            if (
+              rect.left < other.right + 3 &&
+              rect.right > other.left - 3 &&
+              rect.top < other.bottom + 3 &&
+              rect.bottom > other.top - 3
+            )
+              score += 10;
+          if (score < best) {
+            best = score;
+            height = 4 + step * 2.7;
+          }
+        }
+        sprite.position.y = height;
+        const world = item.node.position.clone();
+        world.y += height * item.node.scale.y;
+        const projected = world.clone().project(camera3),
+          factor =
+            host.clientHeight /
+            (2 *
+              Math.tan(THREE.MathUtils.degToRad(camera3.fov / 2)) *
+              world.distanceTo(camera3.position)),
+          w = 9.8 * item.node.scale.x * factor,
+          h = 2.05 * item.node.scale.y * factor,
+          x = ((projected.x + 1) * host.clientWidth) / 2,
+          y = ((1 - projected.y) * host.clientHeight) / 2;
+        labelRects.push({
+          left: x - w / 2,
+          right: x + w / 2,
+          top: y - h / 2,
+          bottom: y + h / 2,
+        });
+      }
       ball.position.set(f.ball.x * 105 - 52.5, 0.4, f.ball.y * 68 - 34);
       if (f.drawings !== lastInk) {
         while (ink.children.length) {

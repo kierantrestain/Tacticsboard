@@ -1,16 +1,16 @@
 # Touchline Studio
 
-A standalone football analysis workspace for preparing and presenting studio segments. Version 3 adds complete saved-shot rundowns, tactical setups, live guides, player spotlighting and configurable Bang On Sports output graphics. It combines the full season match centre with still and short-clip telestration, assisted reconstruction, a virtual 3D pitch, a presenter rundown and an independently controlled clean programme window.
+A standalone football analysis workspace for preparing and presenting studio segments. Version 3 adds complete saved-shot rundowns, tactical setups, live guides, player spotlighting and configurable Bang On Sports output graphics. It adds game/season/career player drill-downs, historical season archives, source coverage reports, TV data cards and ordered still reconstruction. It combines the full season match centre with still and short-clip telestration, assisted reconstruction, a virtual 3D pitch, a presenter rundown and an independently controlled clean programme window.
 
 See the [show workflow](docs/SHOW_WORKFLOW.md) for complete segment preparation, saved shots, TV design and presenter controls.
 
 ## Match centre and current data
 
-Open **Matches** for the season schedule. Choose Premier League or Champions League, select a gameweek/matchday, filter a club or date, and inspect the report before choosing **Analyse this match**. The **Players** view searches and sorts league-wide statistics; select a player for every supplied field and its PL match log. **Table** shows the competition standings and recent form.
+Open **Matches** for the season schedule. Choose Premier League or Champions League, select a gameweek/matchday, filter a club or date, and inspect the report before choosing **Analyse this match**. The **Players** view searches and sorts league-wide statistics. Select a player for **This game**, **Season** and **History**: every supplied match field, competition totals, PL match logs, previous FPL seasons and published ESPN career rows. The season picker opens earlier fixture archives and tables; missing historical squads and reports are labelled unavailable. Historical club identities are retained when they are absent from the current catalogue. **Table** shows the competition standings and recent form.
 
-Reports expose all supplied team statistics, individual starter/substitute statistics, commentary, attendance and officials. PL minutes, starts, xG/xA, defensive figures and match logs come from the official public FPL feed. Fantasy assists stay explicitly labelled because their rules differ from ESPN assists. FPL registration lists can differ from the current ESPN squad, so they remain separate; ambiguous player identities are not joined.
+Reports expose all supplied team statistics, individual starter/substitute statistics, commentary, attendance and officials. The report summary uses supplied facts and shows lineup/player/stat coverage. Download the complete normalised JSON or all player fields as CSV, or present a team comparison/individual player card in the clean TV output and save it to the rundown. PL minutes, starts, xG/xA, defensive figures and match logs come from the official public FPL feed. Fantasy assists stay explicitly labelled because their rules differ from ESPN assists. FPL registration lists can differ from the current ESPN squad, so they remain separate; ambiguous player identities are not joined.
 
-The visible app checks the season/player feed and tables every two minutes; an open live-match report polls every 30 seconds, otherwise every two minutes. Opening a matchweek checks its fixture dates. CDN caching is 30 seconds for match reports/daily scores, two minutes for season/player/table data and 15 minutes for squads. These are application refresh intervals, not an upstream real-time guarantee. Every view shows its check time and retains saved values on a source outage.
+The visible app checks the season/player feed and tables every two minutes; an open live-match report polls every 30 seconds, otherwise every two minutes. Opening a matchweek checks its fixture dates. CDN caching is 30 seconds for match reports/daily scores, two minutes for season/player/table data and 15 minutes for squads. These are application refresh intervals, not an upstream real-time guarantee. Every view shows its check time and retains saved values on a source outage. Refreshed season snapshots, opened match reports, player histories, career rows and historical fixture archives persist on the device. Career/archive requests cache for an hour. An archive reports its actual fixture count against the known PL season size; early 22-club seasons expect 462 games. UCL archive completeness remains unknown rather than inferred from a partial return.
 
 All published UCL league-phase pairings are included. Future knockout pairings cannot be known before the draw. Use the source-backed date lookup as new rounds are published and `npm run data:season` to refresh the shipped season archive.
 
@@ -20,6 +20,7 @@ All published UCL league-phase pairings are included. Future knockout pairings c
 2. **Import a still or clip.** Sources remain on this computer. Use a browser-decodable MP4, WebM, MOV, JPG or PNG under 200 MB. Select up to 20 seconds; scrub the filmstrip, step nominal frames, slow playback, set in/out points and freeze a frame.
 3. **Explain the moment.** Draw arrows, runs, lines, freehand ink, areas, circles, passing triangles, spotlights, text, distance estimates and perspective reference lines. Adjust graphic colour, opacity, weight and visibility times. Zoom and pan the source. After calibration, attach graphics to the pitch to carry the same explanation into the replay.
 4. **Reconstruct the passage.** In Rebuild, identify four visible landmarks using the pitch or penalty-area template. Detect people locally or mark the feet of the relevant players. Confirm teams and assign real player identities yourself. Choose camera compensation or a locked shot, then track the selected passage. Scrub, inspect uncertainty flags and drag incorrect observations into place. Confirm the review before building an editable replay.
+   For a set of pictures, map and review each still, assign real player identities, then use **Still sequence** to order two to twenty images into editable phases. Stable identities link the same player across images. Movement between stills is an illustrative interpolation; unseen movement and off-screen players are not reconstructed.
 5. **Present the explanation.** Compare the original with a top-down reconstruction, or open 3D replay. Use broadcast, overhead, goal or touchline cameras; orbit the pitch, move players and draw in perspective. Optional single-pose source cutouts are available in Display. Bookmark moments and add presenter notes to the rundown.
 6. **Control the programme.** Open the clean output on a second display or capture its window in OBS. Live follow is on by default for immediate updates. Turn it off to rehearse while holding the programme, then use **Take to programme**. Presenter mode includes shot recall controls. Blackout is available. Change the programme caption in Display.
 7. **Export and transfer.** Export a 4K PNG, a silent frame-timed 1080p/25 fps analysis film, an editable JSON document or a portable ZIP including its source files. Open a ZIP on another computer to restore the complete analysis. A JSON document alone does not include the media.
@@ -34,21 +35,21 @@ The app does not implement native SDI/NDI/EVS integration, cross-device control,
 
 ## Controls
 
-| Key | Action |
-| --- | --- |
-| V / A / R / L | Select / pass / run / connection |
-| D / Z / C / G | Freehand / space / circle / triangle |
-| H / U / T / E | Spotlight / distance / text / erase |
-| Space | Play or pause |
-| ← / → in a source | Step a nominal frame; Shift steps one second |
-| I / O | Set clip in / out |
-| F / M / P | Freeze frame / save rundown shot / presenter mode |
-| [ / ] / 1–9 | Previous / next / numbered rundown shot |
-| Enter / B | Take the current view / blackout or restore TV |
-| Ctrl or Cmd + K | Search commands |
-| Ctrl or Cmd + Z / Shift + Z | Undo / redo |
-| Ctrl or Cmd + S | Save |
-| Delete / Escape | Delete selection / leave current operation |
+| Key                         | Action                                            |
+| --------------------------- | ------------------------------------------------- |
+| V / A / R / L               | Select / pass / run / connection                  |
+| D / Z / C / G               | Freehand / space / circle / triangle              |
+| H / U / T / E               | Spotlight / distance / text / erase               |
+| Space                       | Play or pause                                     |
+| ← / → in a source           | Step a nominal frame; Shift steps one second      |
+| I / O                       | Set clip in / out                                 |
+| F / M / P                   | Freeze frame / save rundown shot / presenter mode |
+| [ / ] / 1–9                 | Previous / next / numbered rundown shot           |
+| Enter / B                   | Take the current view / blackout or restore TV    |
+| Ctrl or Cmd + K             | Search commands                                   |
+| Ctrl or Cmd + Z / Shift + Z | Undo / redo                                       |
+| Ctrl or Cmd + S             | Save                                              |
+| Delete / Escape             | Delete selection / leave current operation        |
 
 A mouse and touchscreen are supported. In 3D, drag a player to reposition it; drag empty space to orbit. Tooltips and the in-app help list presenter controls. Video frame stepping uses the selected nominal frame rate; variable-rate footage is not guaranteed frame-index accurate.
 
@@ -85,6 +86,6 @@ The synthetic test generator creates a controlled ten-second/25 fps clip in igno
 
 [Open Touchline Studio](https://fixture-tactics-studio.vercel.app/) · [GitHub source](https://github.com/kierantrestain/Tacticsboard)
 
-Vercel project: `fixture-tactics-studio`, team `FRMX`. Use Vite, Node 24.x, `npm ci`, `npm run build`, output `dist`. The Vercel Function is `/api/football`. No environment variables are required. The production release is uploaded from the exact GitHub commit because Vercel's Git integration previously returned `repo_no_access`; automatic GitHub deployments are not connected. Grant that existing integration repository access before enabling automatic deployment. Do not create a duplicate project.
+Vercel project: `fixture-tactics-studio`, team `FRMX`. Use Vite, Node 24.x, `npm ci`, `npm run build`, output `dist`. The Vercel Function is `/api/football`. No environment variables are required. The existing Git connection successfully built the version 3 staging branch from its exact GitHub commit. Use a staging deployment for review and promote only the approved release; keep the existing project and canonical production address. Staging can require the team's Vercel sign-in.
 
 See [production handoff](docs/PRODUCTION.md), [V2 workflow and verification](docs/STUDIO_V2.md), [foundation review](docs/FOUNDATION_REVIEW.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
