@@ -26,3 +26,14 @@ Export stills are 3840×2160 PNG. Animation export is 1920×1080 and records the
 ## Verification
 
 `npm test` checks competition coverage, squad/manager integrity, formation mapping, interpolation, active-phase persistence, document validation and the football route's input handling, caching and failure behaviour. `npm run build` performs strict TypeScript checking and the production bundle build. Hands-on browser checks cover drag/draw/undo, phases, player profiles, match selection, TV sync and exports.
+
+## Deployed project
+
+- App: https://fixture-tactics-studio.vercel.app/
+- GitHub: https://github.com/kierantrestain/Tacticsboard
+- Vercel team: FRMX (`team_EGBv3untl6ni2PfIzT7vy4mi`).
+- Vercel project: `fixture-tactics-studio` (`prj_kRVOdZTD36LmU64s4wJRj2RBqwfi`).
+- Node runtime: 24.x in the deployment build settings.
+- Vercel’s separate Git integration returned `repo_no_access`. Source is committed in GitHub and deployment uses those same files through the Vercel API. Grant the Vercel GitHub integration repository access, then connect this existing project under Settings → Git to enable future push deployments.
+
+Production HTTP checks returned 200 for squad refresh (31 Arsenal records), the Arsenal–Everton match summary (two lineups), and daily fixtures; an unsupported competition returned 400. Browser checks confirmed drag/draw, undo/redo, phase playback, bench profiles, confirmed match XIs, match statistics, manager information, lineup substitutions, TV title synchronisation, a 3840×2160 PNG, a 1920×1080 VP9 WebM, editable JSON export/import, and local image attachment. Video frame cadence remains dependent on browser foreground status and workstation performance.

@@ -1,5 +1,7 @@
 # Fixture · Tactics Studio
 
+![Fixture tactics studio](docs/studio-preview.jpg)
+
 A football analysis workspace for the Fixture weekly show, by Bang On Entertainment. Built for studio touchscreens, a mouse, and a clean second display or OBS browser source.
 
 ## In the studio
@@ -59,6 +61,10 @@ npm run data:refresh
 Raw source responses are cached in ignored `data-cache/`. Review `data/managers.json` against its identity sources whenever managers change. Rebuild, review coverage, run tests and commit the new snapshot before deploying it. Data refresh is explicit; no unattended schedule or provider SLA is implied.
 
 ## Deploy
+
+Live app: [fixture-tactics-studio.vercel.app](https://fixture-tactics-studio.vercel.app/). Source: [kierantrestain/Tacticsboard](https://github.com/kierantrestain/Tacticsboard).
+
+The initial production release was deployed from the committed source through the Vercel API. Vercel’s Git integration returned `repo_no_access` for this repository, so automatic deployments from GitHub are not connected. The repository owner can grant Vercel access and connect this existing project in Settings → Git; do not create a duplicate project. See the production handoff for the exact project.
 
 Import this repository into Vercel with framework **Vite**, build `npm run build`, output `dist`, Node **24.x**. `vercel.json` supplies SPA routing and security headers; `/api/football` is deployed separately. No environment variables are needed. Production is the `main` branch. Run `npm test && npm run build` before promotion.
 

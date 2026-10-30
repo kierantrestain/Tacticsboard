@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Users,
   UserRound,
@@ -66,6 +66,19 @@ export default function Sidebar() {
   const [search, setSearch] = useState(""),
     [replacement, setReplacement] = useState<string | null>(null),
     [showAll, setShowAll] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const activeProfile =
+    inspector === "players" ? s.profileId || s.selected[0] : null;
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [
+    inspector,
+    side,
+    board?.id,
+    board?.homeTeamId,
+    board?.awayTeamId,
+    activeProfile,
+  ]);
   if (!board || !catalogue) return null;
   const team = catalogue.teams.find(
     (t) => t.id === (side === "home" ? board.homeTeamId : board.awayTeamId),
@@ -159,7 +172,7 @@ export default function Sidebar() {
           </button>
         ))}
       </div>
-      <div className="sidebar-scroll">
+      <div className="sidebar-scroll" ref={scrollRef}>
         <div className="team-inspector-heading">
           <TeamBadge team={team} />
           <div>

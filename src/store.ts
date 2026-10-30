@@ -127,7 +127,16 @@ export const useStudio = create<Studio>((set, get) => ({
     const old = get().board;
     const h = catalogue.teams.find((t) => t.id === "359") || catalogue.teams[0];
     const a = catalogue.teams.find((t) => t.id === "382") || catalogue.teams[1];
-    set({ catalogue, summaries, board: old || newBoard(h, a) });
+    set({
+      catalogue,
+      summaries,
+      board:
+        old &&
+        catalogue.teams.some((t) => t.id === old.homeTeamId) &&
+        catalogue.teams.some((t) => t.id === old.awayTeamId)
+          ? old
+          : newBoard(h, a),
+    });
     if (!IS_OUTPUT) get().save();
   },
   set: (patch) => set(patch),
@@ -248,11 +257,20 @@ export const useStudio = create<Studio>((set, get) => ({
   },
   importBoard: (value) => {
     if (!isBoard(value)) return false;
+    const teams = get().catalogue?.teams;
+    if (
+      !teams?.some((t) => t.id === value.homeTeamId) ||
+      !teams.some((t) => t.id === value.awayTeamId)
+    )
+      return false;
     const b = copy(value);
     b.id = uid();
     b.managerNotes = b.managerNotes || {};
     set({
       board: b,
+      selected: [],
+      selectedShape: null,
+      profileId: null,
       past: [],
       future: [],
       playing: false,
@@ -275,6 +293,9 @@ export const useStudio = create<Studio>((set, get) => ({
         catalogue.teams[1];
     set({
       board: newBoard(h, a),
+      playing: false,
+      playhead: 0,
+      profileId: null,
       past: [],
       future: [],
       modal: null,

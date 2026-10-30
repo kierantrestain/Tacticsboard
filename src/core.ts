@@ -281,19 +281,25 @@ export function isBoard(value: unknown): value is Board {
   const validPlayers = (ps: unknown) =>
     Array.isArray(ps) &&
     ps.length <= 44 &&
+    new Set(ps.map((p) => p?.uid)).size === ps.length &&
     ps.every(
       (p) =>
         point(p) &&
         typeof p.uid === "string" &&
         typeof p.name === "string" &&
         typeof p.playerId === "string" &&
+        typeof p.number === "string" &&
+        (p.opacity === undefined ||
+          (Number.isFinite(p.opacity) && p.opacity >= 0 && p.opacity <= 1)) &&
         ["home", "away"].includes(p.side),
     );
   const validDrawings = (ds: unknown) =>
     Array.isArray(ds) &&
     ds.length <= 500 &&
+    new Set(ds.map((d) => d?.id)).size === ds.length &&
     ds.every(
       (d) =>
+        !!d &&
         typeof d.id === "string" &&
         [
           "arrow",
@@ -308,6 +314,11 @@ export function isBoard(value: unknown): value is Board {
         ].includes(d.type) &&
         Array.isArray(d.points) &&
         d.points.length <= 20000 &&
+        d.points.length % 2 === 0 &&
+        d.points.length >=
+          (d.type === "text" ? 2 : d.type === "triangle" ? 6 : 4) &&
+        (d.type !== "text" ||
+          (typeof d.text === "string" && d.text.length <= 100)) &&
         d.points.every(
           (x: unknown) =>
             typeof x === "number" && Number.isFinite(x) && x >= -1 && x <= 2,
@@ -333,10 +344,13 @@ export function isBoard(value: unknown): value is Board {
     Array.isArray(b.scenes) &&
     b.scenes.length >= 1 &&
     b.scenes.length <= 100 &&
+    new Set(b.scenes.map((s) => s?.id)).size === b.scenes.length &&
     b.scenes.every(
       (s) =>
+        !!s &&
         typeof s.id === "string" &&
         typeof s.title === "string" &&
+        typeof s.note === "string" &&
         Number.isFinite(s.duration) &&
         s.duration >= 0.2 &&
         s.duration <= 60 &&
@@ -367,6 +381,7 @@ export function isBoard(value: unknown): value is Board {
     b.scenes.some((s) => s.id === b.activeScene) &&
     !!b.managerNotes &&
     typeof b.managerNotes === "object" &&
+    !Array.isArray(b.managerNotes) &&
     Object.values(b.managerNotes).every((v) => typeof v === "string") &&
     typeof b.competition === "string" &&
     !!b.formations &&
@@ -378,6 +393,18 @@ export function isBoard(value: unknown): value is Board {
         typeof b.lineupSource[s] === "string" &&
         /^#[0-9a-f]{6}$/i.test(b.colors[s] || ""),
     ) &&
+    (!b.match ||
+      (typeof b.match.id === "string" &&
+        typeof b.match.league === "string" &&
+        typeof b.match.homeId === "string" &&
+        typeof b.match.awayId === "string" &&
+        typeof b.match.homeName === "string" &&
+        typeof b.match.awayName === "string" &&
+        typeof b.match.status === "string" &&
+        typeof b.match.completed === "boolean" &&
+        typeof b.match.sourceUrl === "string" &&
+        b.match.sourceUrl.startsWith("https://") &&
+        Number.isFinite(Date.parse(b.match.date)))) &&
     (!b.media ||
       (typeof b.media.id === "string" &&
         typeof b.media.name === "string" &&

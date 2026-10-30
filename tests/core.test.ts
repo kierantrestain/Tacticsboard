@@ -157,3 +157,20 @@ describe("match statistic presentation", () => {
     expect(formatMatchStat({}, "passPct")).toBe("—");
   });
 });
+
+describe("import recovery", () => {
+  it("rejects invalid nested scenes, duplicate players and malformed match records", () => {
+    const b = newBoard(arsenal, everton);
+    for (const change of [
+      (x: any) => (x.scenes[0] = null),
+      (x: any) => x.players.push(x.players[0]),
+      (x: any) => (x.scenes[0].note = 42),
+      (x: any) => (x.match = { id: "1", date: "not-a-date" }),
+      (x: any) => (x.drawings = [null]),
+    ]) {
+      const bad = copy(b);
+      change(bad);
+      expect(isBoard(bad)).toBe(false);
+    }
+  });
+});
