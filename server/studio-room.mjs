@@ -13,7 +13,7 @@ async function body(req, limit = 2_000_000) {
   try { return JSON.parse(data); } catch { throw failure(400, 'Invalid message.'); }
 }
 export function studioOrigins(port) {
-  return Object.values(networkInterfaces()).flat().filter((n) => n && n.family === 'IPv4' && !n.internal).map((n) => `http://${n.address}:${port}`);
+  try { return Object.values(networkInterfaces()).flat().filter((n) => n && n.family === 'IPv4' && !n.internal).map((n) => `http://${n.address}:${port}`); } catch { return []; }
 }
 /** Ephemeral, capability-scoped LAN relay. The producer remains the only editor. */
 export function createStudioRooms({ port = 4174, trustedProxy = false, now = Date.now } = {}) {
