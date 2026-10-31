@@ -17,7 +17,17 @@ import catalogue from "../public/data/catalogue.json";
 import type { Team } from "../src/types";
 import type { MediaAsset } from "../src/studio/types";
 import { makeCue } from "../src/studio/cueModel";
+import { addCounterattack, moveUnit, unitPlayers } from '../src/studio/teamMovement';
 describe("portable analysis handoff", () => {
+  it('retains the complete counterattack, grouped defensive edit and saved show moment in the actual ZIP format',async()=>{
+    let board=addCounterattack(newBoard(catalogue.teams[0] as unknown as Team,catalogue.teams[1] as unknown as Team),{side:'home',direction:'right',seconds:4});
+    const end=board.scenes.at(-1)!;board.activeScene=end.id;board.players=structuredClone(end.players);board.ball=structuredClone(end.ball);
+    board=moveUnit(board,{ids:unitPlayers(board,'away','back').map(p=>p.uid),operation:'back',direction:'left'});
+    board.studio!.cues=[makeCue(board,'board','broadcast',0)];
+    const result=await exportPack(board,[]),restored=await importPack(new File([result.blob],'counterattack.touchline.zip'));
+    expect(restored.scenes).toEqual(board.scenes);expect(restored.players).toEqual(board.players);
+    expect(restored.players).toHaveLength(22);expect(restored.studio!.cues![0].sequence).toEqual(board.scenes);
+  });
   it("round-trips original source bytes and remaps every document reference", async () => {
     const board = newBoard(
         catalogue.teams[0] as unknown as Team,

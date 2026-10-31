@@ -6,6 +6,7 @@ import { recallCue, saveCue, updateCue } from '../showControl';
 import { addFootballAction } from '../footballActions';
 import type { HostCommand } from './protocol';
 import { availableHostViews, explanationPause } from './tabletModel';
+import { addCounterattack, moveUnit, setDefensiveShape } from '../teamMovement';
 
 export function createMovement(board: Board): Board {
   const next = copy(board), index = next.scenes.findIndex(s => s.id === next.activeScene);
@@ -34,8 +35,19 @@ export function executeHostCommand(command: HostCommand) {
   const s = useStudio.getState(), r = useRuntime.getState(), b = s.board;
   if (!b || r.busy || s.loading) throw Error('The producer is preparing the next view.');
   if (command.type === 'cancel-gesture') { cancelHostGesture(); return; }
-  const boardTools = ['move', 'highlight', 'link', 'focus', 'start-move', 'finish-move', 'cancel-move','ball-action'];
+  const boardTools = ['move', 'highlight', 'link', 'focus', 'start-move', 'finish-move', 'cancel-move','ball-action','unit-move','team-shape','counterattack'];
   if (boardTools.includes(command.type) && r.view !== 'board') throw Error('Open the tactical board to move or select players.');
+  if (command.type === 'unit-move' || command.type === 'team-shape' || command.type === 'counterattack') {
+    if (command.type === 'counterattack' && r.movementDraft) throw Error('Finish or cancel the current movement first.');
+    const base = copy(b);
+    if (s.previewTime !== null) Object.assign(base, frameAt(b,s.previewTime));
+    const next = command.type === 'unit-move' ? moveUnit(base,command.action) : command.type === 'team-shape' ? setDefensiveShape(base,command.side,command.shape,command.direction) : addCounterattack(base,command.options);
+    s.commit(board=>Object.assign(board,next));
+    s.set({playing:false,previewTime:null,selectedShape:null,tool:'select',...(command.type==='unit-move'?{selected:command.action.ids}:{})});
+    r.set({mediaPlaying:false,multiSelect:false,...(command.type==='counterattack'?{zoom:1,pan:{x:0,y:0},panMode:false}:{})});
+    if (command.type === 'counterattack') s.notify?.('Counterattack added. Both teams move together. Preview it, then adjust any step.');
+    return;
+  }
   if (command.type === 'move') {
     if (typeof command.gesture !== 'string' || command.gesture.length > 80 || !Array.isArray(command.positions) || command.positions.length > 45 || command.positions.some(p => !Number.isFinite(p.x) || !Number.isFinite(p.y) || !b.players.some(q => q.uid === p.id) && p.id !== 'ball')) throw Error('That player movement is invalid.');
     if (gesture !== command.gesture) { cancelHostGesture(); stopAtEditableFrame(); s.begin(); gesture = command.gesture; }
@@ -78,7 +90,7 @@ export function executeHostCommand(command: HostCommand) {
   if (command.type === 'view') { if (!availableHostViews(b,r.assets,r.assetAvailability).includes(command.view)) throw Error('Prepare that view on the show computer first.'); editDesk(d => { d.view = command.view; }); r.set({ view: command.view, mediaPlaying: false, mediaHolding:false, ...(command.view==='footage'?{time:b.studio?.trim.start||0}:{}) }); s.set({ playing: false, previewTime: null }); return; }
   if (command.type === 'camera') { if (['broadcast', 'overhead', 'endline', 'touchline'].includes(command.camera)) r.set({ camera: command.camera }); return; }
   if (command.type === 'duration') { const n = Number(command.seconds); if (!Number.isFinite(n)) return; s.commit(board => { const scene = board.scenes.find(x => x.id === board.activeScene); if (scene) scene.duration = Math.max(.5, Math.min(10, n)); }); return; }
-  if (command.type === 'rate') { if(![.25,.5,1,2].includes(command.value))throw Error('Choose a supported playback speed.'); r.set({rate:command.value}); return; }
+  if (command.type === 'rate') { if(![.25,.5,1,2].includes(command.value))throw Error('Choose a supported playback speed.'); if(r.view==='board'||r.view==='replay'&&!b.studio?.assetId)s.set({speed:command.value,playhead:s.previewTime??0});r.set({rate:command.value}); return; }
   if (command.type === 'pause-explain') {
     const asset=r.assets.find(a=>a.id===b.studio?.assetId);if(r.view!=='footage'||asset?.type!=='video')throw Error('Open a video moment first.');
     const pause=explanationPause(b.studio!.trim,r.time,b.studio!.explainStops?.[asset.id]||[],uid());

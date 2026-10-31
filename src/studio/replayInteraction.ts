@@ -1,9 +1,10 @@
 import * as THREE from "three";
-import type { Board, Drawing, Frame } from "../types";
+import type { Board, BoardPlayer, Drawing, Frame } from "../types";
 import { useStudio } from "../store";
 import { useRuntime } from "./runtime";
 import { uid } from "../core";
 import { homography, invert3, project } from "./geometry";
+import { translateGroup } from './teamMovement';
 export function replayInteraction(
   element: HTMLElement,
   camera: THREE.PerspectiveCamera,
@@ -19,8 +20,8 @@ export function replayInteraction(
     current: Drawing | null = null,
     id = "",
     last = { x: 0, y: 0 },
-    start = { x: 0, y: 0 },
-    offset = { x: 0, y: 0 };
+    start = { x: 0, y: 0 };
+  let groupBase: BoardPlayer[] = [];
   const point = (e: PointerEvent) => {
     const rect = element.getBoundingClientRect();
     ray.setFromCamera(
@@ -118,12 +119,14 @@ export function replayInteraction(
           .sort((a, b) => a.distance - b.distance);
       const hit = players[0];
       if (hit && hit.distance < 20) {
+        if(e.shiftKey||r.multiSelect){s.set({selected:s.selected.includes(hit.player.uid)?s.selected.filter(id=>id!==hit.player.uid):[...s.selected,hit.player.uid],selectedShape:null});return;}
         mode = "player";
         id = hit.player.uid;
-        offset = { x: hit.player.x - p.x, y: hit.player.y - p.y };
+        const ids=s.selected.includes(id)?s.selected:[id];
+        groupBase=getFrame().players.filter(p=>ids.includes(p.uid)).map(p=>({...p}));
         s.begin();
         s.set({
-          selected: [id],
+          selected: ids,
           selectedShape: null,
           side: hit.player.side,
           inspector: "players",
@@ -224,8 +227,7 @@ export function replayInteraction(
       return;
     }
     if (mode === "player") {
-      const x = Math.max(0.01, Math.min(0.99, p.x + offset.x)),
-        y = Math.max(0.01, Math.min(0.99, p.y + offset.y));
+      const moved=translateGroup(groupBase,p.x-start.x,p.y-start.y);
       s.preview((b) => {
         const asset = b.studio?.assetId,
           seq = asset ? b.studio?.tracking[asset] : undefined;
@@ -235,13 +237,14 @@ export function replayInteraction(
                 ? f
                 : best,
             ),
-            target = frame.points.find((p) => "reconstructed:" + p.id === id),
             map = frame.map || homography(b.studio!.landmarks[asset!]);
-          if (target) {
-            target.pitch = { x, y };
+          for(const player of moved){
+            const target=frame.points.find(p=>'reconstructed:'+p.id===player.uid);
+            if(!target)continue;
+            target.pitch = { x:player.x, y:player.y };
             if (map) {
               const inverse = invert3(map);
-              if (inverse) target.image = project(inverse, { x, y });
+              if (inverse) target.image = project(inverse, target.pitch);
             }
             target.manual = true;
             target.review = false;
@@ -249,11 +252,7 @@ export function replayInteraction(
             seq.reviewed = false;
           }
         } else {
-          const player = b.players.find((p) => p.uid === id);
-          if (player) {
-            player.x = x;
-            player.y = y;
-          }
+          b.players=b.players.map(p=>{const target=moved.find(q=>q.uid===p.uid);return target?{...p,x:target.x,y:target.y}:p;});
         }
       });
     } else if (mode === "shape") {

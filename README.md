@@ -1,8 +1,10 @@
 # Touchline Studio
 
-A standalone football analysis workspace for preparing and presenting studio segments. Version 3.1 adds a production desk with separate preview and programme, received output thumbnails, compact saved-shot rundowns, pre-show checks and deliberate take/blackout controls. Tactical setups, live guides, player spotlighting and configurable Bang On Sports graphics support the explanation. It adds game/season/career player drill-downs, historical season archives, source coverage reports, TV data cards and ordered still reconstruction. It combines the full season match centre with still and short-clip telestration, assisted reconstruction, a virtual 3D pitch, a presenter rundown and an independently controlled clean programme window.
+A standalone football analysis workspace for preparing and presenting studio segments. Version 4.1 adds team and unit movement, an editable counterattack with defensive recovery, stable group dragging and controls that fit the producer desk and host tablets. The guided Create workspace separates movement, ball actions and display choices. It combines the season match centre, report-driven goal recreations, still and short-clip telestration, assisted reconstruction, a virtual 3D pitch, saved show moments and a clean programme window with deliberate take/blackout controls.
 
 See the [show workflow](docs/SHOW_WORKFLOW.md) for complete segment preparation, saved shots, TV design and presenter controls.
+
+For the quickest replay workflow, open **Explain → Movement**. Select a team and **Back line**, **Midfield**, **Attack**, **Outfield** or **Whole team**. Drag any selected player, or use **Drop back**, **Push up**, lateral shifts and spacing controls. **Build a counterattack** moves both existing sides in two editable stages. Use **Add a move** for your own endpoint; **Done** and **Cancel** stay above the sequence. See [team movement](docs/TEAM_MOVEMENT.md).
 
 ## Match centre and current data
 

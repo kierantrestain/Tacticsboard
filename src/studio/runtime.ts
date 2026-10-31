@@ -10,6 +10,7 @@ import { emptyStudio } from "./types";
 import { useStudio } from "../store";
 import type { Board } from "../types";
 interface Runtime {
+  multiSelect: boolean;
   ballActionKind: import("./footballActionTypes").BallActionKind | null;
   ballTargetPicking: boolean;
   ballTarget: {x:number;y:number} | null;
@@ -59,6 +60,7 @@ interface Runtime {
   set: (v: Partial<Runtime>) => void;
 }
 export const useRuntime = create<Runtime>((set) => ({
+  multiSelect: false,
   simple: localStorage.getItem('touchline.workspace') !== 'advanced',
   ballActionKind:null,
   ballTargetPicking:false,

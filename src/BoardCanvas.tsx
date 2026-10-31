@@ -29,6 +29,7 @@ import type { Board, BoardPlayer, Drawing, Frame } from "./types";
 import { getMedia } from "./media";
 import { analysisFrame } from "./studio/tactics";
 import { playerNameOffsets } from "./studio/labelLayout";
+import { translateGroup } from './studio/teamMovement';
 const W = 1200,
   H = 760,
   PX = 65,
@@ -64,7 +65,7 @@ function ink(hex: string) {
 function Pitch({ board }: { board: Board }) {
   const light = board.settings.theme === "light",
     grass = board.settings.theme === "grass";
-  const color = light ? "#d1dfd7" : grass ? "#2c7840" : "#1b353a";
+  const color = light ? "#d1dfd7" : grass ? "#2c7840" : "#285c3d";
   const line = light ? "#4d6962" : "#c4d4cf";
   return (
     <Group listening={false}>
@@ -74,7 +75,7 @@ function Pitch({ board }: { board: Board }) {
         width={1160}
         height={734}
         cornerRadius={9}
-        fill={light ? "#b9cdc5" : grass ? "#1d4e2c" : "#111e23"}
+        fill={light ? "#b9cdc5" : grass ? "#1d4e2c" : "#152d23"}
       />
       <Rect x={PX} y={PY} width={PW} height={PH} fill={color} />
       {Array.from({ length: 10 }, (_, i) => (
@@ -441,6 +442,7 @@ const BoardCanvas = forwardRef<
   { program?: boolean; externalFrame?: Frame }
 >(({ program = false, externalFrame }, ref) => {
   const studio = useStudio();
+  const multiSelect = useRuntime(s=>s.multiSelect);
   const {
     board,
     tool,
@@ -862,14 +864,14 @@ const BoardCanvas = forwardRef<
                       Math.min(1.6, board.settings.markerScale || 1),
                     )}
                     opacity={p.opacity ?? 1}
-                    draggable={!program && tool === "select" && !playing && !useRuntime.getState().ballTargetPicking}
+                    draggable={!program && tool === "select" && !playing && !multiSelect && !useRuntime.getState().ballTargetPicking}
                     onClick={(e) => {
                       e.cancelBubble = true;
                       if (tool === "select")
                         studio.set({
-                          selected: e.evt.shiftKey
-                            ? [...new Set([...selected, p.uid])]
-                            : [p.uid],
+                          selected: e.evt.shiftKey || multiSelect
+                            ? selected.includes(p.uid) ? selected.filter(id=>id!==p.uid) : [...selected,p.uid]
+                            : selected.includes(p.uid) ? selected : [p.uid],
                           selectedShape: null,
                           profileId: null,
                           inspector: "players",
@@ -880,7 +882,7 @@ const BoardCanvas = forwardRef<
                       e.cancelBubble = true;
                       if (tool === "select")
                         studio.set({
-                          selected: [p.uid],
+                          selected: multiSelect ? selected.includes(p.uid) ? selected.filter(id=>id!==p.uid) : [...selected,p.uid] : selected.includes(p.uid) ? selected : [p.uid],
                           selectedShape: null,
                           profileId: null,
                           inspector: "players",
@@ -899,10 +901,10 @@ const BoardCanvas = forwardRef<
                     }}
                     onDragMove={(e) => {
                       if (!drag.current) return;
-                      const x = clamp((e.target.x() - PX) / PW),
-                        y = clamp((e.target.y() - PY) / PH);
-                      e.target.position({ x: sx(x), y: sy(y) });
                       const { origin, players, uids } = drag.current;
+                      const moved = translateGroup(players.filter(p=>uids.includes(p.uid)),(e.target.x()-PX)/PW-origin.x,(e.target.y()-PY)/PH-origin.y);
+                      const anchor = moved.find(q=>q.uid===p.uid)!;
+                      e.target.position({x:sx(anchor.x),y:sy(anchor.y)});
                       studio.preview((b) => {
                         const asset = b.studio?.assetId,
                           sequence =
@@ -924,11 +926,11 @@ const BoardCanvas = forwardRef<
                             const point = frame.points.find(
                                 (q) => "reconstructed:" + q.id === id,
                               ),
-                              base = players.find((q) => q.uid === id);
+                              base = moved.find((q) => q.uid === id);
                             if (!point || !base) continue;
                             point.pitch = {
-                              x: clamp(base.x + x - origin.x),
-                              y: clamp(base.y + y - origin.y),
+                              x: base.x,
+                              y: base.y,
                             };
                             if (inverse)
                               point.image = project(inverse, point.pitch);
@@ -940,12 +942,12 @@ const BoardCanvas = forwardRef<
                           return;
                         }
                         b.players = b.players.map((q) => {
-                          const base = players.find((z) => z.uid === q.uid);
+                          const base = moved.find((z) => z.uid === q.uid);
                           return uids.includes(q.uid) && base
                             ? {
                                 ...q,
-                                x: clamp(base.x + x - origin.x),
-                                y: clamp(base.y + y - origin.y),
+                                x: base.x,
+                                y: base.y,
                               }
                             : q;
                         });
@@ -1038,7 +1040,7 @@ const BoardCanvas = forwardRef<
               visible={board.settings.ballVisible !== false}
               x={sx(frame.ball.x)}
               y={sy(frame.ball.y)}
-              draggable={!program && tool === "select" && !playing && !useRuntime.getState().ballTargetPicking}
+              draggable={!program && tool === "select" && !playing && !multiSelect && !useRuntime.getState().ballTargetPicking}
               onDragStart={() => studio.begin()}
               onDragMove={(e) => {
                 const x = clamp((e.target.x() - PX) / PW),

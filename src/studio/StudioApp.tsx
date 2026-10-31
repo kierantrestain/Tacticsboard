@@ -125,6 +125,7 @@ import type { StudioCommand } from "./Dialogs";
 import type { ReplayHandle } from "./Pitch3D";
 import { cancelVision } from "./visionClient";
 import FilmBuilder, { FilmTimeline, QuickTools } from './FilmBuilder';
+import { translateGroup } from './teamMovement';
 import PairTablets from './host/PairTablets';
 import HostTablet from './host/HostTablet';
 import { useProducerRoom } from './host/producer';
@@ -415,7 +416,7 @@ function Operator() {
     }
   }, [r.time, r.mediaPlaying, r.mediaHolding, r.rate, s.previewTime, r.follow, r.busy]);
   useEffect(() => {
-    r.set({ activeCueId: null, movementDraft: null,ballActionKind:null,ballTargetPicking:false,ballTarget:null });
+    r.set({ activeCueId: null, movementDraft: null,ballActionKind:null,ballTargetPicking:false,ballTarget:null,multiSelect:false });
   }, [b?.id]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -597,25 +598,8 @@ function Operator() {
         e.preventDefault();
         const step = e.shiftKey ? 0.035 : 0.008;
         state.commit((b) => {
-          b.players = b.players.map((p) =>
-            state.selected.includes(p.uid)
-              ? {
-                  ...p,
-                  x: clamp(
-                    p.x +
-                      (k === "arrowright"
-                        ? step
-                        : k === "arrowleft"
-                          ? -step
-                          : 0),
-                  ),
-                  y: clamp(
-                    p.y +
-                      (k === "arrowdown" ? step : k === "arrowup" ? -step : 0),
-                  ),
-                }
-              : p,
-          );
+          const moved=translateGroup(b.players.filter(p=>state.selected.includes(p.uid)),k==='arrowright'?step:k==='arrowleft'?-step:0,k==='arrowdown'?step:k==='arrowup'?-step:0);
+          b.players=b.players.map(p=>moved.find(q=>q.uid===p.uid)||p);
         });
       }
     };
@@ -1182,6 +1166,8 @@ function Operator() {
           <button className="film-tablet-button" onClick={()=>r.set({tabletPanel:true})}><Tablet size={18}/><span>Connect tablets</span></button>
           <button
             className="tl-secondary"
+            aria-label="Import"
+            title="Import footage or a project"
             onClick={() => importRef.current?.click()}
           >
             <Plus size={16} />
@@ -1189,6 +1175,8 @@ function Operator() {
           </button>
           <button
             className="tl-secondary"
+            aria-label="Export"
+            title="Export a video, still or editable project"
             onClick={() => r.set({ modal: "export" })}
           >
             <ArrowDownToLine size={15} />
@@ -1196,6 +1184,8 @@ function Operator() {
           </button>
           <button
             className="tl-secondary tl-programme-button"
+            aria-label="Programme"
+            title="Open the clean programme window"
             onClick={openProgram}
           >
             <Monitor size={16} />

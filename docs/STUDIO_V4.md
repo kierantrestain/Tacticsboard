@@ -1,5 +1,9 @@
 # Touchline Studio 4.0
 
+## Studio 4.1 workflow cleanup
+
+Team and unit selection, defensive shapes, group movement and a two-stage counterattack reduce manual positioning. The shared host/producer controls preserve relative gaps at the pitch edge and keep selected units together when adding a movement. The default editor separates Movement, Ball actions and Display; a fixed sequence strip adds scrubbing, preview speed, Done and Cancel. Smaller layouts scroll controls within their panels. See [the movement guide and current verification](TEAM_MOVEMENT.md).
+
 The default Create workspace guides preparation through Start, Explain and Finish. Large labelled tools cover player circles, passing arrows, runs, freehand drawing and space. Add a move captures the starting positions; drag players to the finish and choose Done. Saved moments retain the complete sequence and private presenter notes. Advanced controls remain available.
 
 Video preparation includes quick 6/10/15-second ranges, precise in/out points, explanation pauses and on-device person detection with manual checking. Explanation pauses are included in source playback and rendered video. Detection does not establish identities or reveal off-camera players. Still images use a five-second default presentation.

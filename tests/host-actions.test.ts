@@ -17,3 +17,16 @@ describe('host controls',()=>{
 });
 
 it('dispatches a football action through the same host command and blocks unfinished moves',()=>{const home=state.studio.board.players.filter((p:any)=>p.side==='home'),action={kind:'pass' as const,fromId:home[0].uid,toId:home[1].uid,outcome:'completed' as const,seconds:1};executeHostCommand({type:'ball-action',action});expect(state.studio.board.scenes[0].ballAction).toMatchObject({fromId:home[0].uid,toId:home[1].uid});state.runtime.movementDraft={sceneId:'draft'};expect(()=>executeHostCommand({type:'ball-action',action})).toThrow('Finish or cancel');});
+
+it('uses one undoable edit for a team move and allows unit positioning while recording a movement',()=>{
+ const b=state.studio.board, ids=b.players.filter((p:any)=>p.side==='away'&&!/goalkeep/i.test(p.position||'')).map((p:any)=>p.uid);
+ const before=b.players.filter((p:any)=>ids.includes(p.uid)).map((p:any)=>p.x),commit=vi.fn((fn:any)=>fn(state.studio.board));state.studio.commit=commit;
+ state.runtime.movementDraft={sceneId:b.activeScene};executeHostCommand({type:'unit-move',action:{ids,operation:'back',direction:'left'}});
+ expect(commit).toHaveBeenCalledOnce();expect(state.studio.board.players.filter((p:any)=>ids.includes(p.uid)).every((p:any,i:number)=>p.x>before[i])).toBe(true);
+ expect(()=>executeHostCommand({type:'counterattack',options:{side:'home',direction:'right',seconds:4}})).toThrow('Finish or cancel');
+});
+
+it('applies board playback speed at the current playhead and rejects board movement in footage view',()=>{
+ state.studio.previewTime=2.5;executeHostCommand({type:'rate',value:.5});expect(state.studio.set).toHaveBeenCalledWith({speed:.5,playhead:2.5});
+ state.runtime.view='footage';expect(()=>executeHostCommand({type:'team-shape',side:'home',shape:'low',direction:'right'})).toThrow('Open the tactical board');
+});
