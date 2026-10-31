@@ -10,7 +10,7 @@ export function comparisonCanvas(snapshot:ComparisonSnapshot) {
   text(snapshot.basis==='per90'?'PER 90 MINUTES':snapshot.basis==='permatch'?'PER MATCH':'TOTALS & SUPPLIED RATES',80,258,350,15,'#a7b3ba');
   snapshot.entities.forEach((e,i)=>{const x=left+i*width;box(x+8,226,width-16,82,'#ffffff06');box(x+8,226,width-16,4,comparisonColors[i],2);text(e.name,x+width/2,267,width-32,count===5?21:25,'#f1f5f5',700,'center');text(e.subtitle||'',x+width/2,293,width-32,15,'#a7b3ba',500,'center');});
   const rowH=482/Math.max(1,snapshot.fields.length);
-  snapshot.fields.slice(0,8).forEach((key,i)=>{const y=324+i*rowH,label=snapshot.entities.find(e=>e.stats[key])?.stats[key]?.label||key;box(76,y,1450,rowH-5,i%2?'#ffffff03':'#ffffff07',7);text(label,94,y+rowH*.55,333,Math.min(23,rowH*.32),'#bac5ca',500);
+  snapshot.fields.slice(0,8).forEach((key,i)=>{const y=324+i*rowH,label=snapshot.entities.find(e=>e.stats[key])?.stats[key]?.label||key;box(76,y,1450,rowH-5,i%2?'#ffffff03':'#ffffff07',7);const parts=label.split(' · '),origin=parts.length>1?parts.shift():undefined,metric=parts.join(' · ')||label;text(metric,94,y+rowH*(origin?.43:.55),333,Math.min(23,rowH*.32),'#c5d3dc',500);if(origin)text(origin,94,y+rowH*.78,333,Math.min(13,rowH*.21),'#8da5b4',500);
     snapshot.entities.forEach((e,j)=>{const s=e.stats[key],x=left+j*width; text(String(s?.display??s?.value??'—'),x+width/2,y+rowH*.57,width-26,Math.min(34,rowH*.47),comparisonColors[j],750,'center');
       if(e.samples?.[key]!==undefined)text(`n=${e.samples[key]}`,x+width/2,y+rowH-8,width-25,12,'#8b9ca5',500,'center');});
   });
