@@ -1,5 +1,6 @@
 import type { FootballAction } from "./studio/footballActionTypes";
 import type { StudioDocument } from "./studio/types";
+import type { ReportRecreation } from "./football/recreationTypes";
 export type Side = "home" | "away";
 export type Tool =
   | "select"
@@ -119,7 +120,21 @@ export interface Match {
   venue?: string;
   sourceUrl: string;
 }
+export interface ReportEvent {
+  id?: string;
+  minute?: string;
+  seconds?: number;
+  text?: string;
+  type?: string;
+  teamId?: string;
+  teamName?: string;
+  period?: number;
+  scoringPlay?: boolean;
+  participants?: { id?: string; name?: string }[];
+  position?: { x: number; y: number; targetX?: number; targetY?: number };
+}
 export interface MatchDetails {
+  eventEvidenceVersion?: 1;
   updatedAt?: string;
   state?: string;
   status?: string;
@@ -127,7 +142,7 @@ export interface MatchDetails {
   attendance?: number | null;
   venue?: string;
   officials?: { name: string; role?: string }[];
-  commentary?: { minute?: string; text: string }[];
+  commentary?: ReportEvent[];
   score?: { teamId: string; score: string }[];
   match?: Match;
   id: string;
@@ -136,7 +151,8 @@ export interface MatchDetails {
     teamId: string;
     stats: Record<string, { display: string; label: string }>;
   }[];
-  events: { minute?: string; text?: string; type?: string }[];
+  events: ReportEvent[];
+  replayEvents?: ReportEvent[];
   sourceUrl?: string;
 }
 export interface Catalogue {
@@ -189,6 +205,7 @@ export interface Scene extends Frame {
   note: string;
 }
 export interface Board extends Frame {
+  recreation?: ReportRecreation;
   context?: Record<
     Side,
     Pick<

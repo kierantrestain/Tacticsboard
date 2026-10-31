@@ -1,4 +1,5 @@
 import { isFootballAction } from "./studio/footballActionTypes";
+import { isReportRecreation } from "./football/recreationTypes";
 import { emptyStudio, isStudioDocument } from "./studio/types";
 import type {
   Board,
@@ -398,6 +399,7 @@ export function isBoard(value: unknown): value is Board {
     );
   return (
     b.version === 1 &&
+    (b.recreation === undefined || isReportRecreation(b.recreation)) &&
     (!b.studio || isStudioDocument(b.studio)) &&
     typeof b.id === "string" &&
     typeof b.title === "string" &&

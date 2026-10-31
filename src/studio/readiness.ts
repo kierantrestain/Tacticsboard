@@ -16,6 +16,8 @@ export function inspectView(
 ): ReadinessIssue[] {
   const d = board.studio;
   const issues: ReadinessIssue[] = [];
+  if (board.recreation && ['board', 'replay'].includes(view))
+    issues.push({ code: 'report-recreation', level: 'review', message: 'Report recreation: check the actors and direction. Off-ball positions, build-up and movement are illustrative.' });
   const sequence = d?.assetId ? d.tracking[d.assetId] : undefined;
   const needsSource =
     view === "footage" || view === "split" || (view === "replay" && !!sequence);

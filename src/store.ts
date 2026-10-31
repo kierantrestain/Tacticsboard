@@ -381,6 +381,7 @@ export const useStudio = create<Studio>((set, get) => ({
     get().commit((b) => {
       const next = newBoard(ht, at);
       b.homeTeamId = h;
+      b.recreation = undefined;
       b.context = boardContext(ht, at);
       b.awayTeamId = a;
       b.competition = next.competition;
@@ -439,6 +440,7 @@ export const useStudio = create<Studio>((set, get) => ({
     }
     get().commit((b) => {
       b.homeTeamId = ht.id;
+      b.recreation = undefined;
       b.context = boardContext(ht, at);
       b.awayTeamId = at.id;
       b.competition = m.league;

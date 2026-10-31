@@ -24,6 +24,7 @@ export function makeCue(
       ? desk.assetId
       : undefined;
   return {
+    recreation: copy(board.recreation),
     sequence: !source && ['board','replay'].includes(view) ? copy(board.scenes) : undefined,
     explainStops: source ? copy(desk.explainStops?.[source] || []) : undefined,
     tracking: source ? copy(desk.tracking[source]) : undefined,
@@ -79,6 +80,8 @@ export function makeCue(
 }
 export function cueBoard(board: Board, cue: RundownCue): Board {
   const next = copy(board);
+  next.recreation = copy(cue.recreation);
+  if (cue.recreation) next.title = `${cue.recreation.minute} · ${cue.recreation.title}`.slice(0, 120);
   const changedContext =
     !!cue.homeTeamId &&
     (cue.homeTeamId !== board.homeTeamId ||
@@ -180,5 +183,6 @@ export function cueContentKey(cue: RundownCue): string {
     cue.tracking,
     cue.sequence,
     cue.explainStops,
+    cue.recreation,
   ]);
 }

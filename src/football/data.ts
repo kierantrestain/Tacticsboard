@@ -251,6 +251,22 @@ export async function loadReport(
       void putRecord("projects", "football-report:" + m.id, d).catch(() => {});
       return d;
     });
+  const archive = async (base?: MatchDetails) => {
+    if (!/^\d+$/.test(m.id)) return undefined;
+    const response = await fetch(`/data/reports/${m.id}.json`);
+    if (!response.ok) return undefined;
+    const saved: MatchDetails = await response.json();
+    if (saved.id !== m.id) return undefined;
+    const upgraded: MatchDetails = base ? {
+      ...base,
+      eventEvidenceVersion: 1,
+      events: base.events.map(event => ({ ...saved.events.find(e => event.id ? e.id === event.id : e.text === event.text && e.minute === event.minute), ...event })),
+      replayEvents: saved.replayEvents?.filter(event => !/goal/i.test(event.type || '') && !event.scoringPlay),
+    } : saved;
+    acceptReport(m, upgraded);
+    void putRecord('projects', 'football-report:' + m.id, upgraded).catch(() => {});
+    return upgraded;
+  };
   const work = (async () => {
     cached ||=
       (await getRecord<MatchDetails>(
@@ -261,7 +277,9 @@ export async function loadReport(
     if (cached) {
       acceptReport(m, cached);
       if (!force) {
-        void network().catch(() => {});
+        void network().catch(async () => {
+          if (cached?.eventEvidenceVersion !== 1) await archive(cached);
+        }).catch(() => {});
         return cached;
       }
     }
@@ -279,6 +297,9 @@ export async function loadReport(
     try {
       return await network();
     } catch (e) {
+      if (cached?.eventEvidenceVersion !== 1) {
+        try { const upgraded = await archive(cached); if (upgraded) return upgraded; } catch {}
+      }
       if (cached) return cached;
       throw e;
     }

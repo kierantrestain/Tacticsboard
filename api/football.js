@@ -5,6 +5,7 @@ import {
 } from "../lib/football-normalizers.js";
 import clubIndex from "../public/data/club-index.json" with { type: "json" };
 import { parseCareer } from "../lib/career-stats.js";
+import { normaliseReportEvent } from "../lib/match-events.js";
 const BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer/";
 const LEAGUES = new Set(["eng.1", "uefa.champions"]);
 const string = (v) => (typeof v === "string" ? v : "");
@@ -47,6 +48,7 @@ export function normaliseSummary(d, id) {
     st = competition?.status?.type || {};
   return {
     id,
+    eventEvidenceVersion: 1,
     updatedAt: new Date().toISOString(),
     state: st.state,
     status: st.description,
@@ -63,10 +65,7 @@ export function normaliseSummary(d, id) {
     })),
     commentary: (d.commentary || [])
       .filter((c) => c.text)
-      .map((c) => ({
-        minute: c.time?.displayValue || c.clock?.displayValue,
-        text: c.text,
-      })),
+      .map((c) => normaliseReportEvent(c, true)),
     lineups: (d.rosters || []).map((r) => ({
       teamId: String(r.team?.id),
       side: r.homeAway,
@@ -107,11 +106,7 @@ export function normaliseSummary(d, id) {
     })),
     events: (d.keyEvents || [])
       .filter((e) => e.text)
-      .map((e) => ({
-        minute: e.clock?.displayValue,
-        text: e.text,
-        type: e.type?.text,
-      })),
+      .map((e) => normaliseReportEvent(e)),
     sourceUrl: `https://www.espn.com/soccer/match/_/gameId/${id}`,
   };
 }

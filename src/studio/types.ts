@@ -1,5 +1,7 @@
 import type { Board, Drawing, Frame, Side, MatchDetails, Scene } from "../types";
 import { isFootballAction } from "./footballActionTypes";
+import { isReportRecreation } from "../football/recreationTypes";
+import type { ReportRecreation } from "../football/recreationTypes";
 import type { ExplainStop } from './filmPlan';
 export type ViewMode = "board" | "footage" | "split" | "replay" | "stats";
 export type MatchStats = Pick<
@@ -104,6 +106,7 @@ export const defaultBroadcast = (): BroadcastStyle => ({
 });
 /** A cue holds a frame, never a nested Board/StudioDocument. */
 export interface RundownCue {
+  recreation?: ReportRecreation;
   sequence?: Scene[];
   explainStops?: ExplainStop[];
   tracking?: TrackingSequence;
@@ -318,6 +321,7 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
             [p.x, p.y].every((n) => Number.isFinite(n) && n >= 0 && n <= 1);
           return (
             !!c &&
+            (c.recreation === undefined || isReportRecreation(c.recreation)) &&
             (c.explainStops === undefined || validStops(c.explainStops)) &&
             (c.sequence === undefined || (Array.isArray(c.sequence) && c.sequence.length > 0 && c.sequence.length <= 100 && new Set(c.sequence.map(s=>s.id)).size === c.sequence.length && c.sequence.every(s => (s.ballAction === undefined || isFootballAction(s.ballAction)) && typeof s.id === 'string' && typeof s.title === 'string' && s.title.length <= 120 && typeof s.note === 'string' && Number.isFinite(s.duration) && s.duration >= .25 && s.duration <= 60 && point(s.ball) && Array.isArray(s.players) && s.players.length <= 44 && new Set(s.players.map(p=>p.uid)).size === s.players.length && s.players.every(p=>point(p) && typeof p.uid === 'string' && typeof p.name === 'string' && typeof p.number === 'string' && typeof p.playerId === 'string' && ['home','away'].includes(p.side)) && Array.isArray(s.drawings) && s.drawings.length <= 500 && s.drawings.every(i=>i && typeof i.id === 'string' && typeof i.color === 'string' && Number.isFinite(i.width) && Number.isFinite(i.opacity) && Array.isArray(i.points) && i.points.length <= 20000 && i.points.every(Number.isFinite))))) &&
             (c.tracking === undefined ||
