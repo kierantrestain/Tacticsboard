@@ -14,7 +14,6 @@ interface Runtime {
   ballActionKind: import("./footballActionTypes").BallActionKind | null;
   ballTargetPicking: boolean;
   ballTarget: {x:number;y:number} | null;
-  simple: boolean;
   tabletPanel: boolean;
   movementDraft: { before: Board; sceneId: string } | null;
   view: ViewMode;
@@ -61,7 +60,6 @@ interface Runtime {
 }
 export const useRuntime = create<Runtime>((set) => ({
   multiSelect: false,
-  simple: localStorage.getItem('touchline.workspace') !== 'advanced',
   ballActionKind:null,
   ballTargetPicking:false,
   ballTarget:null,
@@ -79,7 +77,7 @@ export const useRuntime = create<Runtime>((set) => ({
   zoom: 1,
   pan: { x: 0, y: 0 },
   panMode: false,
-  sidebar: "rundown",
+  sidebar: "tactics",
   activeCueId: null,
   compactTimeline: true,
   outputConnected: false,

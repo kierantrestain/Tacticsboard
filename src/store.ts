@@ -112,7 +112,7 @@ export const useStudio = create<Studio>((set, get) => ({
   past: [],
   future: [],
   tool: "select",
-  color: "#d5f86a",
+  color: "#dfff81",
   stroke: 3,
   selected: [],
   selectedShape: null,

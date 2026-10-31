@@ -30,6 +30,7 @@ import { getMedia } from "./media";
 import { analysisFrame } from "./studio/tactics";
 import { playerNameOffsets } from "./studio/labelLayout";
 import { translateGroup } from './studio/teamMovement';
+import { fitPitch } from './studio/pitchFrame';
 const W = 1200,
   H = 760,
   PX = 65,
@@ -492,11 +493,7 @@ const BoardCanvas = forwardRef<
     const update = () => {
       const w = el.clientWidth,
         h = el.clientHeight;
-      const scale = Math.min(w / W, h / H);
-      setSize({
-        width: Math.floor(W * scale),
-        height: Math.floor(H * scale),
-      });
+      setSize({ width: w, height: h });
     };
     const r = new ResizeObserver(update);
     r.observe(el);
@@ -567,7 +564,8 @@ const BoardCanvas = forwardRef<
     };
   }, [media, program, board?.id]);
   if (!board) return <div className="canvas-container" ref={container} />;
-  const scale = size.width / W;
+  const fitted = fitPitch(size.width, size.height, board.settings.view);
+  const scale = fitted.scale;
   const frame: Frame = analysisFrame(
     board,
     externalFrame ||
@@ -593,10 +591,10 @@ const BoardCanvas = forwardRef<
     transform = { x: 92, y: 82, scaleX: 0.94, scaleY: 0.78, skewX: -0.11 };
   if (board.settings.view !== "full")
     transform = {
-      x: board.settings.view === "right" ? -1090 : -22,
-      y: -316,
-      scaleX: 1.95,
-      scaleY: 1.9,
+      x: -fitted.x,
+      y: 0,
+      scaleX: 1,
+      scaleY: 1,
     };
   const pos = () => {
     const p = work.current?.getRelativePointerPosition();
@@ -745,8 +743,8 @@ const BoardCanvas = forwardRef<
     >
       <Stage
         ref={stage}
-        width={size.width}
-        height={size.height}
+        width={fitted.width}
+        height={fitted.height}
         scaleX={scale}
         scaleY={scale}
         onMouseDown={down}

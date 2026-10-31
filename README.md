@@ -1,10 +1,10 @@
 # Touchline Studio
 
-A standalone football analysis workspace for preparing and presenting studio segments. Version 4.1 adds team and unit movement, an editable counterattack with defensive recovery, stable group dragging and controls that fit the producer desk and host tablets. The guided Create workspace separates movement, ball actions and display choices. It combines the season match centre, report-driven goal recreations, still and short-clip telestration, assisted reconstruction, a virtual 3D pitch, saved show moments and a clean programme window with deliberate take/blackout controls.
+A standalone football analysis workspace for preparing and presenting studio segments. Version 4.2 unifies Create and Advanced, applies one interface palette and adds a tactical playbook with six open-play routines and five set-piece builders. It combines the season match centre, report-driven goal recreations, still and short-clip telestration, reconstruction, a virtual 3D pitch, saved show moments and clean programme output.
 
 See the [show workflow](docs/SHOW_WORKFLOW.md) for complete segment preparation, saved shots, TV design and presenter controls.
 
-For the quickest replay workflow, open **Explain → Movement**. Select a team and **Back line**, **Midfield**, **Attack**, **Outfield** or **Whole team**. Drag any selected player, or use **Drop back**, **Push up**, lateral shifts and spacing controls. **Build a counterattack** moves both existing sides in two editable stages. Use **Add a move** for your own endpoint; **Done** and **Cancel** stay above the sequence. See [team movement](docs/TEAM_MOVEMENT.md).
+Open **Analysis → Plays** for open play or set pieces. Choose the team, direction and routine, then **Place setup** or **Animate**. Set-piece builders handle both XIs, named takers/runners, marking, walls and restart placement. **Move** contains team/unit movement and shapes; **Ball** contains named passes and shots; **Display** contains pitch and player guides. Additional panels are in the workspace selector. See the [playbook](docs/PLAYBOOK.md) and [team movement](docs/TEAM_MOVEMENT.md).
 
 ## Match centre and current data
 

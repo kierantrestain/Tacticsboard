@@ -1,4 +1,5 @@
 import type { FootballAction } from "./studio/footballActionTypes";
+import type { PlayPhase } from "./studio/playbookTypes";
 import type { StudioDocument } from "./studio/types";
 import type { ReportRecreation } from "./football/recreationTypes";
 export type Side = "home" | "away";
@@ -197,6 +198,8 @@ export interface Frame {
   ball: { x: number; y: number };
 }
 export interface Scene extends Frame {
+  cut?: boolean;
+  play?: PlayPhase;
   ballAction?: FootballAction;
   source?: { assetId: string; time: number; review: boolean };
   id: string;

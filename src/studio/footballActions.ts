@@ -6,7 +6,7 @@ export function addFootballAction(board:Board,request:BallActionRequest):Board {
   const b=copy(board),i=b.scenes.findIndex(s=>s.id===b.activeScene),from=b.players.find(p=>p.uid===request.fromId);
   if(!from||i<0)throw Error('Choose the player making the action.');
   if(b.scenes.length>=100)throw Error('This sequence is full. Start a new analysis.');
-  if(!['pass','through','shot'].includes(request.kind)||!Number.isFinite(request.seconds)||request.seconds<.5||request.seconds>5)throw Error('Choose a valid action and duration.');
+  if(!['pass','through','shot'].includes(request.kind)||!Number.isFinite(request.seconds)||request.seconds<.5||request.seconds>6)throw Error('Choose a valid action and duration.');
   const shot=request.kind==='shot';
   if(!(shot?['on-target','goal','saved','off-target','blocked','woodwork']:['completed','intercepted']).includes(request.outcome))throw Error('Choose an outcome for this action.');
   const to=b.players.find(p=>p.uid===request.toId),interceptor=b.players.find(p=>p.uid===request.interceptorId),defender=b.players.find(p=>p.uid===request.defenderId);
@@ -37,7 +37,7 @@ export function addFootballAction(board:Board,request:BallActionRequest):Board {
   if(request.kind==='through')ink.push({id:`ball-action:${id}:run`,type:'run',points:[to!.x,to!.y,aim.x,aim.y],color:'#79dee4',width:3,opacity:.85});
   if(clean.length+ink.length>500)throw Error('Clear some marks before adding this action.');
   const start=b.scenes[i];Object.assign(start,{players:copy(b.players),drawings:[...copy(clean),...copy(ink)],ball:foot(from),duration:request.seconds,ballAction:action});
-  const end={...copy(start),id:endId,title:label.slice(0,60),note:label,duration:1,ball:finish,ballAction:undefined};
+  const end={...copy(start),id:endId,title:label.slice(0,60),note:label,duration:1,ball:finish,ballAction:undefined,cut:undefined,play:undefined};
   if(request.kind==='through'){const runner=end.players.find(p=>p.uid===to!.uid)!;runner.x=clamp(aim.x-.014*(from.side==='home'?1:-1));runner.y=clamp(aim.y-.012);}
   b.scenes.splice(i+1,0,end);b.activeScene=end.id;b.players=copy(end.players);b.drawings=copy(end.drawings);b.ball=copy(end.ball);b.settings.ballVisible=true;
   return b;

@@ -108,7 +108,6 @@ import { registerPreviewCapture } from "./capture";
 import { transportProgram } from "./productionModel";
 import ProductionDesk from "./ProductionDesk";
 import ShowChecks from "./ShowChecks";
-import TacticsPanel from "./TacticsPanel";
 import BroadcastPanel from "./BroadcastPanel";
 import StatsStage from "./StatsStage";
 import type { StatsHandle } from "./StatsStage";
@@ -119,7 +118,6 @@ import Reconstruction from "./Reconstruction";
 import InkInspector from "./InkInspector";
 import Rundown from "./Rundown";
 import Transport, { bookmarkMoment, freezeFrame } from "./Transport";
-import ToolRail from "./ToolRail";
 import Dialogs from "./Dialogs";
 import type { StudioCommand } from "./Dialogs";
 import type { ReplayHandle } from "./Pitch3D";
@@ -1066,52 +1064,9 @@ function Operator() {
       action: () => r.set({ modal: "export" }),
     },
   ];
-  const nav = [
-    ["show", "Show", ShieldCheck, () => r.set({ sidebar: "show" })],
-    [
-      "studio",
-      "Studio",
-      Grid2X2,
-      () => {
-        setView("board");
-        r.set({ sidebar: "inspector" });
-      },
-    ],
-    [
-      "tactics",
-      "Tactics",
-      Target,
-      () => {
-        setView("board");
-        r.set({ sidebar: "tactics" });
-      },
-    ],
-    [
-      "sources",
-      "Sources",
-      Clapperboard,
-      () => {
-        setView("footage");
-        r.set({ sidebar: "media" });
-      },
-    ],
-    [
-      "reconstruct",
-      "Rebuild",
-      Waypoints,
-      () => {
-        setView("footage");
-        r.set({ sidebar: "reconstruct" });
-      },
-    ],
-    ["rundown", "Rundown", BookmarkPlus, () => r.set({ sidebar: "rundown" })],
-    ["matches", "Matches", CalendarDays, () => s.set({ modal: "matches" })],
-    ["clubs", "Clubs", Users, () => s.set({ modal: "teams" })],
-    ["projects", "Projects", FolderOpen, () => r.set({ modal: "projects" })],
-  ] as const;
   return (
     <main
-      className={`tl-app ${r.simple ? 'film-workspace' : ''} ${r.presenter ? "tl-presenting" : ""} ${r.compactTimeline ? "ts-compact" : ""} ${r.view === "stats" ? "ts-data" : ""}`}
+      className={`tl-app film-workspace unified-workspace ${r.presenter ? "tl-presenting" : ""} ${r.compactTimeline ? "ts-compact" : ""} ${r.view === "stats" ? "ts-data" : ""}`}
     >
       <header className="tl-header">
         <a
@@ -1129,9 +1084,8 @@ function Operator() {
           </span>
         </a>
         <span className="tl-header-divider" />
-        <div className="film-workspace-switch" aria-label="Workspace complexity">{[true,false].map(simple=><button key={String(simple)} aria-pressed={r.simple===simple} onClick={()=>{r.set({simple});localStorage.setItem('touchline.workspace',simple?'simple':'advanced');}}>{simple?'Create':'Advanced'}</button>)}</div>
         <div className="tl-project-title">
-          <span>FOOTBALL SHOW DESK</span>
+
           <input
             aria-label="Analysis title"
             key={b.id + b.title}
@@ -1201,64 +1155,6 @@ function Operator() {
           </button>
         </div>
       </header>
-      <nav className="tl-main-nav" aria-label="Studio navigation">
-        <div className="tl-nav-items">
-          {nav.map(([id, label, Icon, action]) => (
-            <button
-              key={id}
-              title={label}
-              aria-label={label}
-              className={
-                (id === "studio" &&
-                  r.view === "board" &&
-                  !["tactics", "broadcast", "rundown"].includes(r.sidebar)) ||
-                (id === "sources" && r.sidebar === "media") ||
-                id === r.sidebar
-                  ? "is-active"
-                  : ""
-              }
-              onClick={action}
-            >
-              <Icon size={22} strokeWidth={1.65} />
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
-        <div className="tl-nav-bottom">
-          <button
-            aria-label="Install standalone app"
-            title="Install Touchline"
-            onClick={install}
-          >
-            <Download size={20} />
-          </button>
-          <button
-            aria-label="Keyboard shortcuts and help"
-            title="Presenter controls"
-            onClick={() => r.set({ modal: "shortcuts" })}
-          >
-            <HelpCircle size={21} />
-          </button>
-          <button
-            aria-label="Broadcast settings"
-            title="Broadcast identity & TV graphics"
-            onClick={() => r.set({ sidebar: "broadcast" })}
-          >
-            <Monitor size={21} />
-          </button>
-          <button
-            aria-label="Display settings"
-            title="Workspace settings"
-            onClick={() => {
-              r.set({ sidebar: "inspector" });
-              s.set({ inspector: "settings" });
-            }}
-          >
-            <Settings2 size={21} />
-          </button>
-          <span className="tl-profile">TL</span>
-        </div>
-      </nav>
       <section className="tl-workspace">
         <div className="tl-workspace-bar">
           <div
@@ -1301,38 +1197,8 @@ function Operator() {
           </button>
         </div>
         <div className="tl-viewport-shell">
-          {!r.simple && <ToolRail />}
+
           <div className="tl-viewport">
-            <div className="ts-quickbar">
-              <span>
-                <i />
-                {r.program?.black
-                  ? "TV BLACKED OUT"
-                  : r.follow
-                    ? "LIVE FOLLOW · EDITS GO TO OUTPUT"
-                    : "PREVIEW · OFF AIR"}
-              </span>
-              <button
-                className={r.sidebar === "tactics" ? "active" : ""}
-                onClick={() => r.set({ sidebar: "tactics" })}
-              >
-                <Target size={14} />
-                Tactical setups
-              </button>
-              <button
-                onClick={() => {
-                  saveCue();
-                  r.set({ sidebar: "rundown" });
-                }}
-              >
-                <BookmarkPlus size={14} />
-                Save shot <kbd>M</kbd>
-              </button>
-              <button onClick={() => r.set({ sidebar: "broadcast" })}>
-                <Monitor size={14} />
-                <span>TV design</span>
-              </button>
-            </div>
             <div className="tl-viewport-heading">
               <span className="tl-preview-label">
                 <i />
@@ -1541,16 +1407,15 @@ function Operator() {
                 <i style={{ background: b.colors.away }} />
               </span>
             </div>
-            {r.simple && <QuickTools />}
+            <QuickTools />
           </div>
         </div>
-        {r.simple && ['board','footage'].includes(r.view) ? <FilmTimeline asset={asset}/> : <Transport asset={asset} source={sourceRef} />}
+        {['board','footage'].includes(r.view) ? <FilmTimeline asset={asset}/> : <Transport asset={asset} source={sourceRef} />}
       </section>
       <section className="tl-inspector-shell">
         <ProductionDesk />
-        {r.simple ? <FilmBuilder onImport={()=>importRef.current?.click()} onFreeze={()=>void freezeFrame(asset,sourceRef.current)} onFilm={()=>void film()} source={sourceRef}/> : <>
         <div className="director-inspector-switch">
-          <label htmlFor="workspace-panel">WORKSPACE</label>
+
           <select
             id="workspace-panel"
             aria-label="Workspace panel"
@@ -1559,20 +1424,20 @@ function Operator() {
               r.set({ sidebar: e.target.value as typeof r.sidebar })
             }
           >
-            <option value="rundown">Show rundown</option>
-            <option value="show">Pre-show checks</option>
-            <option value="tactics">Tactical setups & guides</option>
-            <option value="inspector">Teams & players</option>
-            <option value="media">Source library</option>
+            <option value="tactics">Analysis</option>
+            <option value="rundown">Show moments</option>
+            <option value="show">Checks</option>
+            <option value="inspector">Players</option>
+            <option value="media">Media</option>
             <option value="reconstruct">Reconstruction</option>
-            <option value="layers">Graphics & timing</option>
-            <option value="broadcast">Broadcast design</option>
+            <option value="layers">Graphics</option>
+            <option value="broadcast">TV design</option>
           </select>
         </div>
         {r.sidebar === "show" ? (
           <ShowChecks />
         ) : r.sidebar === "tactics" ? (
-          <TacticsPanel />
+          <FilmBuilder onImport={()=>importRef.current?.click()} onFreeze={()=>void freezeFrame(asset,sourceRef.current)} onFilm={()=>void film()} source={sourceRef}/>
         ) : r.sidebar === "broadcast" ? (
           <BroadcastPanel />
         ) : r.sidebar === "inspector" ? (
@@ -1586,17 +1451,15 @@ function Operator() {
         ) : (
           <Rundown />
         )}
-        </>}
       </section>
       <footer className="tl-status">
         <span>
           <span className="tl-dot" />
-          TOUCHLINE STUDIO <i />
           {r.online ? "Network connected" : "Offline · saved data"}
           {r.online ? <Wifi size={11} /> : <WifiOff size={11} />}
         </span>
         <button onClick={() => s.set({ modal: "data" })}>
-          Data sources & coverage <ArrowUpRight size={11} />
+          Sources <ArrowUpRight size={11} />
         </button>
         <button
           className="tl-data-check"

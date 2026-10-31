@@ -2,6 +2,7 @@ import type { BallActionRequest } from "../footballActionTypes";
 import type { Board, Drawing, Frame } from '../../types';
 import type { CameraPreset, ViewMode } from '../types';
 import type { AttackDirection, CounterattackOptions, DefensiveShape, UnitMovement } from '../teamMovement';
+import type { PlayRequest } from '../playbookTypes';
 export type HostRole = 'host1' | 'host2';
 export type RoomRole = HostRole | 'producer';
 export interface RoomSession { room: string; token: string; role: RoomRole }
@@ -32,6 +33,7 @@ export interface HostState {
   canRedo: boolean;
 }
 export type HostCommand =
+  | { type: 'build-play'; options: PlayRequest }
   | { type: 'unit-move'; action: UnitMovement }
   | { type: 'team-shape'; side: 'home'|'away'; shape: DefensiveShape; direction: AttackDirection }
   | { type: 'counterattack'; options: CounterattackOptions }

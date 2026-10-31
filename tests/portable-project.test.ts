@@ -18,7 +18,17 @@ import type { Team } from "../src/types";
 import type { MediaAsset } from "../src/studio/types";
 import { makeCue } from "../src/studio/cueModel";
 import { addCounterattack, moveUnit, unitPlayers } from '../src/studio/teamMovement';
+import { buildPlay } from '../src/studio/playbook';
 describe("portable analysis handoff", () => {
+  it('retains named set-piece roles, cuts and complete phases in the exported project',async()=>{
+    const original=newBoard(catalogue.teams[0] as unknown as Team,catalogue.teams[1] as unknown as Team),players=original.players.filter(p=>p.side==='home');
+    const board=buildPlay(original,{id:'corner',side:'home',direction:'left',flank:'bottom',pattern:'short',marking:'man',wallSize:3,seconds:4,mode:'sequence',takerId:players[1].uid,receiverId:players[5].uid,goalTarget:'centre',guides:true});
+    board.studio!.cues=[makeCue(board,'board','broadcast',0)];
+    const packed=await exportPack(board,[]),restored=await importPack(new File([packed.blob],'corner.touchline.zip'));
+    expect(restored.scenes).toEqual(board.scenes);expect(restored.scenes[1].cut).toBe(true);
+    expect(restored.scenes[1].play!.roles['home:taker']).toBe(players[1].uid);expect(restored.scenes.at(-1)!.play!.roles['home:receiver']).toBe(players[5].uid);
+    expect(restored.studio!.cues![0].sequence).toEqual(board.scenes);
+  });
   it('retains the complete counterattack, grouped defensive edit and saved show moment in the actual ZIP format',async()=>{
     let board=addCounterattack(newBoard(catalogue.teams[0] as unknown as Team,catalogue.teams[1] as unknown as Team),{side:'home',direction:'right',seconds:4});
     const end=board.scenes.at(-1)!;board.activeScene=end.id;board.players=structuredClone(end.players);board.ball=structuredClone(end.ball);

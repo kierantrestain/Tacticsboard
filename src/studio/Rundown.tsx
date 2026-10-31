@@ -140,11 +140,7 @@ export default function Rundown() {
       <div className="tl-panel-scroll">
         {!cues.length && (
           <div className="director-empty">
-            <h3>Your story starts here.</h3>
-            <p>
-              Arrange the board, choose a clip or make a data card. Save each
-              moment as a shot.
-            </p>
+            <h3>No saved moments</h3>
             <button className="tl-primary" onClick={saveCue}>
               <Plus size={15} /> Save opening shot
             </button>

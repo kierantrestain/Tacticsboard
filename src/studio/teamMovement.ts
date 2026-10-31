@@ -1,11 +1,11 @@
 import type { Board, BoardPlayer, Side } from '../types';
 import { clamp, copy, formationPoints, syncScene, uid } from '../core';
-import { applyPreset } from './tactics';
+import { applyPreset, resetPositions } from './tactics';
 
 export type PlayerUnit = 'outfield' | 'team' | 'back' | 'midfield' | 'front' | 'selected';
 export type AttackDirection = 'left' | 'right';
-export type UnitOperation = 'forward' | 'back' | 'up' | 'down' | 'narrow' | 'widen' | 'compact' | 'line';
-export type DefensiveShape = 'low' | 'mid' | 'high';
+export type UnitOperation = 'forward' | 'back' | 'up' | 'down' | 'narrow' | 'widen' | 'compact' | 'line' | 'flip';
+export type DefensiveShape = 'low' | 'mid' | 'high' | 'formation';
 export interface UnitMovement { ids: string[]; operation: UnitOperation; direction: AttackDirection }
 export interface CounterattackOptions { side: Side; direction: AttackDirection; seconds: number }
 export interface GroupPosition { id: string; x: number; y: number }
@@ -42,7 +42,7 @@ export function unitPlayers(board: Board, side: Side, unit: PlayerUnit, selected
 }
 export function moveUnit(board: Board, action: UnitMovement): Board {
   if (!Array.isArray(action.ids) || !action.ids.length || action.ids.length > 44 || new Set(action.ids).size !== action.ids.length || action.ids.some(id => !board.players.some(p => p.uid === id))) throw Error('Select players from this board first.');
-  if (!['left','right'].includes(action.direction) || !['forward','back','up','down','narrow','widen','compact','line'].includes(action.operation)) throw Error('Choose a supported team movement.');
+  if (!['left','right'].includes(action.direction) || !['forward','back','up','down','narrow','widen','compact','line','flip'].includes(action.operation)) throw Error('Choose a supported team movement.');
   const next = copy(board), group = next.players.filter(p => action.ids.includes(p.uid));
   const centre = group.reduce((c,p) => ({ x: c.x + p.x / group.length, y: c.y + p.y / group.length }), { x: 0, y: 0 });
   const sign = action.direction === 'right' ? 1 : -1;
@@ -51,6 +51,8 @@ export function moveUnit(board: Board, action: UnitMovement): Board {
     const dy = action.operation === 'up' ? -.06 : action.operation === 'down' ? .06 : 0;
     const shifted = translateGroup(group, dx, dy);
     group.forEach((p,i) => Object.assign(p, shifted[i]));
+  } else if (action.operation === 'flip') {
+    for (const p of group) p.y = 1 - p.y;
   } else if (action.operation === 'line') {
     const sorted = [...group].sort((a,b) => a.y - b.y);
     const width = Math.min(.8, Math.max(sorted.at(-1)!.y - sorted[0].y, (sorted.length - 1) * .085));
@@ -71,9 +73,12 @@ export function moveUnit(board: Board, action: UnitMovement): Board {
   return next;
 }
 export function setDefensiveShape(board: Board, side: Side, shape: DefensiveShape, direction: AttackDirection): Board {
-  if (!['home','away'].includes(side) || !['low','mid','high'].includes(shape) || !['left','right'].includes(direction)) throw Error('Choose a valid team shape.');
+  if (!['home','away'].includes(side) || !['low','mid','high','formation'].includes(shape) || !['left','right'].includes(direction)) throw Error('Choose a valid team shape.');
   const next = copy(board), ball = copy(board.ball);
-  applyPreset(next, shape === 'high' ? 'press' : 'block', side);
+  if (shape === 'formation') {
+    if (next.players.filter(p => p.side === side).length !== 11) throw Error('Load a complete XI first.');
+    resetPositions(next, side);
+  } else applyPreset(next, shape === 'high' ? 'press' : 'block', side);
   const group = unitPlayers(next, side, 'outfield');
   if (shape === 'mid') {
     const shifted = translateGroup(group, side === 'home' ? .17 : -.17, 0);
@@ -127,8 +132,8 @@ export function addCounterattack(board: Board, options: CounterattackOptions): B
   const middlePlayers = next.players.map(p => { const t = targets.get(p.uid)!; return { ...p, x: p.x+(t.x-p.x)*.55, y:p.y+(t.y-p.y)*.55 }; });
   const note = 'Editable counterattack setup: both teams move together. Positions, recovery runs and ball travel are illustrative; adjust them to your analysis.';
   start.duration = options.seconds / 2;
-  const middle = { ...copy(start), id: uid(), title: 'Counterattack · break forward', note, duration: options.seconds / 2, players: middlePlayers, ball: {x:board.ball.x+(targetBall.x-board.ball.x)*.55,y:board.ball.y+(targetBall.y-board.ball.y)*.55} };
-  const finish = { ...copy(start), id: uid(), title: 'Counterattack · defensive recovery', note, duration: 2, players: finishPlayers, ball: targetBall };
+  const middle = { ...copy(start), id: uid(), cut: undefined, play: undefined, title: 'Counterattack · break forward', note, duration: options.seconds / 2, players: middlePlayers, ball: {x:board.ball.x+(targetBall.x-board.ball.x)*.55,y:board.ball.y+(targetBall.y-board.ball.y)*.55} };
+  const finish = { ...copy(start), id: uid(), cut: undefined, play: undefined, title: 'Counterattack · defensive recovery', note, duration: 2, players: finishPlayers, ball: targetBall };
   next.scenes.push(middle, finish);
   next.activeScene = start.id;
   next.players = copy(start.players); next.drawings = copy(start.drawings); next.ball = copy(start.ball);

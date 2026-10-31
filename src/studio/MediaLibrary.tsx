@@ -137,9 +137,7 @@ export default function MediaLibrary() {
           <div className="tl-library-empty">
             <Clapperboard size={27} />
             <p>
-              Every story starts
-              <br />
-              with a moment.
+              No media yet
             </p>
             <small>Drop your source files here.</small>
           </div>

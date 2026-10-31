@@ -8,6 +8,7 @@ vi.mock('../src/studio/runtime',()=>({useRuntime:{getState:()=>state.runtime,set
 vi.mock('../src/studio/showControl',()=>({recallCue:vi.fn(),saveCue:vi.fn(),updateCue:vi.fn()}));
 import {executeHostCommand} from '../src/studio/host/actions';
 import {saveCue,updateCue} from '../src/studio/showControl';
+import { createMovement } from '../src/studio/host/actions';
 beforeEach(()=>{vi.clearAllMocks();state.studio={board:newBoard(catalogue.teams[0] as unknown as Team,catalogue.teams[1] as unknown as Team),loading:false,previewTime:null,set:vi.fn(),commit:(fn:any)=>fn(state.studio.board)};state.runtime={view:'board',busy:'',assets:[],assetAvailability:{},set:(v:any)=>Object.assign(state.runtime,v)};});
 describe('host controls',()=>{
  it('rejects an unprepared view and opens verified footage at its clip start',()=>{expect(()=>executeHostCommand({type:'view',view:'footage'})).toThrow('Prepare');state.studio.board.studio.assetId='clip';state.studio.board.studio.trim={start:12,end:20};state.runtime.assets=[{id:'clip',type:'video',duration:30}];state.runtime.assetAvailability.clip=true;executeHostCommand({type:'view',view:'footage'});expect(state.runtime).toMatchObject({view:'footage',time:12,mediaPlaying:false});});
@@ -29,4 +30,18 @@ it('uses one undoable edit for a team move and allows unit positioning while rec
 it('applies board playback speed at the current playhead and rejects board movement in footage view',()=>{
  state.studio.previewTime=2.5;executeHostCommand({type:'rate',value:.5});expect(state.studio.set).toHaveBeenCalledWith({speed:.5,playhead:2.5});
  state.runtime.view='footage';expect(()=>executeHostCommand({type:'team-shape',side:'home',shape:'low',direction:'right'})).toThrow('Open the tactical board');
+});
+
+it('builds a set piece as one undoable host command and holds incomplete movement drafts',()=>{
+ const options={id:'corner' as const,side:'home' as const,direction:'right' as const,flank:'top' as const,pattern:'near',marking:'zonal' as const,wallSize:4,seconds:4,mode:'sequence' as const,goalTarget:'centre' as const,guides:true};
+ const commit=vi.fn((fn:any)=>fn(state.studio.board));state.studio.commit=commit;
+ executeHostCommand({type:'build-play',options});expect(commit).toHaveBeenCalledOnce();expect(state.studio.board.scenes.at(-1).play).toMatchObject({id:'corner',phase:'finish'});
+ state.runtime.movementDraft={sceneId:'draft'};expect(()=>executeHostCommand({type:'build-play',options})).toThrow('Finish or cancel');
+ state.studio.board.scenes.find((s:any)=>s.id===state.studio.board.activeScene).cut=true;const next=createMovement(state.studio.board);expect(next.scenes.find(s=>s.id===next.activeScene)!.cut).toBeUndefined();
+});
+
+it('plays from the selected step and keeps restart as a full-sequence replay',()=>{
+ const b=state.studio.board,first=structuredClone(b.scenes[0]);first.id='next';b.scenes.push(first);b.activeScene='next';
+ executeHostCommand({type:'play'});expect(state.studio.set).toHaveBeenCalledWith({playing:true,playhead:b.scenes[0].duration});
+ executeHostCommand({type:'restart'});expect(state.studio.set).toHaveBeenCalledWith({playing:true,playhead:0});
 });

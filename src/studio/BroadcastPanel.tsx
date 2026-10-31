@@ -19,7 +19,7 @@ export default function BroadcastPanel() {
       <div className="tl-panel-title">
         <div>
           <span className="tl-eyebrow">BROADCAST DESIGN</span>
-          <h2>Make it your show.</h2>
+          <h2>TV design</h2>
         </div>
         <SlidersHorizontal size={21} />
       </div>
@@ -38,10 +38,6 @@ export default function BroadcastPanel() {
             <strong>{style.headline || b.studio?.lowerThird || b.title}</strong>
           </div>
         </div>
-        <p className="ts-note">
-          The same identity appears on the TV output and exported stills and
-          films.
-        </p>
         <div className="ts-section-title">CHANNEL IDENTITY</div>
         <label className="ts-field">
           Channel name

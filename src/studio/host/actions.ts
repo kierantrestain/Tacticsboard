@@ -1,4 +1,4 @@
-import { clamp, copy, frameAt, totalDuration, uid } from '../../core';
+import { activeSceneTime, clamp, copy, frameAt, totalDuration, uid } from '../../core';
 import type { Board, Drawing } from '../../types';
 import { useStudio } from '../../store';
 import { editDesk, useRuntime } from '../runtime';
@@ -7,6 +7,7 @@ import { addFootballAction } from '../footballActions';
 import type { HostCommand } from './protocol';
 import { availableHostViews, explanationPause } from './tabletModel';
 import { addCounterattack, moveUnit, setDefensiveShape } from '../teamMovement';
+import { buildPlay } from '../playbook';
 
 export function createMovement(board: Board): Board {
   const next = copy(board), index = next.scenes.findIndex(s => s.id === next.activeScene);
@@ -14,15 +15,15 @@ export function createMovement(board: Board): Board {
   if(start?.ballAction)throw Error('Select the action’s finish step before adding a move.');
   if (!start || next.scenes.length >= 80) throw Error('This sequence is full. Start another analysis.');
   Object.assign(start, { players: copy(next.players), ball: copy(next.ball), drawings: copy(next.drawings) });
-  const end = { ...copy(start), id: uid(), title: `Move ${next.scenes.length}`, duration: 1 };
+  const end = { ...copy(start), id: uid(), title: `Move ${next.scenes.length}`, duration: 1, cut: undefined, play: undefined };
   start.duration = 2;
   next.scenes.splice(index + 1, 0, end); next.activeScene = end.id;
   return next;
 }
 export function playerMarks(board: Board, ids: string[], type: 'highlight' | 'link'): Drawing[] {
   const players = board.players.filter(p => ids.includes(p.uid));
-  if (type === 'link') return players.length < 2 ? [] : [{ id: uid(), type: 'line', points: players.flatMap(p => [p.x, p.y]), color: '#e1ff7b', width: 3, opacity: 0.95 }];
-  return players.map(p => ({ id: uid(), type: 'ellipse', points: [clamp(p.x - .029), clamp(p.y - .045), clamp(p.x + .029), clamp(p.y + .045)], color: '#e1ff7b', width: 4, opacity: 1 }));
+  if (type === 'link') return players.length < 2 ? [] : [{ id: uid(), type: 'line', points: players.flatMap(p => [p.x, p.y]), color: '#dfff81', width: 3, opacity: 0.95 }];
+  return players.map(p => ({ id: uid(), type: 'ellipse', points: [clamp(p.x - .029), clamp(p.y - .045), clamp(p.x + .029), clamp(p.y + .045)], color: '#dfff81', width: 4, opacity: 1 }));
 }
 let gesture: string | null = null;
 export function cancelHostGesture() { if (gesture) { useStudio.getState().cancel(); gesture = null; } }
@@ -35,8 +36,16 @@ export function executeHostCommand(command: HostCommand) {
   const s = useStudio.getState(), r = useRuntime.getState(), b = s.board;
   if (!b || r.busy || s.loading) throw Error('The producer is preparing the next view.');
   if (command.type === 'cancel-gesture') { cancelHostGesture(); return; }
-  const boardTools = ['move', 'highlight', 'link', 'focus', 'start-move', 'finish-move', 'cancel-move','ball-action','unit-move','team-shape','counterattack'];
+  const boardTools = ['move', 'highlight', 'link', 'focus', 'start-move', 'finish-move', 'cancel-move','ball-action','unit-move','team-shape','counterattack','build-play'];
   if (boardTools.includes(command.type) && r.view !== 'board') throw Error('Open the tactical board to move or select players.');
+  if (command.type === 'build-play') {
+    if (r.movementDraft) throw Error('Finish or cancel the current movement first.');
+    const next = buildPlay(b, command.options);
+    s.commit(board => Object.assign(board, next));
+    s.set({ playing: false, previewTime: null, selected: [], selectedShape: null, tool: 'select' });
+    r.set({ mediaPlaying: false, multiSelect: false, ballTargetPicking: false, zoom: 1, pan: { x: 0, y: 0 }, panMode: false });
+    return;
+  }
   if (command.type === 'unit-move' || command.type === 'team-shape' || command.type === 'counterattack') {
     if (command.type === 'counterattack' && r.movementDraft) throw Error('Finish or cancel the current movement first.');
     const base = copy(b);
@@ -106,7 +115,7 @@ export function executeHostCommand(command: HostCommand) {
   if (command.type === 'seek') { if (!Number.isFinite(command.time)) return; if (isMedia) r.set({ time: Math.max(b.studio?.trim.start || 0, Math.min(b.studio?.trim.end || 20, command.time)), mediaPlaying: false }); else s.set({ playing: false, playhead: clamp(command.time, 0, totalDuration(b)), previewTime: clamp(command.time, 0, totalDuration(b)) }); return; }
   if (command.type === 'play' || command.type === 'restart') {
     if (isMedia) { if (!r.assets.some(a => a.id === b.studio?.assetId && a.type === 'video')) throw Error('This source is a still image.'); const start = b.studio?.trim.start || 0; r.set({ mediaPlaying: command.type === 'restart' || !r.mediaPlaying, time: command.type === 'restart' || r.time >= (b.studio?.trim.end || 20) - .05 ? start : r.time }); }
-    else { if (b.scenes.length < 2) throw Error('Use Add a move to animate the board.'); const t = s.previewTime ?? 0; s.set({ playing: command.type === 'restart' || !s.playing, playhead: command.type === 'restart' || t >= totalDuration(b) ? 0 : t }); }
+    else { if (b.scenes.length < 2) throw Error('Use Add a move to animate the board.'); const t = s.previewTime ?? activeSceneTime(b); s.set({ playing: command.type === 'restart' || !s.playing, playhead: command.type === 'restart' || t >= totalDuration(b) ? 0 : t }); }
     return;
   }
   if (command.type === 'undo') s.undo();

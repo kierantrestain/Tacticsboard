@@ -273,13 +273,13 @@ export default function Reconstruction({
         <div className="tl-panel-title">
           <div>
             <span className="tl-eyebrow">CLIP → TACTICAL REPLAY</span>
-            <h2>Reconstruct the play</h2>
+            <h2>Reconstruction</h2>
           </div>
           <Waypoints size={20} />
         </div>
         <div className="tl-empty-panel">
           <Focus size={34} />
-          <h3>Start with the source.</h3>
+          <h3>Import a source</h3>
           <p>
             Import a match still or a short clip. Calibrate the pitch, mark the
             players, then turn the movement into an editable replay.
@@ -298,7 +298,7 @@ export default function Reconstruction({
       <div className="tl-panel-title">
         <div>
           <span className="tl-eyebrow">CLIP → TACTICAL REPLAY</span>
-          <h2>Reconstruct the play</h2>
+          <h2>Reconstruction</h2>
         </div>
         <Waypoints size={20} />
       </div>

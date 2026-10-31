@@ -44,3 +44,4 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
 }
 
 import './football/intelligence.css';
+import './studio/theme.css';

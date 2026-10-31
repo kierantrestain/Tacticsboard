@@ -39,18 +39,18 @@ export default function ProductionDesk() {
     >
       <div className="director-monitor-label">
         <strong>
-          <i /> PROGRAMME
+          <i /> TV OUTPUT
         </strong>
         <span>
           {!r.outputConnected
-            ? "No receiver signal"
+            ? "Offline"
             : !p
               ? "Standby"
               : acknowledged
                 ? p.black
                   ? "Black"
-                  : "Output received"
-                : "Awaiting output"}
+                  : "Connected"
+                : "Connecting"}
         </span>
         <button
           aria-label="Open programme window"
@@ -87,8 +87,8 @@ export default function ProductionDesk() {
         ) : (
           <div className="director-monitor-empty">
             <Monitor size={23} />
-            <strong>Ready for your opening shot</strong>
-            <span>Prepare in preview, then take to programme.</span>
+            <strong>Open TV output</strong>
+
           </div>
         )}
       </div>
@@ -98,7 +98,7 @@ export default function ProductionDesk() {
           onClick={() => takeToAir()}
           disabled={!!r.busy || s.loading || !!p?.black || !!blockers.length}
         >
-          <Radio size={16} /> Take preview <kbd>Enter</kbd>
+          <Radio size={16} /> Take to TV <kbd>Enter</kbd>
         </button>
         <button
           className={`director-black ${p?.black ? "active" : ""}`}
@@ -118,10 +118,10 @@ export default function ProductionDesk() {
             disabled={!!r.busy || !!p?.black}
             onChange={(e) => setLiveFollow(e.target.checked)}
           />{" "}
-          Live follow
+          Follow edits
         </label>
         <span>
-          {r.follow ? "Edits go to programme" : "Preview edits stay private"}
+          {r.follow ? "Edits go to TV" : ""}
         </span>
       </div>
       {blockers.length > 0 ? (
@@ -140,14 +140,7 @@ export default function ProductionDesk() {
         >
           {blockers[0].message}
         </button>
-      ) : (
-        <div className="director-readiness">
-          <ShieldCheck size={12} />{" "}
-          {p?.black
-            ? "Restore returns the held shot, unchanged."
-            : "Preview sources available"}
-        </div>
-      )}
+      ) : null}
     </section>
   );
 }

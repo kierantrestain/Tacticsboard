@@ -1,4 +1,5 @@
 import { isFootballAction } from "./studio/footballActionTypes";
+import { isPlayPhase } from "./studio/playbookTypes";
 import { isReportRecreation } from "./football/recreationTypes";
 import { emptyStudio, isStudioDocument } from "./studio/types";
 import type {
@@ -297,7 +298,7 @@ export function frameAt(board: Board, time: number): Frame {
     const a = scenes[i],
       b = scenes[i + 1];
     if (!b || time < start + a.duration) {
-      if (!b) return { players: a.players, drawings: a.drawings, ball: a.ball };
+      if (!b || b.cut) return { players: a.players, drawings: a.drawings, ball: a.ball };
       const f = Math.max(0, Math.min(1, (time - start) / a.duration));
       const t = f * f * (3 - 2 * f);
       return {
@@ -442,7 +443,7 @@ export function isBoard(value: unknown): value is Board {
         s.duration <= 60 &&
         validPlayers(s.players) &&
         validDrawings(s.drawings) &&
-        point(s.ball) && (s.ballAction === undefined || isFootballAction(s.ballAction)),
+        point(s.ball) && (s.ballAction === undefined || isFootballAction(s.ballAction)) && (s.cut === undefined || typeof s.cut === 'boolean') && (s.play === undefined || isPlayPhase(s.play)),
     ) &&
     !!b.settings &&
     ["studio", "grass", "light"].includes(b.settings.theme) &&

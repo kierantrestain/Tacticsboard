@@ -21,3 +21,8 @@ Reliability follow-up: unsent tablet drag/scrub updates coalesce to the latest p
 Tablet preparation controls: switch between prepared views, quarter/half-speed video, add a three-second explanation pause, update a saved moment or explicitly save a new copy. Save/recall is held during unfinished movement recording, and changing projects clears that draft. Source scrubbing starts at the chosen in-point; still images have no video playback controls. Eight regression tests cover readiness, pause limits, actual command dispatch and duplicate-free updates.
 
 Football actions now record passer/shooter, recipient, intended space or goal target, and explicit outcomes. Actions create ball transitions, through-ball runs and labelled graphics, and persist in saved sequences/project packs. They work through the producer desk and the shared host command path. See FOOTBALL_ACTIONS.md. The test browser could play and save sequences but did not provide video encoding; a rendered file still needs verification in a compatible production browser.
+
+
+## Studio 4.2
+
+Create and Advanced are one workspace. A shared palette covers the desk and host controls. The playbook adds play-out, high press, switches, overloads and low-block recovery alongside the counterattack, plus corners, free kicks, throw-ins, goal kicks and penalties. Named roles, initial restart checks, editable phases and cuts persist in show moments and project packs. See [PLAYBOOK.md](PLAYBOOK.md).
