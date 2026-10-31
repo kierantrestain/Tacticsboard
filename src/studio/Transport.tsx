@@ -165,11 +165,8 @@ export default function Transport({
   if (r.view === "stats")
     return (
       <section className="tl-transport ts-data-transport">
-        <strong>Match data card</strong>
-        <span>
-          Choose a team comparison or player above. Save to your rundown with M.
-          Export a 4K still or a five-second film.
-        </span>
+        <strong>{d.comparison?`${d.comparison.entities.length} ${d.comparison.kind} · ${d.comparison.fields.length} graphic metrics`:'Match graphic'}</strong>
+        <button className="tl-secondary" onClick={()=>s.set({modal:'matches'})}>Open data centre</button>
       </section>
     );
   return (

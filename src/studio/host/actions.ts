@@ -8,18 +8,10 @@ import type { HostCommand } from './protocol';
 import { availableHostViews, explanationPause } from './tabletModel';
 import { addCounterattack, moveUnit, setDefensiveShape } from '../teamMovement';
 import { buildPlay } from '../playbook';
+import { giveBall, dropBall } from '../possession';
+import { editSequence, createMovement } from '../sequenceEditing';
 
-export function createMovement(board: Board): Board {
-  const next = copy(board), index = next.scenes.findIndex(s => s.id === next.activeScene);
-  const start = next.scenes[index];
-  if(start?.ballAction)throw Error('Select the action’s finish step before adding a move.');
-  if (!start || next.scenes.length >= 80) throw Error('This sequence is full. Start another analysis.');
-  Object.assign(start, { players: copy(next.players), ball: copy(next.ball), drawings: copy(next.drawings) });
-  const end = { ...copy(start), id: uid(), title: `Move ${next.scenes.length}`, duration: 1, cut: undefined, play: undefined };
-  start.duration = 2;
-  next.scenes.splice(index + 1, 0, end); next.activeScene = end.id;
-  return next;
-}
+export { createMovement } from '../sequenceEditing';
 export function playerMarks(board: Board, ids: string[], type: 'highlight' | 'link'): Drawing[] {
   const players = board.players.filter(p => ids.includes(p.uid));
   if (type === 'link') return players.length < 2 ? [] : [{ id: uid(), type: 'line', points: players.flatMap(p => [p.x, p.y]), color: '#dfff81', width: 3, opacity: 0.95 }];
@@ -36,8 +28,26 @@ export function executeHostCommand(command: HostCommand) {
   const s = useStudio.getState(), r = useRuntime.getState(), b = s.board;
   if (!b || r.busy || s.loading) throw Error('The producer is preparing the next view.');
   if (command.type === 'cancel-gesture') { cancelHostGesture(); return; }
-  const boardTools = ['move', 'highlight', 'link', 'focus', 'start-move', 'finish-move', 'cancel-move','ball-action','unit-move','team-shape','counterattack','build-play'];
+  const boardTools = ['possession','sequence-edit','motion','move', 'highlight', 'link', 'focus', 'start-move', 'finish-move', 'cancel-move','ball-action','unit-move','team-shape','counterattack','build-play'];
   if (boardTools.includes(command.type) && r.view !== 'board') throw Error('Open the tactical board to move or select players.');
+  if(command.type==='possession'){
+    stopAtEditableFrame();s.commit(board=>{giveBall(board,command.playerId);board.settings.ballVisible=true;});return;
+  }
+  if(command.type==='sequence-edit'){
+    if(r.movementDraft)throw Error('Finish the current movement first.');
+    if(!['duplicate','earlier','later'].includes(command.action))throw Error('Choose a valid sequence edit.');
+    s.commit(board=>editSequence(board,command.id,command.action));s.set({playing:false,previewTime:null});return;
+  }
+  if(command.type==='motion'){
+    if(!['smooth','linear'].includes(command.easing)||typeof command.cut!=='boolean'||command.curve!==undefined&&(!Number.isFinite(command.curve)||Math.abs(command.curve)>1))throw Error('Choose a valid movement curve.');
+    s.commit(board=>{
+      const index=board.scenes.findIndex(s=>s.id===board.activeScene),scene=board.scenes[index];
+      if(index<1)throw Error('Add a move, then edit its finish step.');
+      if(board.scenes[index-1].ballAction)throw Error('Pass and shot timing is controlled by its action.');
+      scene.cut=command.cut;scene.motion||={easing:'smooth',curves:{}};scene.motion.easing=command.easing;
+      if(command.playerId){if(!board.players.some(p=>p.uid===command.playerId))throw Error('Select a player on this pitch.');scene.motion.curves[command.playerId]=command.curve||0;}
+    });s.set({playing:false,previewTime:null});return;
+  }
   if (command.type === 'build-play') {
     if (r.movementDraft) throw Error('Finish or cancel the current movement first.');
     const next = buildPlay(b, command.options);
@@ -60,7 +70,7 @@ export function executeHostCommand(command: HostCommand) {
   if (command.type === 'move') {
     if (typeof command.gesture !== 'string' || command.gesture.length > 80 || !Array.isArray(command.positions) || command.positions.length > 45 || command.positions.some(p => !Number.isFinite(p.x) || !Number.isFinite(p.y) || !b.players.some(q => q.uid === p.id) && p.id !== 'ball')) throw Error('That player movement is invalid.');
     if (gesture !== command.gesture) { cancelHostGesture(); stopAtEditableFrame(); s.begin(); gesture = command.gesture; }
-    s.preview(board => { for (const p of command.positions) { const target = p.id === 'ball' ? board.ball : board.players.find(q => q.uid === p.id); if (target) { target.x = clamp(p.x); target.y = clamp(p.y); } } });
+    s.preview(board => { for (const p of command.positions) { if(p.id==='ball')giveBall(board,null); const target = p.id === 'ball' ? board.ball : board.players.find(q => q.uid === p.id); if (target) { target.x = clamp(p.x); target.y = clamp(p.y); } } if(command.final&&command.positions.some(p=>p.id==='ball'))dropBall(board); });
     if (command.final) { s.end(); gesture = null; }
     return;
   }

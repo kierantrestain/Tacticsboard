@@ -13,7 +13,10 @@ import { statCardRows } from "../football/reportTools";
 import { defaultBroadcast, emptyStudio } from "./types";
 import type { Board, Match, MatchDetails } from "../types";
 import type { MatchStats } from "./types";
+import { comparisonCanvas } from './comparisonCanvas';
+import { allComparisonMetrics } from '../football/comparisonModel';
 export function statsCanvas(board: Board, report?: MatchStats, playerId?: string) {
+  if(board.studio?.comparison)return comparisonCanvas(board.studio.comparison);
   const canvas=document.createElement("canvas");canvas.width=1600;canvas.height=900;const c=canvas.getContext("2d")!;
   const lime="#ccf56f",teal="#63d9db",white="#f5f8f7",muted="#9caeb4";
   const text=(value:string,x:number,y:number,width:number,size=24,color=white,align:CanvasTextAlign="left",weight=600)=>{c.font=`${weight} ${size}px "Inter Variable",Arial`;c.fillStyle=color;c.textAlign=align;let v=value;while(v.length>1&&c.measureText(v).width>width)v=v.slice(0,-1);c.fillText(v===value?v:v.slice(0,-1)+"…",x,y);};
@@ -47,6 +50,7 @@ export async function presentMatchData(match: Match, playerId?: string, options:
     return;
   s.commit((b) => {
     b.studio ||= emptyStudio();
+    b.studio.comparison=undefined;
     (b.studio.dataReports ||= {})[match.id] = {
       id: report.id,
       lineups: report.lineups,
@@ -106,7 +110,8 @@ const StatsStage = forwardRef<
   }, [b, report, playerId]);
   return (
     <div className="ts-stats-stage" data-testid="stats-stage">
-      {!program && (
+      {!program && desk.comparison&&<div className="ts-comparison-tools"><strong>{desk.comparison.entities.length} {desk.comparison.kind} · {desk.comparison.scope}</strong><button onClick={()=>s.set({modal:'matches'})}>Data centre</button><details><summary>Graphic metrics · {desk.comparison.fields.length}/8</summary><div>{allComparisonMetrics(desk.comparison.entities).map(m=><label key={m.key}><input type="checkbox" checked={desk.comparison!.fields.includes(m.key)} disabled={!desk.comparison!.fields.includes(m.key)&&desk.comparison!.fields.length>=8} onChange={()=>editDesk(d=>{const f=d.comparison!.fields;d.comparison!.fields=f.includes(m.key)?f.filter(k=>k!==m.key):[...f,m.key];})}/>{m.label}</label>)}</div></details></div>}
+      {!program && !desk.comparison && (
         <div className="ts-data-tools">
           <BarChart3 size={15} />
           {!report && (
@@ -223,12 +228,12 @@ const StatsStage = forwardRef<
       <canvas
         ref={canvasRef}
         aria-label={
-          playerId
+          desk.comparison ? `${desk.comparison.entities.length}-${desk.comparison.kind} comparison graphic` : playerId
             ? "Player match statistics card"
             : "Team match statistics comparison"
         }
       />
-      {!report && !program && (
+      {!report && !desk.comparison && !program && (
         <button
           className="tl-primary"
           onClick={() => s.set({ modal: "matches" })}

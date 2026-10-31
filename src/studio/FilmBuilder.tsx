@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Highlighter, MoreHorizontal, Redo2, Ruler, ScanLine, Triangle, Type, ArrowRight, ArrowUpRight, BookmarkPlus, Camera, Check, ChevronRight, Circle, Clapperboard, Download, Eraser, Film, Hand, Link2, Pause, Pencil, Play, Plus, RotateCcw, Scissors, Sparkles, Square, Target, Trash2, Undo2, Upload, Users, X } from 'lucide-react';
+import { Copy, ChevronLeft, Highlighter, MoreHorizontal, Redo2, Ruler, ScanLine, Triangle, Type, ArrowRight, ArrowUpRight, BookmarkPlus, Camera, Check, ChevronRight, Circle, Clapperboard, Download, Eraser, Film, Hand, Link2, Pause, Pencil, Play, Plus, RotateCcw, Scissors, Sparkles, Square, Target, Trash2, Undo2, Upload, Users, X } from 'lucide-react';
 import { useStudio } from '../store';
 import type { Tool } from '../types';
 import { activeSceneTime, copy, frameAt, totalDuration, uid } from '../core';
@@ -16,6 +16,9 @@ import BallActionPanel from './BallActionPanel';
 import { RecreationEvidence } from '../football/ReportReplays';
 import TeamMovementPanel from './TeamMovementPanel';
 import PlaybookPanel from './PlaybookPanel';
+import SpatialInsights from './SpatialInsights';
+import PlayerControl from './PlayerControl';
+import { sceneBlocks } from './sequenceEditing';
 
 export function quickAction(command: HostCommand) { try { executeHostCommand(command); } catch (e) { useStudio.getState().notify((e as Error).message); } }
 export function QuickTools() {
@@ -33,6 +36,7 @@ export function QuickTools() {
 export function FilmTimeline({ asset }: { asset?: MediaAsset }) {
   const s=useStudio(), r=useRuntime(), b=s.board!, source=r.view==='footage', d=b.studio||emptyStudio();
   const time=source?r.time:s.previewTime??activeSceneTime(b), duration=source?asset?.duration||1:totalDuration(b), playing=source?r.mediaPlaying:s.playing;
+  const blocks=sceneBlocks(b.scenes),groups=new Map(blocks.flatMap((block,index)=>block.map(scene=>[scene.id,{index,size:block.length}] as const)));
   return <section className="film-timeline" aria-label="Build and preview the sequence">
     <div className="film-timeline-top">
       <div><span className="film-kicker">{source?'YOUR CLIP':'YOUR SEQUENCE'}</span><strong>{source?asset?.name||'Import a video to start':`${b.scenes.length} ${b.scenes.length===1?'step':'steps'} · ${duration.toFixed(1)} seconds`}</strong></div>
@@ -48,13 +52,13 @@ export function FilmTimeline({ asset }: { asset?: MediaAsset }) {
     {source?<div className="film-clip-range"><span><Scissors size={15}/>Selected {d.trim.start.toFixed(1)} – {d.trim.end.toFixed(1)}s</span><strong>{(d.trim.end-d.trim.start).toFixed(1)}s clip</strong></div>:<div className="film-step-strip">{b.scenes.map((scene,i)=><div key={scene.id} className={`film-step-card ${b.activeScene===scene.id?'selected':''}`}>
       <button disabled={!!r.movementDraft} onClick={()=>s.selectScene(scene.id)} aria-label={`Open sequence step ${i+1}`}><MiniPitch frame={scene} colors={b.colors}/><span>{String(i+1).padStart(2,'0')}</span></button>
       <input aria-label={`Step ${i+1} name`} value={scene.title} onChange={e=>s.commit(board=>{board.scenes.find(x=>x.id===scene.id)!.title=e.target.value.slice(0,60);})}/>
-      <div><label><input aria-label={`Step ${i+1} seconds`} type="number" min={.5} max={10} step={.5} value={scene.duration} onChange={e=>s.commit(board=>{board.scenes.find(x=>x.id===scene.id)!.duration=Math.max(.5,Math.min(10,+e.target.value));})}/>s</label><button aria-label={`Remove sequence step ${i+1}`} disabled={b.scenes.length<2||!!r.movementDraft} onClick={()=>s.deleteScene(scene.id)}><X size={13}/></button></div>
+      <div><label><input aria-label={`Step ${i+1} seconds`} type="number" min={.5} max={10} step={.5} value={scene.duration} onChange={e=>s.commit(board=>{board.scenes.find(x=>x.id===scene.id)!.duration=Math.max(.5,Math.min(10,+e.target.value));})}/>s</label>{(['earlier','later','duplicate'] as const).map(action=><button key={action} title={`${action==='duplicate'?'Duplicate':`Move ${action}`} ${groups.get(scene.id)!.size>1?'action chain':'step'}`} aria-label={`${action==='duplicate'?'Duplicate':`Move ${action}`} sequence step ${i+1}`} disabled={!!r.movementDraft||action==='earlier'&&groups.get(scene.id)!.index===0||action==='later'&&groups.get(scene.id)!.index===blocks.length-1} onClick={()=>quickAction({type:'sequence-edit',id:scene.id,action})}>{action==='duplicate'?<Copy size={12}/>:action==='earlier'?<ChevronLeft size={12}/>:<ChevronRight size={12}/>}</button>)}<button aria-label={`Remove sequence step ${i+1}`} disabled={b.scenes.length<2||!!r.movementDraft} onClick={()=>s.deleteScene(scene.id)}><X size={13}/></button></div>
     </div>)}</div>}
   </section>;
 }
 export default function FilmBuilder({ onImport, onFreeze, onFilm, source }: { onImport:()=>void; onFreeze:()=>void; onFilm:()=>void; source:React.RefObject<SourceHandle|null> }) {
   const s=useStudio(),r=useRuntime(),b=s.board!,d=b.studio||emptyStudio(),asset=r.assets.find(a=>a.id===d.assetId),isSource=r.view==='footage',isStats=r.view==='stats';
-  const [tab,setTab]=useState<'plays'|'move'|'ball'|'display'>('plays');
+  const [tab,setTab]=useState<'plays'|'move'|'ball'|'inspect'|'display'>('plays');
   useEffect(()=>{setTab('plays');},[b.id]);
   useEffect(()=>{if(r.ballActionKind)setTab('ball');},[r.ballActionKind]);
   useEffect(()=>{if(r.view!=='board')r.set({ballActionKind:null,ballTargetPicking:false,ballTarget:null});},[r.view]);
@@ -88,9 +92,9 @@ export default function FilmBuilder({ onImport, onFreeze, onFilm, source }: { on
   const toggle=(key:'names'|'numbers'|'homeVisible'|'awayVisible'|'ballVisible'|'teamShape'|'teamLines'|'thirds'|'lanes')=>s.commit(board=>{board.settings[key]=!(board.settings[key]??false);});
   return <aside className="film-builder unified-editor" aria-label="Analysis editor">
     <RecreationEvidence/>
-    {!isSource&&!isStats&&<div className="film-edit-tabs" role="tablist" aria-label="Analysis tools">{([['plays','Plays'],['move','Move'],['ball','Ball'],['display','Display']] as const).map(([value,label])=><button key={value} role="tab" aria-selected={tab===value} aria-pressed={tab===value} onClick={()=>{setTab(value);r.set({ballActionKind:value==='ball'?'pass':null,ballTargetPicking:false,multiSelect:false});}}>{label}</button>)}</div>}
+    {!isSource&&!isStats&&<div className="film-edit-tabs" role="tablist" aria-label="Analysis tools">{([['plays','Plays'],['move','Move'],['ball','Ball'],['inspect','Inspect'],['display','Display']] as const).map(([value,label])=><button key={value} role="tab" aria-selected={tab===value} aria-pressed={tab===value} onClick={()=>{setTab(value);r.set({ballActionKind:value==='ball'?'pass':null,ballTargetPicking:false,multiSelect:false});}}>{label}</button>)}</div>}
     <div className="film-builder-content">
-      {isStats?<label className="film-field">Headline<input aria-label="Graphic headline" maxLength={120} value={d.broadcast?.headline||d.lowerThird} onChange={e=>editDesk(d=>{d.lowerThird=e.target.value;if(d.broadcast)d.broadcast.headline=e.target.value;})}/></label>:isSource?<>
+      {isStats?<label className="film-field">Headline<input aria-label="Graphic headline" maxLength={120} value={d.comparison?.title||d.broadcast?.headline||d.lowerThird} onChange={e=>editDesk(d=>{d.lowerThird=e.target.value;if(d.broadcast)d.broadcast.headline=e.target.value;if(d.comparison)d.comparison.title=e.target.value;})}/></label>:isSource?<>
         {asset?<>
           {asset.type==='video'&&<><div className="film-segment">{[6,10,15].map(n=><button key={n} onClick={()=>editDesk(d=>{d.trim=aroundMoment(r.time,asset.duration,n);})}>{n}s clip</button>)}</div><div className="film-two-buttons"><button className="film-button" onClick={()=>quickAction({type:'clip-in'})}>Set start</button><button className="film-button" onClick={()=>quickAction({type:'clip-out'})}>Set end</button></div><button className="film-button" onClick={addStop}><Pause size={18}/>Add explanation pause</button></>}
           <button className="film-button" disabled={!!r.busy} onClick={()=>void autoCircle()}><Sparkles size={18}/>Circle visible players</button><button className="film-button" onClick={onFreeze}><Camera size={17}/>Save still</button>
@@ -99,7 +103,9 @@ export default function FilmBuilder({ onImport, onFreeze, onFilm, source }: { on
       </>:<>
         {tab==='plays'&&<PlaybookPanel key={b.id} board={b} send={quickAction} disabled={!!r.busy||s.playing} recording={!!r.movementDraft}/>}
         {tab==='move'&&<TeamMovementPanel key={b.id} board={b} selected={s.selected} onSelect={selectPlayers} multiSelect={r.multiSelect} onMultiSelect={multiSelect=>{r.set({multiSelect});s.set({tool:'select',playing:false});}} send={quickAction} disabled={!!r.busy} recording={!!r.movementDraft}/>}
+        {tab==='ball'&&<PlayerControl board={b} selected={s.selected} send={quickAction} disabled={!!r.busy||s.playing}/>}
         {tab==='ball'&&<BallActionPanel board={b} selected={s.selected} kind={r.ballActionKind} setKind={kind=>r.set({ballActionKind:kind,ballTarget:null})} target={r.ballTarget} picking={r.ballTargetPicking} onPick={()=>{s.set({tool:'select',playing:false,previewTime:null});r.set({ballTargetPicking:true,multiSelect:false});}} onCancelPick={()=>r.set({ballTargetPicking:false})} onAdd={action=>executeHostCommand({type:'ball-action',action})} disabled={!!r.movementDraft||!!r.busy}/>}
+        {tab==='inspect'&&<SpatialInsights/>}
         {tab==='display'&&<>
           {!!s.selected.length&&<div className="film-two-buttons"><button className="film-button" onClick={()=>quickAction({type:'highlight',ids:s.selected})}><Circle size={17}/>Highlight</button><button className="film-button" disabled={s.selected.length<2} onClick={()=>quickAction({type:'link',ids:s.selected})}><Link2 size={17}/>Connect</button></div>}
           <div className="film-segment">{(['full','left','right'] as const).map(view=><button key={view} aria-pressed={b.settings.view===view} onClick={()=>quickAction({type:'pitch',view})}>{view==='full'?'Full pitch':view==='left'?'Left half':'Right half'}</button>)}</div>

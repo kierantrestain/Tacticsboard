@@ -31,6 +31,8 @@ import { analysisFrame } from "./studio/tactics";
 import { playerNameOffsets } from "./studio/labelLayout";
 import { translateGroup } from './studio/teamMovement';
 import { fitPitch } from './studio/pitchFrame';
+import { dropBall } from './studio/possession';
+import { motionPoint } from './studio/motion';
 const W = 1200,
   H = 760,
   PX = 65,
@@ -837,6 +839,7 @@ const BoardCanvas = forwardRef<
                 }}
               />
             ))}
+            {!program&&tool==='select'&&!playing&&studio.previewTime===null&&(()=>{const index=board.scenes.findIndex(s=>s.id===board.activeScene),scene=board.scenes[index],previous=board.scenes[index-1];if(!previous||scene.cut||previous.ballAction)return null;return selected.map(id=>{const a=previous.players.find(p=>p.uid===id),b=scene.players.find(p=>p.uid===id);if(!a||!b||Math.hypot(a.x-b.x,a.y-b.y)<.005)return null;return <Line key={`motion:${id}`} points={Array.from({length:31},(_,i)=>motionPoint(a,b,i/30,scene.motion?.curves[id]||0)).flatMap(p=>[sx(p.x),sy(p.y)])} stroke="#dfff81" strokeWidth={2.5} dash={[7,6]} opacity={.75} listening={false}/>;});})()}
             {frame.players
               .filter((p) =>
                 p.side === "home"
@@ -966,11 +969,12 @@ const BoardCanvas = forwardRef<
                     {active && (
                       <Circle
                         radius={26}
-                        stroke="#63d9ff"
+                        stroke="#dfff81"
                         strokeWidth={2}
                         opacity={0.95}
                       />
                     )}
+                    {frame.ball.carrierId===p.uid&&<Circle radius={29} stroke="#dfff81" strokeWidth={3} dash={[4,5]} opacity={.9} listening={false}/>}
                     <Circle
                       y={4}
                       radius={21}
@@ -1048,7 +1052,7 @@ const BoardCanvas = forwardRef<
                   b.ball = { x, y };
                 });
               }}
-              onDragEnd={() => studio.end()}
+              onDragEnd={() => {studio.preview(b=>dropBall(b));studio.end();}}
             >
               <Circle y={3} radius={11} fill="#000" opacity={0.35} />
               <Circle

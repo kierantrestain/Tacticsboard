@@ -24,6 +24,7 @@ export function makeCue(
       ? desk.assetId
       : undefined;
   return {
+    comparison: view==='stats'?copy(desk.comparison):undefined,
     recreation: copy(board.recreation),
     sequence: !source && ['board','replay'].includes(view) ? copy(board.scenes) : undefined,
     explainStops: source ? copy(desk.explainStops?.[source] || []) : undefined,
@@ -51,7 +52,7 @@ export function makeCue(
     match: copy(board.match),
     id: uid(),
     title: (view === "stats"
-      ? statsPlayer
+      ? desk.comparison ? desk.comparison.title : statsPlayer
         ? `${statsPlayer.name} · match stats`
         : `${board.context?.home.shortName || "Home"} v ${board.context?.away.shortName || "Away"} · numbers`
       : board.scenes.find((s) => s.id === board.activeScene)?.title ||
@@ -126,6 +127,7 @@ export function cueBoard(board: Board, cue: RundownCue): Board {
     );
   next.studio.view = cue.view;
   next.studio.statsSnapshot = copy(cue.report);
+  next.studio.comparison = copy(cue.comparison);
   next.studio.statsFields = copy(cue.statsFields);
   if (cue.broadcast) next.studio.broadcast = copy(cue.broadcast);
   else if (next.studio.broadcast)
@@ -175,6 +177,7 @@ export function cueContentKey(cue: RundownCue): string {
     cue.lowerThird,
     cue.broadcast,
     cue.report,
+    cue.comparison,
     cue.statsFields,
     cue.statsPlayerId,
     cue.statsComparePlayerId,

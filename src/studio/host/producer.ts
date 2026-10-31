@@ -44,7 +44,7 @@ export function hostSnapshot(includeImage = false): HostState | null {
   const board = copy(s.board);
   // The host needs the current scene and cue labels, not the entire research archive.
   if (board.studio) {
-    board.studio = { ...board.studio, tracking: {}, targets: {}, landmarks: {}, dataReports: undefined, statsSnapshot: undefined, ink: {}, bookmarks: [], cues: board.studio.cues?.map(c => ({ ...c, sequence: undefined, report: undefined, tracking: undefined, thumbnail: undefined, ink: [], frame: { players: [], drawings: [], ball: {x:.5,y:.5} } })) };
+    board.studio = { ...board.studio, tracking: {}, targets: {}, landmarks: {}, dataReports: undefined, statsSnapshot: undefined, comparison: undefined, ink: {}, bookmarks: [], cues: board.studio.cues?.map(c => ({ ...c, sequence: undefined, report: undefined, comparison: undefined, tracking: undefined, thumbnail: undefined, ink: [], frame: { players: [], drawings: [], ball: {x:.5,y:.5} } })) };
   }
   const asset = r.assets.find(a => a.id === board.studio?.assetId);
   const isMedia = r.view === 'footage' || r.view === 'split' || r.view === 'replay' && !!s.board.studio?.tracking[asset?.id || ''];

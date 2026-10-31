@@ -22,6 +22,7 @@ import {
 import { TeamBadge } from "./ClubBadge";
 import MatchReport from "./MatchReport";
 import LeaguePlayers from "./LeaguePlayers";
+import LeagueTeams from "./LeagueTeams";
 import type { Match } from "../types";
 const stat = (stats: any, key: string) =>
   stats[key]?.display ?? stats[key]?.value ?? "—";
@@ -248,11 +249,9 @@ export default function MatchCentre() {
             FOOTBALL INTELLIGENCE / {year}/{String(year + 1).slice(-2)}
           </span>
           <h1>
-            Match intelligence<span>{all.length} fixtures</span>
+            Data centre<span>{all.length} fixtures</span>
           </h1>
-          <p>
-            The whole match. Every available statistic. Your next talking point.
-          </p>
+
         </div>
         <button
           className="tl-icon"
@@ -316,6 +315,7 @@ export default function MatchCentre() {
             <UserRound size={15} />
             Players
           </button>
+          <button className={tab === "teams" ? "active" : ""} onClick={() => useFootball.setState({tab:"teams"})}><Trophy size={15}/>Teams</button>
           <button
             className={tab === "table" ? "active" : ""}
             onClick={() => useFootball.setState({ tab: "table" })}
@@ -565,7 +565,7 @@ export default function MatchCentre() {
           seasonYear={year}
           archiveTeams={archive?.teams}
         />
-      ) : (
+      ) : tab === "teams" ? <LeagueTeams key={league+year} league={league} year={year} teams={historic?archive?.teams||[]:teams} matches={all} table={table}/> : (
         <div className="fc-table-scroll">
           {table?.groups.map((g, i) => (
             <section key={i}>

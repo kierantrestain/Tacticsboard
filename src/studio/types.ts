@@ -3,6 +3,9 @@ import { isFootballAction } from "./footballActionTypes";
 import { isReportRecreation } from "../football/recreationTypes";
 import type { ReportRecreation } from "../football/recreationTypes";
 import type { ExplainStop } from './filmPlan';
+import { validComparison, type ComparisonSnapshot } from '../football/comparisonModel';
+import { validBall } from './possession';
+import { validMotion } from './motion';
 export type ViewMode = "board" | "footage" | "split" | "replay" | "stats";
 export type MatchStats = Pick<
   MatchDetails,
@@ -106,6 +109,7 @@ export const defaultBroadcast = (): BroadcastStyle => ({
 });
 /** A cue holds a frame, never a nested Board/StudioDocument. */
 export interface RundownCue {
+  comparison?: ComparisonSnapshot;
   recreation?: ReportRecreation;
   sequence?: Scene[];
   explainStops?: ExplainStop[];
@@ -142,6 +146,7 @@ export interface RundownCue {
   lowerThird: string;
 }
 export interface StudioDocument {
+  comparison?: ComparisonSnapshot;
   explainStops?: Record<string, ExplainStop[]>;
   statsSnapshot?: MatchStats;
   statsFields?: string[];
@@ -211,6 +216,7 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
     !!x && typeof x === "object" && !Array.isArray(x);
   return (
     d.version === 2 &&
+    (d.comparison === undefined || validComparison(d.comparison)) &&
     (d.view === undefined ||
       ["board", "footage", "split", "replay", "stats"].includes(d.view)) &&
     !!d.trim &&
@@ -321,9 +327,10 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
             [p.x, p.y].every((n) => Number.isFinite(n) && n >= 0 && n <= 1);
           return (
             !!c &&
+            (c.comparison === undefined || validComparison(c.comparison)) &&
             (c.recreation === undefined || isReportRecreation(c.recreation)) &&
             (c.explainStops === undefined || validStops(c.explainStops)) &&
-            (c.sequence === undefined || (Array.isArray(c.sequence) && c.sequence.length > 0 && c.sequence.length <= 100 && new Set(c.sequence.map(s=>s.id)).size === c.sequence.length && c.sequence.every(s => (s.ballAction === undefined || isFootballAction(s.ballAction)) && typeof s.id === 'string' && typeof s.title === 'string' && s.title.length <= 120 && typeof s.note === 'string' && Number.isFinite(s.duration) && s.duration >= .25 && s.duration <= 60 && point(s.ball) && Array.isArray(s.players) && s.players.length <= 44 && new Set(s.players.map(p=>p.uid)).size === s.players.length && s.players.every(p=>point(p) && typeof p.uid === 'string' && typeof p.name === 'string' && typeof p.number === 'string' && typeof p.playerId === 'string' && ['home','away'].includes(p.side)) && Array.isArray(s.drawings) && s.drawings.length <= 500 && s.drawings.every(i=>i && typeof i.id === 'string' && typeof i.color === 'string' && Number.isFinite(i.width) && Number.isFinite(i.opacity) && Array.isArray(i.points) && i.points.length <= 20000 && i.points.every(Number.isFinite))))) &&
+            (c.sequence === undefined || (Array.isArray(c.sequence) && c.sequence.length > 0 && c.sequence.length <= 100 && new Set(c.sequence.map(s=>s.id)).size === c.sequence.length && c.sequence.every(s => (s.ballAction === undefined || isFootballAction(s.ballAction)) && typeof s.id === 'string' && typeof s.title === 'string' && s.title.length <= 120 && typeof s.note === 'string' && Number.isFinite(s.duration) && s.duration >= .25 && s.duration <= 60 && point(s.ball) && Array.isArray(s.players) && s.players.length <= 44 && new Set(s.players.map(p=>p.uid)).size === s.players.length && validBall(s.ball,s.players) && validMotion(s) && s.players.every(p=>point(p) && typeof p.uid === 'string' && typeof p.name === 'string' && typeof p.number === 'string' && typeof p.playerId === 'string' && ['home','away'].includes(p.side)) && Array.isArray(s.drawings) && s.drawings.length <= 500 && s.drawings.every(i=>i && typeof i.id === 'string' && typeof i.color === 'string' && Number.isFinite(i.width) && Number.isFinite(i.opacity) && Array.isArray(i.points) && i.points.length <= 20000 && i.points.every(Number.isFinite))))) &&
             (c.tracking === undefined ||
               isStudioDocument({
                 ...emptyStudio(),
@@ -396,7 +403,7 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
             !!c.frame &&
             point(c.frame.ball) &&
             Array.isArray(c.frame.players) &&
-            c.frame.players.length <= 44 &&
+            c.frame.players.length <= 44 && validBall(c.frame.ball,c.frame.players) &&
             new Set(c.frame.players.map((p) => p?.uid)).size ===
               c.frame.players.length &&
             c.frame.players.every(

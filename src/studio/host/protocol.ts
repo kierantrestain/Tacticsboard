@@ -33,6 +33,9 @@ export interface HostState {
   canRedo: boolean;
 }
 export type HostCommand =
+  | { type: 'possession'; playerId: string | null }
+  | { type: 'sequence-edit'; id: string; action: 'duplicate' | 'earlier' | 'later' }
+  | { type: 'motion'; easing: 'smooth' | 'linear'; cut: boolean; playerId?: string; curve?: number }
   | { type: 'build-play'; options: PlayRequest }
   | { type: 'unit-move'; action: UnitMovement }
   | { type: 'team-shape'; side: 'home'|'away'; shape: DefensiveShape; direction: AttackDirection }

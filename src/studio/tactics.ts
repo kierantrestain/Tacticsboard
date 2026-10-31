@@ -1,5 +1,6 @@
 import type { Board, BoardPlayer, Drawing, Frame, Side } from "../types";
 import { clamp, formationPoints } from "../core";
+import { passingOptions } from './spatialAnalysis';
 
 export const TACTICAL_PRESETS = [
   {
@@ -260,6 +261,7 @@ export function analysisFrame(board: Board, frame: Frame): Frame {
     !settings.thirds &&
     !settings.teamShape &&
     !settings.teamLines &&
+    !settings.passingLanes &&
     !settings.focusPlayer
   )
     return frame;
@@ -316,6 +318,7 @@ export function analysisFrame(board: Board, frame: Frame): Frame {
     });
   }
   const focused = frame.players.find((p) => p.uid === settings.focusPlayer);
+  if(settings.passingLanes){const owner=frame.players.find(p=>p.uid===frame.ball.carrierId);if(owner)for(const option of passingOptions(frame))drawings.push(guide('pass:'+option.receiver.uid,'line',[owner.x,owner.y,option.receiver.x,option.receiver.y],.65,option.blocked?'#ffbf83':'#dfff81'));}
   if (focused)
     drawings.push(
       guide(

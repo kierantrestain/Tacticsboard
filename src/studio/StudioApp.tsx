@@ -1116,7 +1116,7 @@ function Operator() {
           <Search size={16} />
           <kbd>⌘ K</kbd>
         </button>
-        <div className="tl-header-actions">
+        <div className="tl-header-actions"><button className="tl-data-centre-button" onClick={()=>s.set({modal:"matches"})}><BarChart3 size={16}/><span>Data centre</span></button>
           <button className="film-tablet-button" onClick={()=>r.set({tabletPanel:true})}><Tablet size={18}/><span>Connect tablets</span></button>
           <button
             className="tl-secondary"
@@ -1206,7 +1206,7 @@ function Operator() {
               </span>
               <span className="tl-stage-context">
                 {r.view === "stats"
-                  ? "MATCH DATA CARD"
+                  ? desk.comparison ? `${desk.comparison.entities.length} ${desk.comparison.kind.toUpperCase()} / COMPARISON` : "MATCH DATA CARD"
                   : r.view === "footage"
                     ? asset?.name || "SOURCE ANALYSIS"
                     : r.view === "replay"
@@ -1389,7 +1389,7 @@ function Operator() {
             <div className="tl-stage-footer">
               <span>
                 <i style={{ background: b.colors.home }} />
-                {home?.shortName} <ArrowRight size={12} />
+                {r.view==='stats'&&desk.comparison?desk.comparison.scope:<>{home?.shortName} <ArrowRight size={12} /></>}
               </span>
               <button
                 className="director-preview-caption"
@@ -1403,7 +1403,7 @@ function Operator() {
               </button>
               <span>
                 <ArrowRight size={12} />
-                {away?.shortName}
+                {r.view==='stats'&&desk.comparison?`${desk.comparison.entities.length} ${desk.comparison.kind}`:away?.shortName}
                 <i style={{ background: b.colors.away }} />
               </span>
             </div>

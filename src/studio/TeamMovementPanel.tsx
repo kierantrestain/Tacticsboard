@@ -4,6 +4,7 @@ import type { Board, Side } from '../types';
 import type { HostCommand } from './host/protocol';
 import { unitPlayers, type AttackDirection, type PlayerUnit, type UnitOperation } from './teamMovement';
 import './teamMovement.css';
+import PlayerControl from './PlayerControl';
 
 const units: { id: PlayerUnit; label: string }[] = [
   {id:'outfield',label:'Outfield'}, {id:'team',label:'Whole team'}, {id:'back',label:'Back line'},
@@ -21,6 +22,7 @@ export default function TeamMovementPanel({board,selected,onSelect,multiSelect,o
   const choose=(nextSide:Side,nextUnit:PlayerUnit)=>{setSide(nextSide);setUnit(nextUnit);onSelect(unitPlayers(board,nextSide,nextUnit,selected).map(p=>p.uid));onMultiSelect(false);};
   const move=(operation:UnitOperation)=>{onSelect(ids);onMultiSelect(false);send({type:'unit-move',action:{ids,operation,direction}});};
   return <section className="team-movement" aria-label="Team movement controls">
+    <PlayerControl board={board} selected={selected} send={send} disabled={disabled} motion/>
     <fieldset disabled={disabled}>
       <div className="tm-heading"><span><Users size={15}/>MOVE A UNIT</span><small>{members.length} players</small></div>
       <div className="tm-teams" aria-label="Team to move">{(['home','away'] as const).map(team=><button key={team} aria-pressed={side===team} onClick={()=>choose(team,unit==='selected'?'outfield':unit)}><i style={{background:board.colors[team]}}/>{name(team)}</button>)}</div>

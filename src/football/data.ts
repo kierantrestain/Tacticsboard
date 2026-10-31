@@ -48,7 +48,7 @@ interface FootballState {
   careers: Record<string, CareerData>;
   archives: Record<string, SeasonArchive>;
   set: (v: Partial<FootballState>) => void;
-  tab: "fixtures" | "table" | "players";
+  tab: "fixtures" | "table" | "players" | "teams";
 }
 export const useFootball = create<FootballState>((set) => ({
   season: null,

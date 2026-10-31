@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, RefreshCw } from "lucide-react";
+import StatExplorer from "./StatExplorer";
 import { useStudio } from "../store";
 import type { LineupPlayer, Match, Player, Stat, Team } from "../types";
 import {
@@ -9,38 +10,7 @@ import {
   useFootball,
 } from "./data";
 const display = (s?: Stat) => s?.display ?? s?.value ?? "—";
-function Stats({ stats }: { stats: Record<string, Stat> }) {
-  const [filter, setFilter] = useState("");
-  const entries = Object.entries(stats).filter(([k, v]) =>
-    (k + " " + v.label).toLowerCase().includes(filter.toLowerCase()),
-  );
-  return (
-    <>
-      <input
-        className="fc-stat-search"
-        aria-label="Filter player statistics"
-        placeholder="Find a player statistic…"
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-      />
-      <div className="detail-stats fp-stat-grid">
-        {entries.map(([k, v]) => (
-          <div key={k}>
-            <span>{v.label}</span>
-            <strong>{display(v)}</strong>
-          </div>
-        ))}
-      </div>
-      {!entries.length && (
-        <p className="fc-source-note">
-          {filter
-            ? "No statistics match this search."
-            : "No individual figures were supplied by this source."}
-        </p>
-      )}
-    </>
-  );
-}
+function Stats({stats}:{stats:Record<string,Stat>}) { return <StatExplorer stats={stats}/>; }
 export default function PlayerData({
   player,
   team,

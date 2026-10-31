@@ -5,6 +5,7 @@ import { useFootball, checkedTime, requestFootball } from "./data";
 import type { Player, Stat, Team } from "../types";
 import { TeamBadge } from "./ClubBadge";
 import PlayerData from "./PlayerData";
+import ComparisonPanel from "./ComparisonPanel";
 import { metricGroups, metricGroup, metricNumber, metricText, canPer90, type MetricGroup } from "./metrics";
 import { download, filename } from "../core";
 type Row = {
@@ -28,6 +29,7 @@ export default function LeaguePlayers({
 }) {
   const catalogue = useStudio((s) => s.catalogue),
     season = useFootball((s) => s.season),
+    [feed,setFeed] = useState<'fpl'|'espn'>('fpl'),
     [q, setQ] = useState(""),
     [club, setClub] = useState("all"),
     [sort, setSort] = useState(""),
@@ -78,7 +80,7 @@ export default function LeaguePlayers({
       active = false;
     };
   }, [historic, league, seasonYear, archiveTeams]);
-  const fpl = league === "eng.1" && !historic;
+  const fpl = league === "eng.1" && !historic && feed==='fpl';
   const rows = useMemo<Row[]>(() => {
     if (!catalogue) return [];
     const lookup = new Map(catalogue.teams.map((t) => [t.id, t]));
@@ -126,6 +128,7 @@ export default function LeaguePlayers({
   return (
     <section className={`fc-players-view ${fpl ? "" : "ucl"}`}>
       <div className="fc-player-tools">
+        {league==='eng.1'&&!historic&&<select aria-label="Player data source" value={feed} onChange={e=>{setFeed(e.target.value as 'fpl'|'espn');setSort('');setColumns(null);setCompare([]);setExpanded('');}}><option value="fpl">FPL · season & expected stats</option><option value="espn">ESPN · competition stats</option></select>}
         <label>
           <Search size={15} />
           <input
@@ -181,7 +184,7 @@ export default function LeaguePlayers({
             : "ESPN · roster source"}
         </span>
       </div>
-      {compare.length>0&&<div className="mi-season-compare"><div className="mi-section-head"><h3>{compare.map(id=>rows.find(r=>r.id===id)?.name).join(' vs ')}{compare.length===1?' · select another player':''}</h3><button onClick={()=>setCompare([])}>Clear comparison</button></div>{compare.length===2&&<div className="mi-season-comparison-table">{metrics.map(m=><div key={m.key}><strong>{metricText(rows.find(r=>r.id===compare[0])!.stats,m.key,per90)}</strong><span>{label(m.key)}</span><strong>{metricText(rows.find(r=>r.id===compare[1])!.stats,m.key,per90)}</strong></div>)}</div>}</div>}
+      {compare.length>0&&<ComparisonPanel entities={compare.flatMap(id=>rows.filter(r=>r.id===id).map(r=>({id:r.id,name:r.name,subtitle:r.team.shortName,color:r.team.color,stats:r.stats})))} kind="players" scope={`${league==='eng.1'?'Premier League':'Champions League'} · ${seasonYear||season?.seasonYear}/${String((seasonYear||season?.seasonYear||0)+1).slice(-2)}`} source={fpl?'FPL season data':'ESPN competition squad records'} updatedAt={fpl?season?.updatedAt:undefined} onRemove={id=>setCompare(compare.filter(x=>x!==id))} onClear={()=>setCompare([])}/>}
       <div className="mi-leader-scroll"><div className="fc-leader-head" style={grid}><span>Player</span><span>Club</span>{shownColumns.map(k=><button key={k} onClick={()=>{if(sortKey===k)setAscending(!ascending);else{setSort(k);setAscending(false);}}}>{label(k)}{sortKey===k?(ascending?' ↑':' ↓'):''}</button>)}<span>VS</span></div>
       {filtered.slice(0, limit).map((r) => (
         <div key={r.id}>
@@ -189,7 +192,7 @@ export default function LeaguePlayers({
             <button aria-label={`Statistics for ${r.name}`} aria-expanded={expanded===r.id} onClick={()=>setExpanded(expanded===r.id?'':r.id)}><strong>{r.name}</strong><ChevronDown size={13}/></button>
             <span className="fc-leader-club"><TeamBadge team={r.team} size="small"/>{r.team.shortName}</span>
             {shownColumns.map(k=><span key={k} className={sortKey===k?'mi-ranked':''}>{metricText(r.stats,k,per90)}</span>)}
-            <button aria-label={`Compare ${r.name}`} aria-pressed={compare.includes(r.id)} disabled={!compare.includes(r.id)&&compare.length===2} onClick={()=>setCompare(compare.includes(r.id)?compare.filter(id=>id!==r.id):[...compare,r.id])}>{compare.includes(r.id)?'✓':'+'}</button>
+            <button aria-label={`Compare ${r.name}`} aria-pressed={compare.includes(r.id)} disabled={!compare.includes(r.id)&&compare.length>=5} onClick={()=>setCompare(compare.includes(r.id)?compare.filter(id=>id!==r.id):[...compare,r.id])}>{compare.includes(r.id)?'✓':'+'}</button>
           </div>
           {expanded === r.id && (
             <div className="fc-leader-details">

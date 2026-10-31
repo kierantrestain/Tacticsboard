@@ -1,6 +1,7 @@
 import type { Board, Drawing } from '../types';
 import type { BallActionRequest, FootballAction } from './footballActionTypes';
 import { copy, clamp, uid, shortName } from '../core';
+import type { Frame } from '../types';
 export const outcomeNames={completed:'Completed',intercepted:'Intercepted','on-target':'On target',goal:'Goal',saved:'Saved','off-target':'Off target',blocked:'Blocked',woodwork:'Woodwork'};
 export function addFootballAction(board:Board,request:BallActionRequest):Board {
   const b=copy(board),i=b.scenes.findIndex(s=>s.id===b.activeScene),from=b.players.find(p=>p.uid===request.fromId);
@@ -39,6 +40,13 @@ export function addFootballAction(board:Board,request:BallActionRequest):Board {
   const start=b.scenes[i];Object.assign(start,{players:copy(b.players),drawings:[...copy(clean),...copy(ink)],ball:foot(from),duration:request.seconds,ballAction:action});
   const end={...copy(start),id:endId,title:label.slice(0,60),note:label,duration:1,ball:finish,ballAction:undefined,cut:undefined,play:undefined};
   if(request.kind==='through'){const runner=end.players.find(p=>p.uid===to!.uid)!;runner.x=clamp(aim.x-.014*(from.side==='home'?1:-1));runner.y=clamp(aim.y-.012);}
+  const attach=(frame:Frame,id:string)=>{const player=frame.players.find(p=>p.uid===id)!;frame.ball={...frame.ball,carrierId:id,offset:{x:frame.ball.x-player.x,y:frame.ball.y-player.y}};};
+  attach(start, from.uid);
+  if(!shot)attach(end, request.outcome==='intercepted'?interceptor!.uid:to!.uid);
+  if(shot&&request.outcome==='saved'){
+    const keeper=end.players.filter(p=>p.side!==from.side).sort((a,c)=>Math.hypot(a.x-finish.x,a.y-finish.y)-Math.hypot(c.x-finish.x,c.y-finish.y))[0];
+    if(keeper)attach(end,keeper.uid);
+  }
   b.scenes.splice(i+1,0,end);b.activeScene=end.id;b.players=copy(end.players);b.drawings=copy(end.drawings);b.ball=copy(end.ball);b.settings.ballVisible=true;
   return b;
 }

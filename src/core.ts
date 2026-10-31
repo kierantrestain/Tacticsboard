@@ -1,4 +1,6 @@
 import { isFootballAction } from "./studio/footballActionTypes";
+import { resolvedBall, validBall } from './studio/possession';
+import { motionPoint, validMotion } from './studio/motion';
 import { isPlayPhase } from "./studio/playbookTypes";
 import { isReportRecreation } from "./football/recreationTypes";
 import { emptyStudio, isStudioDocument } from "./studio/types";
@@ -283,6 +285,7 @@ export function catalogueWithBoardTeams(
     : { ...catalogue, teams };
 }
 export function syncScene(board: Board) {
+  board.ball = resolvedBall(board);
   const s = board.scenes.find((s) => s.id === board.activeScene);
   if (s) {
     s.players = copy(board.players);
@@ -298,22 +301,27 @@ export function frameAt(board: Board, time: number): Frame {
     const a = scenes[i],
       b = scenes[i + 1];
     if (!b || time < start + a.duration) {
-      if (!b || b.cut) return { players: a.players, drawings: a.drawings, ball: a.ball };
+      if (!b || b.cut) return { players: a.players, drawings: a.drawings, ball: resolvedBall(a) };
       const f = Math.max(0, Math.min(1, (time - start) / a.duration));
-      const t = f * f * (3 - 2 * f);
-      return {
+      const t = b.motion?.easing === 'linear' ? f : f * f * (3 - 2 * f);
+      const startBall=resolvedBall(a),endBall=resolvedBall(b);
+      const frame: Frame = {
         players: a.players.map((p) => {
           const q = b.players.find((q) => q.uid === p.uid);
           return q
-            ? { ...p, x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t }
+            ? { ...p, ...motionPoint(p, q, t, b.motion?.curves[p.uid] || 0) }
             : p;
         }),
         drawings: f > 0.85 ? b.drawings : a.drawings,
         ball: {
-          x: a.ball.x + (b.ball.x - a.ball.x) * t,
-          y: a.ball.y + (b.ball.y - a.ball.y) * t,
+          x: startBall.x + (endBall.x - startBall.x) * t,
+          y: startBall.y + (endBall.y - startBall.y) * t,
         },
       };
+      if (!a.ballAction && a.ball.carrierId && a.ball.carrierId === b.ball.carrierId) {
+        frame.ball = resolvedBall({ players: frame.players, ball: a.ball });
+      }
+      return frame;
     }
     start += a.duration;
   }
@@ -427,7 +435,7 @@ export function isBoard(value: unknown): value is Board {
         }))) &&
     validPlayers(b.players) &&
     validDrawings(b.drawings) &&
-    point(b.ball) &&
+    point(b.ball) && validBall(b.ball,b.players) &&
     Array.isArray(b.scenes) &&
     b.scenes.length >= 1 &&
     b.scenes.length <= 100 &&
@@ -443,13 +451,16 @@ export function isBoard(value: unknown): value is Board {
         s.duration <= 60 &&
         validPlayers(s.players) &&
         validDrawings(s.drawings) &&
-        point(s.ball) && (s.ballAction === undefined || isFootballAction(s.ballAction)) && (s.cut === undefined || typeof s.cut === 'boolean') && (s.play === undefined || isPlayPhase(s.play)),
+        point(s.ball) && validBall(s.ball,s.players) &&
+        validMotion(s) &&
+        (s.ballAction === undefined || isFootballAction(s.ballAction)) && (s.cut === undefined || typeof s.cut === 'boolean') && (s.play === undefined || isPlayPhase(s.play)),
     ) &&
     !!b.settings &&
     ["studio", "grass", "light"].includes(b.settings.theme) &&
     ["top", "angle"].includes(b.settings.camera) &&
     ["full", "left", "right"].includes(b.settings.view) &&
     ["disc", "shirt"].includes(b.settings.tokenStyle) &&
+    (b.settings.passingLanes === undefined || typeof b.settings.passingLanes === 'boolean') &&
     (b.settings.markerScale === undefined ||
       (Number.isFinite(b.settings.markerScale) &&
         b.settings.markerScale >= 0.7 &&

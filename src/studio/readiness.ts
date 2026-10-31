@@ -2,6 +2,7 @@ import type { Board } from "../types";
 import type { MediaAsset, RundownCue, ViewMode } from "./types";
 import { cueBoard } from "./cueModel";
 import { statCardRows } from "../football/reportTools";
+import { validComparison } from '../football/comparisonModel';
 
 export interface ReadinessIssue {
   code: string;
@@ -69,7 +70,8 @@ export function inspectView(
       message:
         "Rebuild this tracking sequence: observations or player identities are missing.",
     });
-  if (view === "stats") {
+  if(view==='stats'&&d?.comparison&&(!validComparison(d.comparison)||!d.comparison.fields.length))issues.push({code:'invalid-comparison',level:'block',message:'Choose two to five entries and at least one statistic.'});
+  if (view === "stats"&&!d?.comparison) {
     const report =
       d?.statsSnapshot ||
       (d?.statsReportId ? d.dataReports?.[d.statsReportId] : undefined);

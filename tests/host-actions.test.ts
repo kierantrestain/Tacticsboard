@@ -45,3 +45,13 @@ it('plays from the selected step and keeps restart as a full-sequence replay',()
  executeHostCommand({type:'play'});expect(state.studio.set).toHaveBeenCalledWith({playing:true,playhead:b.scenes[0].duration});
  executeHostCommand({type:'restart'});expect(state.studio.set).toHaveBeenCalledWith({playing:true,playhead:0});
 });
+
+it('assigns and releases possession on the tablet and keeps the carried ball in a unit move',()=>{
+ const b=state.studio.board,p=b.players.find((p:any)=>p.side==='home'&&!/goalkeep/i.test(p.position||''));executeHostCommand({type:'possession',playerId:p.uid});expect(b.ball.carrierId).toBe(p.uid);const offset=b.ball.x-p.x;
+ executeHostCommand({type:'unit-move',action:{ids:[p.uid],operation:'forward',direction:'right'}});expect(b.ball.x-b.players.find((q:any)=>q.uid===p.uid).x).toBeCloseTo(offset);
+ executeHostCommand({type:'possession',playerId:null});expect(b.ball.carrierId).toBeUndefined();expect(()=>executeHostCommand({type:'possession',playerId:'missing'})).toThrow('Choose a player');
+});
+it('validates and saves actual run curves through the shared controller command',()=>{
+ const next=createMovement(state.studio.board);state.studio.board=next;const id=next.players[1].uid;executeHostCommand({type:'motion',easing:'linear',cut:false,playerId:id,curve:.5});expect(next.scenes[1].motion).toEqual({easing:'linear',curves:{[id]:.5}});expect(()=>executeHostCommand({type:'motion',easing:'linear',cut:false,playerId:id,curve:Infinity})).toThrow('valid movement');
+ state.runtime.movementDraft={sceneId:next.activeScene};expect(()=>executeHostCommand({type:'sequence-edit',id:next.activeScene,action:'duplicate'})).toThrow('Finish');
+});

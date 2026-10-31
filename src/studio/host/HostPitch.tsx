@@ -6,6 +6,8 @@ import type { HostCommand } from './protocol';
 import { translateGroup } from '../teamMovement';
 import { pitchFrame } from '../pitchFrame';
 import { playerNameOffsets } from '../labelLayout';
+import { resolvedBall } from '../possession';
+import { analysisFrame } from '../tactics';
 export type TouchTool = 'move' | 'pen' | 'arrow' | 'run' | 'ellipse' | 'zone' | 'erase';
 const x = (n: number) => 65 + n * 1070, y = (n: number) => 48 + n * 664;
 function Shape({ d }: { d: Drawing }) {
@@ -70,7 +72,8 @@ export default function HostPitch({ board, frame, tool, selected, setSelected, s
   const cancel = () => { if (gesture.current?.positions.length) send({ type: 'cancel-gesture' }); gesture.current = null; setGhost([]); setDraft(null); };
   const crop = pitchFrame(board.settings.view);
   const viewBox = footage ? `0 0 1200 ${mediaHeight}` : `${crop.x} ${crop.y} ${crop.width} ${crop.height}`;
-  const ball = ghost.find(p => p.id === 'ball') || frame.ball;
+  const ball = ghost.find(p => p.id === 'ball') || resolvedBall({players:frame.players.map(p=>({...p,...ghost.find(q=>q.id===p.uid)})),ball:frame.ball});
+  const guideFrame=analysisFrame(board,{...frame,ball,players:frame.players.map(p=>({...p,...ghost.find(q=>q.id===p.uid)}))});
   const visiblePlayers=frame.players.filter(p=>p.side==='home'?board.settings.homeVisible:board.settings.awayVisible);
   const labelOffsets=playerNameOffsets(visiblePlayers.map(p=>({...p,...ghost.find(q=>q.id===p.uid)})));
   return <svg ref={svg} className={`host-pitch tool-${tool}`} viewBox={viewBox} role="application" aria-label={footage ? 'Mark the paused footage' : 'Touch tactical board. Select or drag a player.'} onPointerDown={down} onPointerMove={e => move(e)} onPointerUp={e => move(e, true)} onPointerCancel={cancel}>
@@ -81,13 +84,13 @@ export default function HostPitch({ board, frame, tool, selected, setSelected, s
       <g fill="#c4d4cf" opacity=".8"><circle cx="600" cy="380" r="3"/><circle cx="175" cy="380" r="3"/><circle cx="1025" cy="380" r="3"/></g>
       {board.settings.lanes && [.2,.4,.6,.8].map(n => <path key={n} d={`M65 ${y(n)}H1135`} stroke="#dfff81" opacity=".22" strokeDasharray="9 8"/>)}
       {board.settings.thirds && [1/3,2/3].map(n => <path key={n} d={`M${x(n)} 48V712`} stroke="#dfff81" opacity=".22" strokeDasharray="9 8"/>)}
-      {frame.drawings.map(d => <Shape key={d.id} d={d}/>)}
+      {guideFrame.drawings.map(d => <Shape key={d.id} d={d}/>)}
       {frame.players.filter(p => p.side === 'home' ? board.settings.homeVisible : board.settings.awayVisible).map(p => { const position = ghost.find(q => q.id === p.uid) || p, active = selected.includes(p.uid), name = shortName(p.name); return <g key={p.uid} data-player={p.uid} transform={`translate(${x(position.x)},${y(position.y)})`} opacity={board.settings.focusPlayer && board.settings.focusPlayer !== p.uid ? .25 : 1}>
-        <circle r="39" fill="transparent"/>{active && <circle r="30" stroke="#dfff81" strokeWidth="2.5" strokeDasharray="3 4" fill="none"/>}<circle cy="4" r="23" fill="#070d10" opacity=".4"/><circle r="23" fill={board.colors[p.side]} stroke="#ffffffb0" strokeWidth="2"/>
+        <circle r="39" fill="transparent"/>{(active||frame.ball.carrierId===p.uid) && <circle r="30" stroke="#dfff81" strokeWidth="2.5" strokeDasharray={frame.ball.carrierId===p.uid?'4 5':undefined} fill="none"/>}<circle cy="4" r="23" fill="#070d10" opacity=".4"/><circle r="23" fill={board.colors[p.side]} stroke="#ffffffb0" strokeWidth="2"/>
         {board.settings.numbers && <text textAnchor="middle" y="7" fontSize="21" fontWeight="750" fill="#fff" stroke="#000" strokeWidth=".4" paintOrder="stroke">{p.number}</text>}
         {board.settings.names && <g transform={`translate(0,${labelOffsets.get(p.uid)||0})`}><rect x={-Math.min(63, name.length * 3.8 + 8)} y="28" width={Math.min(126, name.length * 7.6 + 16)} height="21" rx="6" fill="#0a151bf0"/><text textAnchor="middle" y="44" fill="#f7faf9" fontSize="15" fontWeight="600">{name.length > 17 ? name.slice(0,16) + '…' : name}</text></g>}
       </g>; })}
-      {board.settings.ballVisible !== false && <g data-player="ball" transform={`translate(${x(ball.x)},${y(ball.y)})`}><circle r="31" fill="transparent"/><circle r="10" fill="#fff" stroke="#070d10" strokeWidth="2"/><circle r="3.5" fill="#243a3d"/>{selected.includes('ball') && <circle r="17" stroke="#dfff81" fill="none" strokeWidth="2"/>}</g>}
+      {board.settings.ballVisible !== false && <g data-player="ball" transform={`translate(${x(ball.x)},${y(ball.y)})`}><circle r={frame.ball.carrierId?12:31} fill="transparent"/><circle r="10" fill="#fff" stroke="#070d10" strokeWidth="2"/><circle r="3.5" fill="#243a3d"/>{selected.includes('ball') && <circle r="17" stroke="#dfff81" fill="none" strokeWidth="2"/>}</g>}
     </>}
     {draft && (footage ? <g transform={`translate(${-65*1200/1070},${-48*mediaHeight/664}) scale(${1200/1070},${mediaHeight/664})`}><Shape d={draft}/></g> : <Shape d={draft}/>)}
   </svg>;

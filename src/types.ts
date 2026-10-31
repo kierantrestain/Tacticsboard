@@ -195,9 +195,16 @@ export interface Drawing {
 export interface Frame {
   players: BoardPlayer[];
   drawings: Drawing[];
-  ball: { x: number; y: number };
+  ball: BallState;
+}
+export interface BallState {
+  x: number;
+  y: number;
+  carrierId?: string;
+  offset?: { x: number; y: number };
 }
 export interface Scene extends Frame {
+  motion?: { easing: 'smooth' | 'linear'; curves: Record<string, number> };
   cut?: boolean;
   play?: PlayPhase;
   ballAction?: FootballAction;
@@ -252,6 +259,7 @@ export interface Board extends Frame {
     mediaVisible: boolean;
     tokenStyle: "disc" | "shirt";
     ballVisible?: boolean;
+    passingLanes?: boolean;
     thirds?: boolean;
     teamShape?: boolean;
     teamLines?: boolean;

@@ -16,10 +16,21 @@ import { newBoard } from "../src/core";
 import catalogue from "../public/data/catalogue.json";
 import type { Team } from "../src/types";
 import type { MediaAsset } from "../src/studio/types";
+import { giveBall } from '../src/studio/possession';
+import { syncScene, copy } from '../src/core';
+import { freezeComparison } from '../src/football/comparisonModel';
 import { makeCue } from "../src/studio/cueModel";
 import { addCounterattack, moveUnit, unitPlayers } from '../src/studio/teamMovement';
 import { buildPlay } from '../src/studio/playbook';
 describe("portable analysis handoff", () => {
+  it('round-trips ball ownership, curved runs and a five-team graphic with its full statistics',async()=>{
+    const board=newBoard(catalogue.teams[0] as unknown as Team,catalogue.teams[1] as unknown as Team);giveBall(board,board.players[1].uid);syncScene(board);
+    const end=copy(board.scenes[0]);end.id='run-end';end.players[1].x+=.2;end.motion={easing:'linear',curves:{[board.players[1].uid]:.5}};board.scenes.push(end);
+    board.studio!.comparison=freezeComparison({kind:'teams',title:'Five clubs',scope:'Premier League 2026/27',source:'ESPN',basis:'totals',fields:['points'],entities:Array.from({length:5},(_,i)=>({id:String(i),name:`Club ${i}`,stats:{points:{label:'Points',value:i*3},extra:{label:'Another statistic',value:10+i}}}))});
+    board.studio!.cues=[makeCue(board,'board','broadcast',0),makeCue(board,'stats','broadcast',0)];
+    const packed=await exportPack(board,[]),restored=await importPack(new File([packed.blob],'upgrade.touchline.zip'));
+    expect(restored.ball.carrierId).toBe(board.players[1].uid);expect(restored.scenes[1].motion).toEqual(end.motion);expect(restored.studio!.comparison).toEqual(board.studio!.comparison);expect(restored.studio!.cues![1].comparison!.entities).toHaveLength(5);expect(restored.studio!.cues![1].comparison!.entities[0].stats.extra.value).toBe(10);
+  });
   it('retains named set-piece roles, cuts and complete phases in the exported project',async()=>{
     const original=newBoard(catalogue.teams[0] as unknown as Team,catalogue.teams[1] as unknown as Team),players=original.players.filter(p=>p.side==='home');
     const board=buildPlay(original,{id:'corner',side:'home',direction:'left',flank:'bottom',pattern:'short',marking:'man',wallSize:3,seconds:4,mode:'sequence',takerId:players[1].uid,receiverId:players[5].uid,goalTarget:'centre',guides:true});
