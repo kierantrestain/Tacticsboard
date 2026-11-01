@@ -184,6 +184,9 @@ export interface BoardPlayer {
   opacity?: number;
 }
 export interface Drawing {
+  hidden?: boolean;
+  curve?: number;
+  textScale?: number;
   id: string;
   type: Exclude<Tool, "select" | "erase">;
   points: number[];
@@ -193,6 +196,7 @@ export interface Drawing {
   text?: string;
 }
 export interface Frame {
+  hideBall?: boolean;
   players: BoardPlayer[];
   drawings: Drawing[];
   ball: BallState;

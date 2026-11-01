@@ -31,7 +31,7 @@ export function appendTrackingPhases(
     players: frame.points.flatMap((p) => {
       const target = sequence.targets.find((t) => t.id === p.id);
       if (
-        !target ||
+        !target || p.rejected ||
         p.pitch.x < 0 ||
         p.pitch.x > 1 ||
         p.pitch.y < 0 ||

@@ -62,6 +62,7 @@ export function takeToAir({ capture = true }: { capture?: boolean } = {}) {
   });
   const cue = cues?.find((c) => c.id === r.activeCueId);
   return publish({
+    assetRevision:r.assets.find(a=>a.id===board.studio?.assetId)?.revision||0,
     report:
       r.view === "stats"
         ? copy(

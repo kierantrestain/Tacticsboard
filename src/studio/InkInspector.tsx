@@ -28,6 +28,11 @@ export default function InkInspector() {
               <span>{selected.type.toUpperCase()}</span>
               <strong>Selected graphic</strong>
             </div>
+            <button className="film-button" aria-pressed={!selected.hidden} onClick={()=>editDesk(d=>{const ink=d.ink[id!].find(i=>i.id===selected.id)!;ink.hidden=!ink.hidden;})}>{selected.hidden?'Show this graphic':'Hide this graphic'}</button>
+            <label className="tl-field">Graphic style<select aria-label="Annotation style preset" defaultValue="custom" onChange={e=>editDesk(d=>{const i=d.ink[id!].find(i=>i.id===selected.id)!;const style=({lime:{color:'#dfff81',width:4,opacity:1},cyan:{color:'#63d9db',width:4,opacity:1},white:{color:'#ffffff',width:3,opacity:1},space:{color:'#dfff81',width:2,opacity:.4}} as const)[e.target.value as 'lime'];if(style)Object.assign(i,style);})}><option value="custom">Custom</option><option value="lime">Broadcast lime</option><option value="cyan">Broadcast cyan</option><option value="white">Clean white</option><option value="space">Subtle space</option></select></label>
+            {['arrow','run'].includes(selected.type)&&selected.points.length===4&&<label className="tl-range-label">Arrow curve<input type="range" aria-label="Annotation curve" min="-1" max="1" step=".05" value={selected.curve||0} onChange={e=>editDesk(d=>{d.ink[id!].find(i=>i.id===selected.id)!.curve=+e.target.value;})}/></label>}
+            {selected.type==='text'&&<label className="tl-range-label">Label size<input type="range" aria-label="Annotation text size" min=".5" max="3" step=".1" value={selected.textScale||1} onChange={e=>editDesk(d=>{d.ink[id!].find(i=>i.id===selected.id)!.textScale=+e.target.value;})}/></label>}
+            <p className="tl-small-note">Drag the graphic to move it. Use its corner handles to resize. Layer edits remain undoable.</p>
             {selected.type === "text" && (
               <label className="tl-field">
                 On-screen text

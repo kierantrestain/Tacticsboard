@@ -17,6 +17,7 @@ import {
   Line,
   Arrow,
   Ellipse,
+  Transformer,
 } from "react-konva";
 import type Konva from "konva";
 import type { Board, Drawing } from "../types";
@@ -27,6 +28,8 @@ import { editDesk, useRuntime } from "./runtime";
 import type { MediaAsset, MediaInk, SourceHandle, Point } from "./types";
 import { emptyStudio } from "./types";
 import { homography, invert3, project, sampleTracking } from "./geometry";
+import { defaultPresentation, sourceGeometry, visibleMediaInk, curvedPoints } from './mediaModel';
+import { openFrameReader } from './frameReader';
 const INK = [
   "arrow",
   "run",
@@ -47,6 +50,7 @@ function Ink({
   selected,
   onSelect,
   onMove,
+  onResize,
   distance,
 }: {
   d: Drawing;
@@ -55,9 +59,12 @@ function Ink({
   selected: boolean;
   onSelect?: () => void;
   onMove?: (dx: number, dy: number) => void;
+  onResize?: (points:number[],textScale?:number) => void;
   distance?: string;
 }) {
-  const points = d.points.map((p, i) => p * (i % 2 ? h : w)),
+  const group=useRef<Konva.Group>(null),transformer=useRef<Konva.Transformer>(null);
+  useEffect(()=>{if(selected&&group.current)transformer.current?.nodes([group.current]);},[selected,!!onResize,d.points,d.curve,d.text,d.textScale]);
+  const points = curvedPoints(d).map((p, i) => p * (i % 2 ? h : w)),
     x = points[0],
     y = points[1],
     x2 = points[2] ?? x,
@@ -198,7 +205,7 @@ function Ink({
             x={x + 2}
             y={y + 1}
             text={d.text || "Tactical note"}
-            fontSize={24}
+            fontSize={24*(d.textScale||1)}
             fontStyle="bold"
             fill={d.color}
           />
@@ -207,7 +214,8 @@ function Ink({
       break;
   }
   return (
-    <Group
+    <><Group
+      ref={group}
       opacity={d.opacity}
       draggable={!!onMove}
       onClick={(e) => {
@@ -224,9 +232,10 @@ function Ink({
         e.target.position({ x: 0, y: 0 });
         onMove?.(dx, dy);
       }}
+      onTransformEnd={()=>{const n=group.current;if(!n)return;const sx=n.scaleX(),sy=n.scaleY(),dx=n.x()/w,dy=n.y()/h;const next=d.points.map((p,i)=>p*(i%2?sy:sx)+(i%2?dy:dx));n.scale({x:1,y:1});n.position({x:0,y:0});onResize?.(next,d.type==='text'?Math.max(.5,Math.min(3,(d.textScale||1)*sx)):undefined);}}
     >
       {node}
-    </Group>
+    </Group>{selected&&onResize&&<Transformer ref={transformer} name="calibration-guide" rotateEnabled={false} flipEnabled={false} anchorSize={14} borderStroke="#dfff81" anchorStroke="#dfff81" anchorFill="#172831" boundBoxFunc={(old,next)=>Math.abs(next.width)<12||Math.abs(next.height)<12?old:next}/>}</>
   );
 }
 const MediaStage = forwardRef<
@@ -274,7 +283,12 @@ const MediaStage = forwardRef<
       pinch = useRef(0);
     const w = 1280,
       h = asset ? (1280 * asset.height) / asset.width : 720,
-      scale = Math.min(size.width / w, size.height / h);
+      presentation=asset?desk.sourcePresentations?.[asset.id]||defaultPresentation():defaultPresentation(),
+      geometry=sourceGeometry(w,h,presentation),
+      scale = Math.min(size.width / geometry.width, size.height / geometry.height);
+    const view=useRef<Konva.Group>(null),sourceNode=useRef<Konva.Image>(null),paintSettings=useRef(presentation),reader=useRef<Awaited<ReturnType<typeof openFrameReader>>|null>(null),readerBusy=useRef(false),heldFrame=useRef<HTMLCanvasElement|null>(null),[held,setHeld]=useState<HTMLCanvasElement|null>(null),filtered=useRef<HTMLCanvasElement|null>(null);
+    paintSettings.current=presentation;
+    const paint=()=>{if(!element)return;const p=paintSettings.current;if(!p.original&&(p.brightness!==1||p.contrast!==1)){const c=filtered.current||document.createElement('canvas');if(!filtered.current){c.width=Math.min(asset?.width||1280,1920);c.height=Math.round(c.width*h/w);filtered.current=c;}const ctx=c.getContext('2d')!;ctx.filter=`brightness(${p.brightness}) contrast(${p.contrast})`;ctx.drawImage(heldFrame.current||element,0,0,c.width,c.height);sourceNode.current?.image(c);}else sourceNode.current?.image(heldFrame.current||element);};
     const video = element instanceof HTMLVideoElement ? element : null;
     const capture = () => {
       if (!element) return null;
@@ -282,13 +296,14 @@ const MediaStage = forwardRef<
       c.width = asset?.width || 1280;
       c.height = asset?.height || 720;
       try {
-        c.getContext("2d")!.drawImage(element, 0, 0, c.width, c.height);
+        c.getContext("2d")!.drawImage(heldFrame.current||element, 0, 0, c.width, c.height);
         return c;
       } catch {
         return null;
       }
     };
     const seek = async (t: number) => {
+      heldFrame.current=null;setHeld(null);
       if (!video) {
         if (!program) r.set({ time: t });
         return;
@@ -296,7 +311,7 @@ const MediaStage = forwardRef<
       const target = Math.max(0, Math.min((asset?.duration || 1) - 0.001, t));
       if (!program) r.set({ time: target, mediaPlaying: false });
       video.pause();
-      if (Math.abs(video.currentTime - target) < 0.002) {
+      if (Math.abs(video.currentTime - target) < 0.002 && !video.seeking && video.readyState>=2) {
         stage.current?.draw();
         return;
       }
@@ -315,25 +330,39 @@ const MediaStage = forwardRef<
         video.currentTime = target;
       });
     };
+    const step=async(direction:number)=>{
+      if(!video||!asset)return {time,exact:false};
+      if(readerBusy.current)throw Error('Wait for the current frame to decode.');readerBusy.current=true;
+      r.set({mediaPlaying:false,reverseReview:false});
+      try{if(!reader.current){const blob=await getMedia(asset.id);if(!blob)throw Error('Source missing.');reader.current=await openFrameReader(blob);}const frame=await reader.current.step(video.currentTime,direction);if(frame){await seek(frame.time+.000001);heldFrame.current=frame.canvas;setHeld(frame.canvas);r.set({time:frame.time});return {time:frame.time,exact:true};}}
+      catch {reader.current?.close();reader.current=null;}
+      finally{readerBusy.current=false;}
+      const target=Math.max(0,Math.min(asset.duration-.001,video.currentTime+direction/(asset.measuredFps||asset.fps||25)));await seek(target);return {time:target,exact:false};
+    };
     useImperativeHandle(
       ref,
       () => ({
         capture,
+        step,
         composite: () => {
+          paint();
           const helpers = stage.current?.find(".calibration-guide") || [];
           helpers.forEach((n) => n.hide());
+          const transform=view.current?{...view.current.getAttrs()}:undefined;
+          view.current?.setAttrs({x:geometry.width/2,y:geometry.height/2,scaleX:1,scaleY:1});
           stage.current?.draw();
           const out =
             stage.current?.toCanvas({ pixelRatio: 1 / Math.max(0.1, scale) }) ||
             null;
           helpers.forEach((n) => n.show());
+          if(transform)view.current?.setAttrs(transform);
           stage.current?.draw();
           return out;
         },
         seek,
         element: () => element,
       }),
-      [element, asset, scale],
+      [element, asset, scale, board, held],
     );
     useEffect(() => {
       const el = holder.current;
@@ -349,6 +378,8 @@ const MediaStage = forwardRef<
       let live = true,
         url: string | undefined;
       setElement(null);
+      heldFrame.current=null;setHeld(null);filtered.current=null;
+      reader.current?.close();reader.current=null;
       setError("");
       if (!asset) return;
       getMedia(asset.id)
@@ -382,13 +413,23 @@ const MediaStage = forwardRef<
         .catch((e) => setError(e.message));
       return () => {
         live = false;
+        reader.current?.close();reader.current=null;
         if (url) URL.revokeObjectURL(url);
       };
-    }, [asset?.id]);
+    }, [asset?.id,asset?.revision]);
+    useEffect(()=>{paint();stage.current?.batchDraw();},[element,presentation.brightness,presentation.contrast,presentation.original,held]);
+    useEffect(()=>{if(playing){heldFrame.current=null;setHeld(null);}},[playing]);
+    useEffect(()=>{
+      if(program||!r.reverseReview||!video||!asset)return;
+      let cancelled=false,timer:ReturnType<typeof setTimeout>;
+      const backwards=async()=>{if(cancelled)return;const next=Math.max(desk.trim.start,video.currentTime-.08*Math.max(.25,rate));try{await seek(next);paint();stage.current?.draw();}catch{r.set({reverseReview:false});return;}if(cancelled)return;if(next<=desk.trim.start+.001){r.set({reverseReview:false});return;}timer=setTimeout(()=>void backwards(),80);};
+      void backwards();return()=>{cancelled=true;clearTimeout(timer);};
+    },[r.reverseReview,video,asset?.id,desk.trim.start,rate,program]);
     useEffect(() => {
       if (!video) return;
       let presented = 0;
       const redraw = () => {
+        paint();
         stage.current?.draw();
         if (video.requestVideoFrameCallback) {
           if (presented) video.cancelVideoFrameCallback(presented);
@@ -434,6 +475,7 @@ const MediaStage = forwardRef<
       const visited = new Set(stops.filter(p=>p.time<video.currentTime-.08).map(p=>p.id));
       const draw = () => {
         if (playing) {
+          paint();
           stage.current?.batchDraw();
           if (!program) {
             const now=performance.now();
@@ -444,7 +486,7 @@ const MediaStage = forwardRef<
               heldUntil=0;r.set({mediaHolding:false});void video.play().catch(()=>r.set({mediaPlaying:false}));
             }
             const stop=stops.find(p=>!visited.has(p.id) && video.currentTime>=p.time);
-            if(stop){visited.add(stop.id);video.pause();video.currentTime=stop.time;lastSourceTime=stop.time;heldUntil=now+stop.hold*1000/Math.max(.1,rate);r.set({time:stop.time,mediaHolding:true});stage.current?.batchDraw();raf=requestAnimationFrame(draw);return;}
+            if(stop){visited.add(stop.id);video.pause();video.currentTime=stop.time;lastSourceTime=stop.time;heldUntil=now+stop.hold*1000;r.set({time:stop.time,mediaHolding:true});stage.current?.batchDraw();raf=requestAnimationFrame(draw);return;}
             const end = Math.min(asset?.duration || Infinity, desk.trim.end);
             if (video.currentTime >= end - 0.025) {
               if (r.loopClip) {video.currentTime = desk.trim.start;visited.clear();}
@@ -490,8 +532,7 @@ const MediaStage = forwardRef<
         ).map
       : homography(landmarks) || undefined;
     const visibleInk = asset
-      ? (desk.ink[asset.id] || [])
-          .filter((d) => time >= d.from - 0.03 && time <= d.to + 0.03)
+      ? visibleMediaInk(desk.ink[asset.id] || [],time,presentation)
           .map((d) => imageInk(d, hmap))
           .filter((d): d is MediaInk => !!d)
       : [];
@@ -551,6 +592,7 @@ const MediaStage = forwardRef<
       }
       if (s.tool === "erase") return;
       if (!INK.includes(s.tool)) return;
+      if(presentation.original||!presentation.annotations)editDesk(d=>{const p=(d.sourcePresentations||={})[asset.id]||=defaultPresentation();p.original=false;p.annotations=true;});
       const d: MediaInk = {
         id: uid(),
         assetId: asset.id,
@@ -564,7 +606,7 @@ const MediaStage = forwardRef<
       };
       if (s.tool === "text") {
         d.points = [p.x, p.y];
-        d.text = "Tactical note";
+        d.text = r.annotationText||"Tactical note";
         commitInk(d);
         s.set({ tool: "select" });
         return;
@@ -696,8 +738,8 @@ const MediaStage = forwardRef<
         ) : (
           <Stage
             ref={stage}
-            width={Math.max(1, w * scale)}
-            height={Math.max(1, h * scale)}
+            width={Math.max(1, geometry.width * scale)}
+            height={Math.max(1, geometry.height * scale)}
             scaleX={scale}
             scaleY={scale}
             onMouseDown={down}
@@ -720,27 +762,29 @@ const MediaStage = forwardRef<
           >
             <Layer>
               <Group
-                ref={work}
-                x={w / 2 + (program ? 0 : r.pan.x * w)}
-                y={h / 2 + (program ? 0 : r.pan.y * h)}
-                offsetX={w / 2}
-                offsetY={h / 2}
+                ref={view}
+                x={geometry.width / 2 + (program ? 0 : r.pan.x * geometry.width)}
+                y={geometry.height / 2 + (program ? 0 : r.pan.y * geometry.height)}
+                offsetX={geometry.width / 2}
+                offsetY={geometry.height / 2}
                 scaleX={program ? 1 : r.zoom}
                 scaleY={program ? 1 : r.zoom}
                 draggable={!program && r.panMode}
                 onDragEnd={(e) =>
                   r.set({
                     pan: {
-                      x: (e.target.x() - w / 2) / w,
-                      y: (e.target.y() - h / 2) / h,
+                      x: (e.target.x() - geometry.width / 2) / geometry.width,
+                      y: (e.target.y() - geometry.height / 2) / geometry.height,
                     },
                   })
                 }
               >
+              <Group ref={work} x={geometry.x} y={geometry.y} offsetX={geometry.offsetX} offsetY={geometry.offsetY} rotation={geometry.rotation} clipX={geometry.offsetX} clipY={geometry.offsetY} clipWidth={w*geometry.crop.width} clipHeight={h*geometry.crop.height}>
                 {element && (
                   <KImage
+                    ref={sourceNode}
                     name="source-image"
-                    image={element}
+                    image={held||element}
                     width={w}
                     height={h}
                   />
@@ -754,6 +798,7 @@ const MediaStage = forwardRef<
                     selected={!program && r.selectedInk === d.id}
                     distance={distance(d)}
                     onSelect={program ? undefined : () => selectInk(d)}
+                    onResize={!program&&s.tool==='select'?(points,textScale)=>editDesk(b=>{const old=b.ink[d.assetId].find(i=>i.id===d.id);if(!old)return;old.points=old.space==='pitch'&&hmap?points.flatMap((_,i)=>i%2?[]:Object.values(project(hmap,{x:points[i],y:points[i+1]}))):points;if(textScale)old.textScale=textScale;}):undefined}
                     onMove={
                       !program && s.tool === "select"
                         ? (dx, dy) =>
@@ -826,12 +871,13 @@ const MediaStage = forwardRef<
                       />
                     </Group>
                   ))}
-                {(desk.showTracking ||
+                {!presentation.original && (desk.showTracking ||
                   (!program && r.sidebar === "reconstruct")) &&
                   targets.map((t) => {
                     const p = tracked.find((p) => p.id === t.id),
                       pos = p?.image || t.image,
                       c = p?.review ? "#ffb961" : board.colors[t.side];
+                    if(sequence&&!p)return null;
                     const x = pos.x * w,
                       y = pos.y * h;
                     return (
@@ -919,7 +965,7 @@ const MediaStage = forwardRef<
                       </Group>
                     );
                   })}
-              </Group>
+              </Group></Group>
             </Layer>
           </Stage>
         )}

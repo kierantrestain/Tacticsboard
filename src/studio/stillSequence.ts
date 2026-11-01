@@ -26,7 +26,7 @@ export function buildStillSequence(
     const players = frame.points
       .filter(
         (p) =>
-          p.pitch.x >= 0 && p.pitch.x <= 1 && p.pitch.y >= 0 && p.pitch.y <= 1,
+          !p.rejected && p.pitch.x >= 0 && p.pitch.x <= 1 && p.pitch.y >= 0 && p.pitch.y <= 1,
       )
       .map((p) => {
         const target = sequence.targets.find((t) => t.id === p.id);
@@ -58,11 +58,11 @@ export function buildStillSequence(
       note: `Source: ${asset.name}. Movement between these stills is illustrative, not measured tracking.`,
       source: {
         assetId: id,
-        time: frame.time,
+        time: asset.referenceTime ?? asset.sourceTime ?? frame.time,
         review: frame.points.some((p) => p.review),
       },
       players,
-      drawings: [],
+      drawings: (desk.ink[id]||[]).filter(i=>i.space==='pitch'&&!i.hidden).map(i=>({...i,id:uid()})),
       ball: { x: 0.5, y: 0.5 },
     };
   });

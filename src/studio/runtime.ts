@@ -9,7 +9,11 @@ import type {
 import { emptyStudio } from "./types";
 import { useStudio } from "../store";
 import type { Board } from "../types";
+import { setLiveFollow } from './production';
 interface Runtime {
+  pendingFiles: File[];
+  annotationText: string;
+  reverseReview: boolean;
   multiSelect: boolean;
   ballActionKind: import("./footballActionTypes").BallActionKind | null;
   ballTargetPicking: boolean;
@@ -43,7 +47,7 @@ interface Runtime {
   outputAck: { id: string; black: boolean; thumbnail?: string } | null;
   assetAvailability: Record<string, boolean>;
   cueClock: { startedAt: number | null; elapsed: number };
-  modal: "export" | "projects" | "shortcuts" | "commands" | null;
+  modal: "export" | "projects" | "shortcuts" | "commands" | "media" | null;
   presenter: boolean;
   follow: boolean;
   program: ProgramSnapshot | null;
@@ -59,6 +63,9 @@ interface Runtime {
   set: (v: Partial<Runtime>) => void;
 }
 export const useRuntime = create<Runtime>((set) => ({
+  pendingFiles: [],
+  annotationText: "Tactical note",
+  reverseReview: false,
   multiSelect: false,
   ballActionKind:null,
   ballTargetPicking:false,
@@ -128,6 +135,8 @@ export function getDesk() {
   return useStudio.getState().board?.studio || emptyStudio();
 }
 export function selectAsset(asset: MediaAsset) {
+  const changed=getDesk().assetId!==asset.id;
+  setLiveFollow(false);
   editDesk((d) => {
     if (d.assetId) (d.sourceRanges ||= {})[d.assetId] = { ...d.trim };
     d.assetId = asset.id;
@@ -139,6 +148,7 @@ export function selectAsset(asset: MediaAsset) {
     d.fps = asset.fps;
   });
   useRuntime.setState({
+    activeCueId:changed?null:useRuntime.getState().activeCueId,
     view: "footage",
     time: getDesk().trim.start,
     mediaPlaying: false,
@@ -146,6 +156,10 @@ export function selectAsset(asset: MediaAsset) {
     zoom: 1,
     pan: { x: 0, y: 0 },
     selectedInk: null,
-    sidebar: "media",
+    sidebar: "tactics",
+    reverseReview: false,
+    markMode:'none',
+    panMode:false,
   });
+  if(changed)useStudio.getState().set({tool:'select',selected:[],selectedShape:null,playing:false,previewTime:null});
 }

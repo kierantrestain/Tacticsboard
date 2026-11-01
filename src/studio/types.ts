@@ -6,6 +6,8 @@ import type { ExplainStop } from './filmPlan';
 import { validComparison, type ComparisonSnapshot } from '../football/comparisonModel';
 import { validBall } from './possession';
 import { validMotion } from './motion';
+import { validPresentation, validCameraPose, validGraphicExtras } from './mediaModel';
+import type { SourcePresentation, CameraPose } from './mediaModel';
 export type ViewMode = "board" | "footage" | "split" | "replay" | "stats";
 export type MatchStats = Pick<
   MatchDetails,
@@ -17,6 +19,16 @@ export interface Point {
   y: number;
 }
 export interface MediaAsset {
+  matchId?: string;
+  matchLabel?: string;
+  segment?: string;
+  notes?: string;
+  tags?: string[];
+  referenceTime?: number;
+  fingerprint?: string;
+  revision?: number;
+  measuredFps?: number;
+  timing?: 'estimated' | 'packet-average';
   id: string;
   name: string;
   type: "video" | "image";
@@ -56,6 +68,7 @@ export interface TrackedTarget {
   confidence?: number;
 }
 export interface TrackPoint {
+  rejected?: boolean;
   id: string;
   image: Point;
   pitch: Point;
@@ -109,6 +122,13 @@ export const defaultBroadcast = (): BroadcastStyle => ({
 });
 /** A cue holds a frame, never a nested Board/StudioDocument. */
 export interface RundownCue {
+  phaseTime?: number;
+  sourcePresentation?: SourcePresentation;
+  comparisonView?: '2d' | '3d';
+  cameraPose?: CameraPose;
+  playbackRate?: number;
+  segmentId?: string;
+  segmentTitle?: string;
   comparison?: ComparisonSnapshot;
   statsScroll?: number;
   recreation?: ReportRecreation;
@@ -147,6 +167,11 @@ export interface RundownCue {
   lowerThird: string;
 }
 export interface StudioDocument {
+  sourcePresentations?: Record<string, SourcePresentation>;
+  comparisonView?: '2d' | '3d';
+  cameraPose?: CameraPose;
+  playbackRate?: number;
+  stillOrder?: string[];
   comparison?: ComparisonSnapshot;
   statsScroll?: number;
   explainStops?: Record<string, ExplainStop[]>;
@@ -176,6 +201,7 @@ export interface StudioDocument {
   cues?: RundownCue[];
 }
 export interface ProgramSnapshot {
+  assetRevision?:number;
   phaseTime?: number | null;
   cueId?: string;
   title?: string;
@@ -193,6 +219,7 @@ export interface ProgramSnapshot {
   teams?: { home: string; away: string };
 }
 export interface SourceHandle {
+  step?: (direction: number) => Promise<{time:number;exact:boolean}>;
   capture: () => HTMLCanvasElement | null;
   composite: () => HTMLCanvasElement | null;
   seek: (time: number) => Promise<void>;
@@ -218,6 +245,11 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
     !!x && typeof x === "object" && !Array.isArray(x);
   return (
     d.version === 2 &&
+    (d.sourcePresentations === undefined || record(d.sourcePresentations) && Object.keys(d.sourcePresentations).length<=500 && Object.values(d.sourcePresentations).every(validPresentation)) &&
+    (d.comparisonView === undefined || ['2d','3d'].includes(d.comparisonView)) &&
+    (d.cameraPose === undefined || validCameraPose(d.cameraPose)) &&
+    (d.playbackRate === undefined || [.25,.5,1,1.5,2].includes(d.playbackRate)) &&
+    (d.stillOrder === undefined || Array.isArray(d.stillOrder)&&d.stillOrder.length<=20&&d.stillOrder.every(id=>typeof id==='string')&&new Set(d.stillOrder).size===d.stillOrder.length) &&
     (d.comparison === undefined || validComparison(d.comparison)) &&
     (d.statsScroll === undefined || Number.isFinite(d.statsScroll) && d.statsScroll >= 0 && d.statsScroll <= 1500) &&
     (d.view === undefined ||
@@ -330,6 +362,13 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
             [p.x, p.y].every((n) => Number.isFinite(n) && n >= 0 && n <= 1);
           return (
             !!c &&
+            (c.phaseTime===undefined||Number.isFinite(c.phaseTime)&&c.phaseTime>=0&&c.phaseTime<=6000) &&
+            (c.sourcePresentation === undefined || validPresentation(c.sourcePresentation)) &&
+            (c.comparisonView === undefined || ['2d','3d'].includes(c.comparisonView)) &&
+            (c.cameraPose === undefined || validCameraPose(c.cameraPose)) &&
+            (c.playbackRate === undefined || [.25,.5,1,1.5,2].includes(c.playbackRate)) &&
+            (c.segmentId === undefined || typeof c.segmentId==='string'&&c.segmentId.length<=100) &&
+            (c.segmentTitle === undefined || typeof c.segmentTitle==='string'&&c.segmentTitle.length<=120) &&
             (c.comparison === undefined || validComparison(c.comparison)) &&
             (c.statsScroll === undefined || Number.isFinite(c.statsScroll) && c.statsScroll >= 0 && c.statsScroll <= 1500) &&
             (c.recreation === undefined || isReportRecreation(c.recreation)) &&
@@ -424,6 +463,7 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
             c.frame.drawings.every(
               (i) =>
                 !!i &&
+                validGraphicExtras(i) &&
                 typeof i.id === "string" &&
                 typeof i.color === "string" &&
                 Number.isFinite(i.width) &&
@@ -464,6 +504,7 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
         a.every(
           (x) =>
             !!x &&
+            validGraphicExtras(x) &&
             Array.isArray(x.points) &&
             x.points.length <= 20000 &&
             x.points.every(Number.isFinite) &&

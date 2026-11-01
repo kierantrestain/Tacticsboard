@@ -1,5 +1,5 @@
 import { emptyStudio } from "./types";
-import { frameAt } from "../core";
+import { frameAt, activeSceneTime } from "../core";
 import { useStudio } from "../store";
 import { useRuntime } from "./runtime";
 import { takeToAir } from "./production";
@@ -21,7 +21,7 @@ export function saveCue() {
     b,
     r.view,
     r.camera,
-    r.time,
+    r.view==='board'||r.view==='replay'&&!b.studio?.tracking[b.studio?.assetId||'']?s.previewTime??activeSceneTime(b):r.time,
     s.previewTime === null ? undefined : frameAt(b, s.previewTime),
   );
   cue.thumbnail = captureThumbnail();
@@ -48,12 +48,16 @@ export function recallCue(id: string, take = false) {
   s.commit((board) => Object.assign(board, cueBoard(board, cue)));
   s.set({
     playing: false,
-    previewTime: null,
+    speed: cue.playbackRate||1,
+    previewTime: cue.phaseTime??null,
+    playhead:cue.phaseTime??0,
     selected: [],
     selectedShape: null,
   });
   r.set({
     view: cue.view,
+    rate: cue.playbackRate||1,
+    reverseReview: false,
     camera: cue.camera,
     time: cue.time,
     mediaPlaying: false,
@@ -88,7 +92,7 @@ export function updateCue() {
     b,
     r.view,
     r.camera,
-    r.time,
+    r.view==='board'||r.view==='replay'&&!b.studio?.tracking[b.studio?.assetId||'']?s.previewTime??activeSceneTime(b):r.time,
     s.previewTime === null ? undefined : frameAt(b, s.previewTime),
   );
   current.thumbnail = captureThumbnail();

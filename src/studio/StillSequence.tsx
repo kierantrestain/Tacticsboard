@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { ArrowDown, ArrowUp, Images, Plus } from "lucide-react";
 import { useStudio } from "../store";
-import { useRuntime } from "./runtime";
+import { useRuntime, editDesk } from "./runtime";
 import { emptyStudio } from "./types";
 import { buildStillSequence } from "./stillSequence";
 import { copy } from "../core";
+import { setLiveFollow } from "./production";
 export default function StillSequence() {
   const s = useStudio(),
     r = useRuntime(),
@@ -14,10 +15,16 @@ export default function StillSequence() {
       .sort((a, b) =>
         a.name.localeCompare(b.name, undefined, { numeric: true }),
       );
-  const [order, setOrder] = useState<string[]>([]),
-    [seconds, setSeconds] = useState(1);
+  const order = desk.stillOrder || [],
+    [seconds, setSeconds] = useState(1),
+    [append, setAppend] = useState(false);
+  const persistOrder = (next: string[] | ((old: string[]) => string[])) =>
+    editDesk((d) => {
+      d.stillOrder =
+        typeof next === "function" ? next(d.stillOrder || []) : next;
+    });
   const move = (i: number, delta: number) =>
-    setOrder((old) => {
+    persistOrder((old) => {
       const n = [...old],
         target = i + delta;
       if (target >= 0 && target < n.length)
@@ -48,7 +55,7 @@ export default function StillSequence() {
               disabled={!ready || (!order.includes(a.id) && order.length >= 20)}
               checked={order.includes(a.id)}
               onChange={(e) =>
-                setOrder((old) =>
+                persistOrder((old) =>
                   e.target.checked
                     ? [...old, a.id]
                     : old.filter((id) => id !== a.id),
@@ -108,6 +115,19 @@ export default function StillSequence() {
         />
         <span>sec</span>
       </label>
+      <label className="ts-check">
+        <input
+          type="checkbox"
+          checked={append}
+          onChange={(e) => setAppend(e.target.checked)}
+        />
+        Append to current storyboard
+      </label>
+      <p className="ts-note">
+        {append
+          ? "Adds these phases after your current sequence."
+          : "Starts a new sequence. Saved show moments stay available; undo restores the previous draft."}
+      </p>
       <button
         className="ts-wide-action"
         disabled={order.length < 2}
@@ -122,15 +142,20 @@ export default function StillSequence() {
                   .find((t) => t.id === teamId)
                   ?.players.find((bio) => bio.id === p.playerId)?.position;
               }
-            if ((s.board?.scenes.length || 0) + scenes.length > 100)
+            if (
+              (append ? s.board?.scenes.length || 0 : 0) + scenes.length >
+              100
+            )
               throw Error(
                 "This sequence would exceed the 100-phase storyboard limit.",
               );
+            setLiveFollow(false);
             s.commit((b) => {
-              b.scenes.push(...scenes);
+              if (append) b.scenes.push(...scenes);
+              else b.scenes = scenes;
               b.activeScene = scenes[0].id;
               b.players = copy(scenes[0].players);
-              b.drawings = [];
+              b.drawings = copy(scenes[0].drawings);
               b.ball = { x: 0.5, y: 0.5 };
               b.settings.ballVisible = false;
               b.lineupSource = {
@@ -138,9 +163,21 @@ export default function StillSequence() {
                 away: "Reviewed still sequence",
               };
             });
-            r.set({ view: "board", time: 0, mediaPlaying: false });
+            s.set({
+              playing: false,
+              previewTime: null,
+              selected: [],
+              selectedShape: null,
+            });
+            r.set({
+              view: "board",
+              time: 0,
+              mediaPlaying: false,
+              activeCueId: null,
+              markMode: "none",
+            });
             s.notify(
-              `${scenes.length} source stills added as editable phases · undo available`,
+              `${scenes.length} source stills ${append ? "added" : "prepared"} as editable phases · undo available`,
             );
           } catch (e) {
             r.set({

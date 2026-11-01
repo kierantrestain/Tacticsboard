@@ -12,6 +12,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { Board, Frame } from "../types";
 import type { CameraPreset } from "./types";
 import { analysisFrame } from "./tactics";
+import { useStudio } from '../store';
 export interface ReplayHandle {
   capture: () => HTMLCanvasElement | null;
   renderFrame: (frame: Frame) => HTMLCanvasElement | null;
@@ -149,6 +150,9 @@ const Pitch3D = forwardRef<
     controls.minDistance = 28;
     controls.maxDistance = 180;
     controls.enabled = !program;
+    const pose=current.current.board.studio?.cameraPose;
+    if(pose){camera3.position.set(...pose.position);controls.target.set(...pose.target);camera3.fov=pose.fov;camera3.updateProjectionMatrix();}
+    controls.addEventListener('end',()=>{if(program)return;const position=camera3.position.toArray() as [number,number,number],target=controls.target.toArray() as [number,number,number];useStudio.getState().commit(b=>{if(b.studio)b.studio.cameraPose={position,target,fov:camera3.fov};});});
     const ambient = new THREE.HemisphereLight("#cde7ff", "#15223e", 2.6);
     scene.add(ambient);
     const light = new THREE.DirectionalLight("#eff8ff", 3);
@@ -464,7 +468,7 @@ const Pitch3D = forwardRef<
         item.node.visible =
           p.side === "home" ? b.settings.homeVisible : b.settings.awayVisible;
       }
-      ball.visible = b.settings.ballVisible !== false;
+      ball.visible = b.settings.ballVisible !== false && !f.hideBall;
       camera3.updateMatrixWorld();
       scene.updateMatrixWorld(true);
       const labelRects: {
@@ -664,6 +668,7 @@ const Pitch3D = forwardRef<
     let previousPreset = current.current.camera,
       tween = 0,
       target = new THREE.Vector3(...cameraPositions[previousPreset]);
+    let previousPose=JSON.stringify(current.current.board.studio?.cameraPose);
     controls.addEventListener("start", () => {
       tween = 0;
     });
@@ -686,10 +691,11 @@ const Pitch3D = forwardRef<
         damping = 1 - Math.exp(-Math.min(1, (now - lastRender) / 1000) * 8);
       lastRender = now;
       const next = current.current;
+      const poseKey=JSON.stringify(next.board.studio?.cameraPose);
+      if(poseKey!==previousPose){previousPose=poseKey;const pose=next.board.studio?.cameraPose;if(pose){camera3.position.set(...pose.position);controls.target.set(...pose.target);camera3.fov=pose.fov;camera3.updateProjectionMatrix();tween=0;}}
       if (next.camera !== previousPreset) {
         previousPreset = next.camera;
-        target.set(...cameraPositions[next.camera]);
-        tween = 1;
+        if(!next.board.studio?.cameraPose){target.set(...cameraPositions[next.camera]);tween = 1;}
       }
       if (tween) {
         camera3.position.lerp(target, damping);

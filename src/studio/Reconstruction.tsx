@@ -54,7 +54,7 @@ export default function Reconstruction({
   const map = homography(marks);
   const issues =
     seq?.frames.reduce(
-      (n, f) => n + f.points.filter((p) => p.review).length,
+      (n, f) => n + f.points.filter((p) => p.review&&!p.rejected).length,
       0,
     ) || 0;
   const startFrame = async () => {
@@ -576,6 +576,7 @@ export default function Reconstruction({
             </select>
           </label>
         )}
+        {asset.type==='video'&&d.trim.end-d.trim.start>20&&<p className="tl-small-note">Tracking processes the first 20 seconds of this passage. Shorten the clip range to focus on another moment.</p>}
         <button
           className="tl-primary full"
           disabled={!map || !targets.length || !!r.busy}
@@ -589,6 +590,7 @@ export default function Reconstruction({
         </button>
         {seq && (
           <>
+            <details className="tracking-review-details"><summary>Review sampled observations</summary><p className="tl-small-note">Drag a marker on the source to correct its nearest sampled frame. Reject an uncertain observation to hide it from reconstruction and interpolation.</p><div className="tracking-review-jumps">{seq.frames.filter(f=>f.points.some(p=>p.review&&!p.rejected)).slice(0,16).map(f=><button key={f.time} onClick={()=>r.set({time:f.time,mediaPlaying:false})}>{timecode(f.time)} · {f.points.filter(p=>p.review&&!p.rejected).length} flagged</button>)}</div>{(()=>{const frame=seq.frames.length?seq.frames.reduce((a,b)=>Math.abs(a.time-r.time)<Math.abs(b.time-r.time)?a:b):undefined;if(!frame)return <p>No sampled observations. Track the source again.</p>;return <><strong className="tl-small-note">Sample {timecode(frame.time)} · camera confidence {Math.round(frame.cameraConfidence*100)}%</strong>{frame.points.map(p=><div className="tracking-review-point" key={p.id}><button onClick={()=>r.set({time:frame.time,mediaPlaying:false})}>{seq.targets.find(t=>t.id===p.id)?.name||'Player'}<small>{p.rejected?'Rejected':p.manual?'Manually reviewed':`${Math.round(p.confidence*100)}% tracking confidence`}</small></button><button aria-label={`${p.rejected?'Restore':'Reject'} observation ${p.id}`} onClick={()=>editDesk(d=>{const sample=d.tracking[asset.id].frames.find(f=>f.time===frame.time)!.points.find(q=>q.id===p.id)!;sample.rejected=!sample.rejected;d.tracking[asset.id].reviewed=false;})}>{p.rejected?'Restore':'Reject'}</button></div>)}</>;})()}</details>
             <div className={`tl-quality-card ${issues ? "needs-review" : ""}`}>
               <span>
                 {issues ? (

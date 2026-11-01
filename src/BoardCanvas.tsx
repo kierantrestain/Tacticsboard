@@ -1039,7 +1039,7 @@ const BoardCanvas = forwardRef<
                 );
               })}
             <Group
-              visible={board.settings.ballVisible !== false}
+              visible={board.settings.ballVisible !== false && !frame.hideBall}
               x={sx(frame.ball.x)}
               y={sy(frame.ball.y)}
               draggable={!program && tool === "select" && !playing && !multiSelect && !useRuntime.getState().ballTargetPicking}

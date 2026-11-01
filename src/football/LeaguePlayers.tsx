@@ -114,7 +114,7 @@ export default function LeaguePlayers({
           player: p,
         })),
       );
-  }, [catalogue, season?.players, league, historic, historicTeams]);
+  }, [catalogue, season?.players, league, historic, historicTeams, fpl]);
   const metrics=useMemo(()=>{const entries=new Map<string,string>();rows.forEach(r=>Object.entries(r.stats).forEach(([key,stat])=>entries.set(key,stat.label||key)));return [...entries].map(([key,label])=>({key,label})).sort((a,b)=>a.label.localeCompare(b.label));},[rows]);
   const visibleMetrics=metrics.filter(m=>group==='All'||metricGroup(m.key,m.label)===group);
   const defaultSort=fpl?'goals_scored':'totalGoals',sortKey=sort||defaultSort;

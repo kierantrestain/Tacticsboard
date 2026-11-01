@@ -190,3 +190,13 @@ describe("portable analysis handoff", () => {
     ).rejects.toThrow("source file is missing");
   });
 });
+
+it('round-trips source adjustments, segment metadata, camera poses, rejected observations and ordered views',async()=>{
+ const b=newBoard(catalogue.teams[0] as unknown as Team,catalogue.teams[1] as unknown as Team),d=b.studio!,id='media-phase1';
+ const a:MediaAsset={id,name:'Passage.mp4',type:'video',mime:'video/mp4',size:3,width:1280,height:720,duration:50,fps:25,createdAt:'2026-11-01',thumbnail:'data:image/jpeg;base64,YWJj',matchId:'match',segment:'The overload',notes:'Follow the runner',tags:['press'],referenceTime:240,measuredFps:25,timing:'packet-average'};
+ media.set(id,new Blob(['abc']));d.assetId=id;d.trim={start:30,end:40};d.playbackRate=.5;d.sourcePresentations={[id]:{original:false,annotations:true,rotation:90,crop:{x:.1,y:.1,width:.8,height:.8},brightness:1.2,contrast:1.1}};d.cameraPose={position:[20,70,90],target:[5,0,0],fov:40};d.comparisonView='3d';d.stillOrder=[id];d.ink[id]=[{id:'curve',assetId:id,type:'arrow',points:[.2,.3,.6,.7],curve:.6,color:'#dfff81',width:4,opacity:.8,hidden:false,from:30,to:40}];
+ d.tracking[id]={assetId:id,start:30,end:40,reviewed:true,createdAt:'2026-11-01',method:'test',targets:[{id:'p',name:'Player',number:'8',side:'home',image:{x:.3,y:.4}}],frames:[{time:30,cameraConfidence:1,points:[{id:'p',image:{x:.3,y:.4},pitch:{x:.4,y:.5},confidence:.4,review:true,rejected:true}]}]};
+ d.cues=[makeCue(b,'split','endline',35)];d.cues[0].segmentId='story';d.cues[0].segmentTitle='The overload';
+ const pack=await exportPack(b,[a]),restored=await importPack(new File([pack.blob],'media.touchline.zip')),newId=restored.studio!.assetId!;
+ expect(newId).not.toBe(id);expect(restored.studio!.sourcePresentations![newId]).toEqual(d.sourcePresentations[id]);expect(restored.studio!.stillOrder).toEqual([newId]);expect(restored.studio!.cues![0]).toMatchObject({assetId:newId,playbackRate:.5,segmentId:'story',cameraPose:d.cameraPose,comparisonView:'3d'});expect(restored.studio!.tracking[newId].frames[0].points[0].rejected).toBe(true);expect((records.get(newId) as MediaAsset).notes).toBe('Follow the runner');expect(restored.studio!.ink[newId][0].curve).toBe(.6);
+});

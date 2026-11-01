@@ -5,6 +5,7 @@ import type { CameraPreset } from "./types";
 import type { ReplayHandle } from "./Pitch3D";
 import { replayInteraction } from "./replayInteraction";
 import { analysisFrame } from "./tactics";
+import { useStudio } from '../store';
 const presets: Record<CameraPreset, [number, number, number]> = {
   broadcast: [8, 75, 88],
   overhead: [0, 124, 0.1],
@@ -46,11 +47,15 @@ const SoftwarePitch3D = forwardRef<
       cam = new THREE.PerspectiveCamera(43, 1, 0.1, 400);
     cam.position.set(...presets[latest.current.camera]);
     cam.lookAt(0, 0, 0);
+    const initialPose=latest.current.board.studio?.cameraPose;
+    if(initialPose){cam.position.set(...initialPose.position);cam.lookAt(...initialPose.target);cam.fov=initialPose.fov;cam.updateProjectionMatrix();}
     cam.updateMatrixWorld();
     let preset = latest.current.camera,
       target = cam.position.clone(),
       tween = false,
       draft: Drawing | null = null;
+    let poseKey=JSON.stringify(latest.current.board.studio?.cameraPose),poseTimer:ReturnType<typeof setTimeout>;
+    const savePose=()=>{clearTimeout(poseTimer);poseTimer=setTimeout(()=>useStudio.getState().commit(b=>{if(b.studio)b.studio.cameraPose={position:cam.position.toArray() as [number,number,number],target:[0,0,0],fov:cam.fov};}),200);};
     const dot = (x: number, y: number, z: number) => {
       const v = new THREE.Vector3(x, y, z).project(cam);
       return {
@@ -547,7 +552,7 @@ const SoftwarePitch3D = forwardRef<
         }
         ctx.restore();
       }
-      if (b.settings.ballVisible !== false) {
+      if (b.settings.ballVisible !== false && !f.hideBall) {
         const p = dot(f.ball.x * 105 - 52.5, 0.4, f.ball.y * 68 - 34);
         ctx.beginPath();
         ctx.arc(p.x, p.y, Math.max(2, w / 450), 0, Math.PI * 2);
@@ -588,6 +593,7 @@ const SoftwarePitch3D = forwardRef<
             cam.position.setFromSpherical(spherical);
             cam.lookAt(0, 0, 0);
             cam.updateMatrixWorld();
+            savePose();
           },
         );
     const wheel = (e: WheelEvent) => {
@@ -598,6 +604,7 @@ const SoftwarePitch3D = forwardRef<
         .clampLength(30, 180);
       cam.lookAt(0, 0, 0);
       cam.updateMatrixWorld();
+      savePose();
     };
     if (!program) el.addEventListener("wheel", wheel, { passive: false });
     let raf = 0;
@@ -606,10 +613,10 @@ const SoftwarePitch3D = forwardRef<
       const now = performance.now(),
         damping = 1 - Math.exp(-Math.min(1, (now - lastRender) / 1000) * 10);
       lastRender = now;
+      const key=JSON.stringify(latest.current.board.studio?.cameraPose);if(key!==poseKey){poseKey=key;const pose=latest.current.board.studio?.cameraPose;if(pose){cam.position.set(...pose.position);cam.lookAt(...pose.target);cam.fov=pose.fov;cam.updateProjectionMatrix();cam.updateMatrixWorld();tween=false;}}
       if (latest.current.camera !== preset) {
         preset = latest.current.camera;
-        target.set(...presets[preset]);
-        tween = true;
+        if(!latest.current.board.studio?.cameraPose){target.set(...presets[preset]);tween = true;}
       }
       if (tween) {
         cam.position.lerp(target, damping);
@@ -623,6 +630,7 @@ const SoftwarePitch3D = forwardRef<
     animate();
     return () => {
       cancelAnimationFrame(raf);
+      clearTimeout(poseTimer);
       observer.disconnect();
       cleanup();
       el.removeEventListener("wheel", wheel);

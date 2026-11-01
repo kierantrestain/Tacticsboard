@@ -1,3 +1,4 @@
+import { validMediaMetadata } from './mediaModel';
 import { zipSync, unzipSync, strToU8, strFromU8 } from "fflate";
 import { copy, download, filename, isBoard } from "../core";
 import type { Board } from "../types";
@@ -109,6 +110,7 @@ export async function exportPack(board: Board, assets: MediaAsset[]) {
         ...Object.keys(b.studio?.landmarks || {}),
         ...Object.keys(b.studio?.targets || {}),
         ...Object.keys(b.studio?.sourceRanges || {}),
+        ...Object.keys(b.studio?.sourcePresentations || {}),
         ...b.scenes.map((s) => s.source?.assetId),
         ...(b.studio?.bookmarks || []).map((m) => m.assetId),
         ...(b.studio?.cues || []).map((c) => c.assetId),
@@ -189,6 +191,7 @@ export async function importPack(file: File): Promise<Board> {
     remap: Record<string, string> = {};
   for (const a of manifest.assets) {
     if (
+      !validMediaMetadata(a) ||
       typeof a.id !== "string" ||
       !/^[a-zA-Z0-9-]{1,100}$/.test(a.id) ||
       !["image", "video"].includes(a.type) ||
@@ -200,10 +203,12 @@ export async function importPack(file: File): Promise<Board> {
       throw Error("A media record is invalid.");
     const data = files[`sources/${a.id}.bin`];
     if (!data) throw Error("A source file is missing from this project pack.");
-    const id = uid();
-    remap[a.id] = id;
-    await saveMedia(id, new Blob([data as BlobPart], { type: a.mime }));
-    await putRecord("meta", id, { ...a, id, filmstrip: undefined });
+    remap[a.id] = uid();
+  }
+  for(const a of manifest.assets){
+    const id=remap[a.id],data=files[`sources/${a.id}.bin`];
+    await saveMedia(id,new Blob([data as BlobPart],{type:a.mime}));
+    await putRecord('meta',id,{...a,id,sourceAssetId:a.sourceAssetId?remap[a.sourceAssetId]||a.sourceAssetId:undefined,filmstrip:undefined});
   }
   if (b.studio) {
     const d = b.studio;
@@ -214,6 +219,7 @@ export async function importPack(file: File): Promise<Board> {
       "tracking",
       "sourceRanges",
       "explainStops",
+      "sourcePresentations",
     ] as const) {
       const record = d[key] as Record<string, any> | undefined;
       if (!record) continue;
@@ -226,6 +232,7 @@ export async function importPack(file: File): Promise<Board> {
       }
     }
     if (d.assetId) d.assetId = remap[d.assetId] || d.assetId;
+    if(d.stillOrder)d.stillOrder=d.stillOrder.map(id=>remap[id]||id);
     d.bookmarks.forEach((m) => (m.assetId = remap[m.assetId] || m.assetId));
     d.cues?.forEach((c) => {
       c.sequence?.forEach(s => { if(s.source) s.source.assetId = remap[s.source.assetId] || s.source.assetId; });

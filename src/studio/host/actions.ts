@@ -109,9 +109,9 @@ export function executeHostCommand(command: HostCommand) {
   if (command.type === 'scene') { if (!b.scenes.some(scene => scene.id === command.id)) throw Error('That step is no longer in this sequence.'); s.selectScene(command.id); return; }
   if (command.type === 'cue') { if (!b.studio?.cues?.some(cue => cue.id === command.id)) throw Error('That moment is no longer in this show.'); recallCue(command.id); return; }
   if (command.type === 'view') { if (!availableHostViews(b,r.assets,r.assetAvailability).includes(command.view)) throw Error('Prepare that view on the show computer first.'); editDesk(d => { d.view = command.view; }); r.set({ view: command.view, mediaPlaying: false, mediaHolding:false, ...(command.view==='footage'?{time:b.studio?.trim.start||0}:{}) }); s.set({ playing: false, previewTime: null }); return; }
-  if (command.type === 'camera') { if (['broadcast', 'overhead', 'endline', 'touchline'].includes(command.camera)) r.set({ camera: command.camera }); return; }
+  if (command.type === 'camera') { if (['broadcast', 'overhead', 'endline', 'touchline'].includes(command.camera)){editDesk(d=>{d.cameraPose=undefined;});r.set({ camera: command.camera });} return; }
   if (command.type === 'duration') { const n = Number(command.seconds); if (!Number.isFinite(n)) return; s.commit(board => { const scene = board.scenes.find(x => x.id === board.activeScene); if (scene) scene.duration = Math.max(.5, Math.min(10, n)); }); return; }
-  if (command.type === 'rate') { if(![.25,.5,1,2].includes(command.value))throw Error('Choose a supported playback speed.'); if(r.view==='board'||r.view==='replay'&&!b.studio?.assetId)s.set({speed:command.value,playhead:s.previewTime??0});r.set({rate:command.value}); return; }
+  if (command.type === 'rate') { if(![.25,.5,1,1.5,2].includes(command.value))throw Error('Choose a supported playback speed.'); if(r.view==='board'||r.view==='replay'&&!b.studio?.tracking[b.studio?.assetId||''])s.set({speed:command.value,playhead:s.previewTime??0});editDesk(d=>{d.playbackRate=command.value;});r.set({rate:command.value}); return; }
   if (command.type === 'pause-explain') {
     const asset=r.assets.find(a=>a.id===b.studio?.assetId);if(r.view!=='footage'||asset?.type!=='video')throw Error('Open a video moment first.');
     const pause=explanationPause(b.studio!.trim,r.time,b.studio!.explainStops?.[asset.id]||[],uid());
@@ -121,7 +121,7 @@ export function executeHostCommand(command: HostCommand) {
     if (!b.studio?.assetId) throw Error('Choose a clip first.');
     const a = r.assets.find(x => x.id === b.studio?.assetId);
     if (!a || a.type !== 'video') throw Error('Choose a video to set the clip range.');
-    editDesk(d => { if (command.type === 'clip-in') { d.trim.start = Math.min(r.time, Math.max(0, a.duration - .25)); d.trim.end = Math.min(a.duration, Math.max(d.trim.start + .25, Math.min(d.trim.start + 20, d.trim.end))); } else d.trim.end = Math.max(d.trim.start + .25, Math.min(r.time, a.duration, d.trim.start + 20)); }); return;
+    editDesk(d => { if (command.type === 'clip-in') { d.trim.start = Math.min(r.time, Math.max(0, a.duration - .25)); d.trim.end = Math.min(a.duration, Math.max(d.trim.start + .25, Math.min(d.trim.start + 60, d.trim.end))); } else d.trim.end = Math.max(d.trim.start + .25, Math.min(r.time, a.duration, d.trim.start + 60)); }); return;
   }
   const isMedia = r.view === 'footage' || r.view === 'split' || r.view === 'replay' && !!b.studio?.assetId && !!b.studio?.tracking[b.studio.assetId];
   if (command.type === 'seek') { if (!Number.isFinite(command.time)) return; if (isMedia) r.set({ time: Math.max(b.studio?.trim.start || 0, Math.min(b.studio?.trim.end || 20, command.time)), mediaPlaying: false }); else s.set({ playing: false, playhead: clamp(command.time, 0, totalDuration(b)), previewTime: clamp(command.time, 0, totalDuration(b)) }); return; }

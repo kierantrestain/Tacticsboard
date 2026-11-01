@@ -20,6 +20,8 @@ import {
 import { useRuntime } from "./runtime";
 import { useStudio } from "../store";
 import { dateLabel } from "../core";
+import { totalDuration } from '../core';
+import { clipPlan } from './filmPlan';
 export function Dialog({
   title,
   kicker,
@@ -88,6 +90,8 @@ export default function Dialogs({
   const r = useRuntime(),
     s = useStudio(),
     [search, setSearch] = useState("");
+  const asset=r.assets.find(a=>a.id===s.board?.studio?.assetId),sourceMode=['footage','split'].includes(r.view)||r.view==='replay'&&!!s.board?.studio?.tracking[asset?.id||''],rate=r.view==='stats'||sourceMode&&asset?.type==='image'?1:sourceMode?r.rate:s.speed;
+  const filmDuration=r.view==='stats'?5:sourceMode&&s.board?.studio?clipPlan(s.board.studio.trim,s.board.studio.explainStops?.[asset?.id||'']||[],rate).duration:s.board?totalDuration(s.board)/rate:0;
   if (r.modal === "export")
     return (
       <Dialog title="Ready for the studio." kicker="EXPORT & HANDOFF">
@@ -95,6 +99,7 @@ export default function Dialogs({
           Export a clean analysis or move the entire project, including its
           source media, to another computer.
         </p>
+        <div className="export-analysis-summary"><strong>Current {r.view==='stats'?'data graphic':r.view==='footage'?'source analysis':r.view==='split'?'source comparison':'tactical sequence'}</strong><span>{filmDuration.toFixed(1)} seconds · {rate}× speed · 1080p / 25 fps · silent</span><small>{r.view==='stats'?'The film captures the current statistic window for five seconds.':'Selected playback speed and explanation pauses are included.'} This exports the current analysis; saved shots remain editable in the project pack.</small></div>
         <div className="tl-export-grid">
           <button onClick={onPNG}>
             <span className="tl-export-icon">

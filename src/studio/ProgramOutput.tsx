@@ -30,12 +30,13 @@ export function reconstructedFrame(
     const points = sampleTracking(sequence.frames, snapshot.time);
     return {
       ...b,
+      hideBall:true,
       drawings: [
         ...b.drawings,
         ...(asset
           ? (b.studio?.ink[asset] || []).filter(
               (d) =>
-                d.space === "pitch" &&
+                !d.hidden && d.space === "pitch" &&
                 snapshot.time >= d.from &&
                 snapshot.time <= d.to,
             )
@@ -77,8 +78,10 @@ export default function ProgramOutput() {
     sourceRef = useRef<SourceHandle>(null),
     statsRef = useRef<StatsHandle>(null),
     replayRef = useRef<ReplayHandle>(null),
-    current = useRef(snapshot);
+    current = useRef(snapshot),
+    programmeStage = useRef<HTMLDivElement>(null);
   current.current = snapshot;
+  useEffect(()=>{if(snapshot&&!snapshot.black)programmeStage.current?.animate?.([{opacity:.35},{opacity:1}],{duration:160,easing:'ease-out'});},[snapshot?.cueId,snapshot?.view]);
   useEffect(() => {
     void listAssets().then(setAssets);
     const onMessage = (e: MessageEvent) => {
@@ -97,7 +100,7 @@ export default function ProgramOutput() {
       let raw: HTMLCanvasElement | null = null;
       if (shot && !shot.black) {
         if (shot.view === "stats") raw = statsRef.current?.capture() || null;
-        else if (shot.view === "replay")
+        else if (shot.view === "replay" || shot.view==='split'&&shot.board.studio?.comparisonView==='3d')
           raw = replayRef.current?.capture() || null;
         else if (shot.view === "footage")
           raw = sourceRef.current?.composite() || null;
@@ -164,7 +167,7 @@ export default function ProgramOutput() {
   }, []);
   useEffect(() => {
     void listAssets().then(setAssets);
-  }, [snapshot?.board.studio?.assetId]);
+  }, [snapshot?.board.studio?.assetId,snapshot?.assetRevision]);
   if (!snapshot)
     return (
       <main className="tl-program waiting">
@@ -231,6 +234,7 @@ export default function ProgramOutput() {
             </header>
           )}
           <div
+            ref={programmeStage}
             className={`tl-program-stage ${snapshot.view === "split" ? "is-split" : ""}`}
           >
             {["footage", "split"].includes(snapshot.view) && (
@@ -256,7 +260,7 @@ export default function ProgramOutput() {
                   report={snapshot.report}
                   program
                 />
-              ) : snapshot.view === "replay" ? (
+              ) : snapshot.view === "replay" || snapshot.view==='split'&&b.studio?.comparisonView==='3d' ? (
                 <Pitch3D
                   ref={replayRef}
                   board={b}

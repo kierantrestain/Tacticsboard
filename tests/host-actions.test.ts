@@ -60,3 +60,8 @@ it('scrolls a complete prepared statistic graphic through the host command witho
  executeHostCommand({type:'stats-scroll',value:500});expect(state.studio.set).toHaveBeenCalledWith(expect.objectContaining({board:expect.objectContaining({studio:expect.objectContaining({statsScroll:12,comparison:expect.objectContaining({fields:expect.any(Array)})})})}));
  expect(b.studio.comparison.fields).toHaveLength(20);state.runtime.view='board';expect(()=>executeHostCommand({type:'stats-scroll',value:1})).toThrow('prepared statistic');
 });
+
+it('changes board replay speed when an untracked source remains selected',()=>{
+ state.runtime.view='replay';state.studio.board.studio.assetId='untracked-source';state.studio.previewTime=2.5;
+ executeHostCommand({type:'rate',value:.5});expect(state.studio.set).toHaveBeenCalledWith({speed:.5,playhead:2.5});expect(state.studio.board.studio.playbackRate).toBe(.5);
+});

@@ -24,6 +24,11 @@ export function makeCue(
       ? desk.assetId
       : undefined;
   return {
+    phaseTime:!source&&['board','replay'].includes(view)?time:undefined,
+    sourcePresentation: source ? copy(desk.sourcePresentations?.[source]) : undefined,
+    comparisonView: desk.comparisonView,
+    cameraPose: copy(desk.cameraPose),
+    playbackRate: desk.playbackRate || 1,
     comparison: view==='stats'?copy(desk.comparison):undefined,
     statsScroll: view==='stats'?desk.statsScroll:undefined,
     recreation: copy(board.recreation),
@@ -122,10 +127,15 @@ export function cueBoard(board: Board, cue: RundownCue): Board {
         scene;
     next.activeScene = scene.id;
   }
+  if(cue.sequence?.length&&savedScene&&cue.phaseTime!==undefined){next.players=copy(savedScene.players);next.ball=copy(savedScene.ball);next.drawings=copy(savedScene.drawings);}
   if (next.studio.assetId)
     (next.studio.sourceRanges ||= {})[next.studio.assetId] = copy(
       next.studio.trim,
     );
+  next.studio.cameraPose=copy(cue.cameraPose);
+  next.studio.playbackRate=cue.playbackRate||1;
+  next.studio.comparisonView=cue.comparisonView;
+  if(cue.assetId){(next.studio.sourcePresentations||={})[cue.assetId]=copy(cue.sourcePresentation||{original:false,annotations:true,rotation:0,crop:{x:0,y:0,width:1,height:1},brightness:1,contrast:1});}
   next.studio.view = cue.view;
   next.studio.statsSnapshot = copy(cue.report);
   next.studio.comparison = copy(cue.comparison);
@@ -161,12 +171,19 @@ export function replaceCueContent(
     note: previous.note,
     duration: previous.duration,
     reviewedAt: undefined,
+    segmentId: previous.segmentId,
+    segmentTitle: previous.segmentTitle,
   };
 }
 
 export function cueContentKey(cue: RundownCue): string {
   return JSON.stringify([
     cue.view,
+    cue.phaseTime,
+    cue.sourcePresentation,
+    cue.comparisonView,
+    cue.cameraPose,
+    cue.playbackRate,
     cue.camera,
     cue.time,
     cue.frame,

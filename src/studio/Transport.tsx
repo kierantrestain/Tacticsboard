@@ -18,26 +18,90 @@ import {
   X,
 } from "lucide-react";
 import { useStudio } from "../store";
-import { activeSceneTime, totalDuration, uid } from "../core";
-import { useRuntime, editDesk } from "./runtime";
+import { activeSceneTime, totalDuration, uid, copy } from "../core";
+import { useRuntime, editDesk, selectAsset } from "./runtime";
 import type { MediaAsset, SourceHandle } from "./types";
 import { emptyStudio, timecode } from "./types";
 import { getMedia, putRecord, saveFreeze } from "./assetStore";
 import { saveCue } from "./showControl";
+import { sampleTracking, invert3, project } from "./geometry";
 export async function freezeFrame(
   asset: MediaAsset | undefined,
   source: SourceHandle | null,
 ) {
   if (!asset || !source) return;
-  const raw = source.capture();
-  if (!raw) return;
   const r = useRuntime.getState(),
     s = useStudio.getState();
   r.set({ busy: "Saving freeze frame", progress: 0 });
   try {
-    const still = await saveFreeze(asset, raw, r.time);
+    const at = r.time;
+    await source.seek(at);
+    const raw = source.capture();
+    if (!raw) throw Error("The source frame is not ready.");
+    const still = await saveFreeze(asset, raw, at);
+    still.matchId = asset.matchId;
+    still.matchLabel = asset.matchLabel;
+    still.segment = asset.segment;
+    still.notes = asset.notes;
+    still.referenceTime = r.time;
+    await putRecord("meta", still.id, still);
+    editDesk((d) => {
+      d.ink[still.id] = (d.ink[asset.id] || [])
+        .filter((i) => r.time >= i.from && r.time <= i.to)
+        .map((i) => ({
+          ...copy(i),
+          id: uid(),
+          assetId: still.id,
+          from: 0,
+          to: 5,
+        }));
+      if (d.sourcePresentations?.[asset.id])
+        (d.sourcePresentations ||= {})[still.id] = copy(
+          d.sourcePresentations[asset.id],
+        );
+      const seq = d.tracking[asset.id],
+        nearest = seq?.frames.length ? seq.frames.reduce((a, b) =>
+          Math.abs(a.time - r.time) < Math.abs(b.time - r.time) ? a : b,
+        ) : undefined,
+        inverse = nearest?.map ? invert3(nearest.map) : null;
+      d.landmarks[still.id] = (d.landmarks[asset.id] || []).map((l) => ({
+        ...copy(l),
+        image: inverse ? project(inverse, l.pitch) : copy(l.image),
+      }));
+      if (seq && nearest) {
+        const exact = Math.abs(nearest.time - r.time) < 0.01,
+          points = sampleTracking(seq.frames, r.time),
+          targets = seq.targets
+            .filter((t) => points.some((p) => p.id === t.id))
+            .map((t) => ({
+              ...copy(t),
+              image: copy(points.find((p) => p.id === t.id)!.image),
+            }));
+        d.targets[still.id] = targets;
+        d.tracking[still.id] = {
+          ...copy(seq),
+          assetId: still.id,
+          start: 0,
+          end: 0,
+          targets,
+          reviewed: exact && seq.reviewed,
+          frames: [
+            {
+              ...copy(nearest),
+              time: 0,
+              points: points.map((p) => ({ ...p, review: !exact || p.review })),
+            },
+          ],
+          method:
+            "Freeze of source observations. Interpolated markers require review.",
+        };
+      }
+    });
     r.set({ assets: [still, ...r.assets] });
-    s.notify("Freeze frame saved to the source library.");
+    selectAsset(still);
+    s.notify(
+      "Editable freeze opened. Its source timestamp and annotations are retained.",
+    );
   } catch (e) {
     r.set({
       error: e instanceof Error ? e.message : "The frame could not be saved.",
@@ -165,8 +229,17 @@ export default function Transport({
   if (r.view === "stats")
     return (
       <section className="tl-transport ts-data-transport">
-        <strong>{d.comparison?`${d.comparison.entities.length} ${d.comparison.kind} · ${d.comparison.fields.length} graphic metrics`:'Match graphic'}</strong>
-        <button className="tl-secondary" onClick={()=>s.set({modal:'matches'})}>Open data centre</button>
+        <strong>
+          {d.comparison
+            ? `${d.comparison.entities.length} ${d.comparison.kind} · ${d.comparison.fields.length} graphic metrics`
+            : "Match graphic"}
+        </strong>
+        <button
+          className="tl-secondary"
+          onClick={() => s.set({ modal: "matches" })}
+        >
+          Open data centre
+        </button>
       </section>
     );
   return (
@@ -225,11 +298,18 @@ export default function Transport({
           <select
             aria-label="Analysis playback speed"
             value={isSource ? r.rate : s.speed}
-            onChange={(e) =>
+            onChange={(e) => {
               isSource
                 ? r.set({ rate: +e.target.value })
-                : s.set({ speed: +e.target.value })
-            }
+                : s.set({
+                    speed: +e.target.value,
+                    playhead: s.previewTime ?? 0,
+                  });
+              editDesk((d) => {
+                d.playbackRate = +e.target.value;
+              });
+              r.set({ rate: +e.target.value });
+            }}
           >
             {[0.25, 0.5, 1, 1.5, 2].map((v) => (
               <option key={v} value={v}>

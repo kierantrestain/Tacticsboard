@@ -75,11 +75,12 @@ export function sampleTracking(
       a === b
         ? 0
         : Math.max(0, Math.min(1, (time - a.time) / (b.time - a.time)));
-  return a.points.map((p) => {
+  return a.points.flatMap((p) => {
     const q = b.points.find((q) => q.id === p.id);
+    if(p.rejected || (t>0&&q?.rejected) || (!q&&a!==b&&t>0))return [];
     if (!q || p.review || q.review)
-      return { ...p, review: p.review || !!q?.review };
-    return {
+      return [{ ...p, review: p.review || !!q?.review }];
+    return [{
       ...p,
       image: {
         x: p.image.x + (q.image.x - p.image.x) * t,
@@ -90,7 +91,7 @@ export function sampleTracking(
         y: p.pitch.y + (q.pitch.y - p.pitch.y) * t,
       },
       confidence: Math.min(p.confidence, q.confidence),
-    };
+    }];
   });
 }
 export const pitchPresets: {

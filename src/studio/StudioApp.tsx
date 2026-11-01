@@ -1,3 +1,4 @@
+import MediaWorkspace from './MediaWorkspace';
 import {
   bootFootball,
   refreshFootball,
@@ -162,6 +163,7 @@ function presenter() {
 function setView(view: ViewMode) {
   const r = useRuntime.getState();
   const state = useStudio.getState();
+  if(view==='footage'&&!state.board?.studio?.assetId){const phase=state.board?.scenes.find(scene=>scene.id===state.board?.activeScene),asset=r.assets.find(a=>a.id===phase?.source?.assetId);if(asset){selectAsset(asset);r.set({time:phase?.source?.time||0});return;}}
   if (state.board) {
     const next = copy(state.board);
     next.studio ||= emptyStudio();
@@ -624,32 +626,14 @@ function Operator() {
     }
   };
   const onFiles = async (files: FileList | null) => {
-    if (!files?.length) return;
-    r.set({ busy: "Importing footage locally", progress: 0, error: "" });
-    try {
-      let last;
-      for (let i = 0; i < files.length; i++) {
-        last = await importAsset(files[i]);
-        r.set({ progress: (i + 1) / files.length });
-      }
-      r.set({ assets: await listAssets() });
-      if (last) selectAsset(last);
-    } catch (e) {
-      r.set({ error: e instanceof Error ? e.message : "Import failed" });
-    } finally {
-      r.set({
-        busy: "",
-        progress: 0,
-        assets: await listAssets().catch(() => r.assets),
-      });
-    }
+    if(files?.length)r.set({pendingFiles:Array.from(files),modal:'media',mediaPlaying:false});
   };
   const capture = () => {
     const state = useRuntime.getState();
     if (state.view === "stats") return statsRef.current?.capture() || null;
     if (state.view === "split") {
       const source = sourceRef.current?.composite(),
-        replay = boardRef.current?.stage()?.toCanvas({ pixelRatio: 2 });
+        replay = useStudio.getState().board?.studio?.comparisonView==='3d'?replayRef.current?.capture():boardRef.current?.stage()?.toCanvas({ pixelRatio: 2 });
       if (!source || !replay) return null;
       const out = document.createElement("canvas");
       out.width = 2560;
@@ -756,17 +740,18 @@ function Operator() {
         (["footage", "split"].includes(runtime.view) ||
           (runtime.view === "replay" && !!board.studio?.tracking[a.id])),
       start = sourceMode ? board.studio?.trim.start || 0 : 0,
-      plan = clipPlan(board.studio?.trim || {start:0,end:a?.duration||20}, board.studio?.explainStops?.[a?.id||''] || []),
+      speed = runtime.view==='stats'||sourceMode&&a?.type==='image'?1:sourceMode?runtime.rate:state.speed,
+      plan = clipPlan(board.studio?.trim || {start:0,end:a?.duration||20}, board.studio?.explainStops?.[a?.id||''] || [],speed),
       duration =
         runtime.view === "stats"
           ? 5
           : sourceMode
             ? plan.duration
-            : totalDuration(board);
-    if (duration <= 0 || duration > 60) {
+            : totalDuration(board) / speed;
+    if (duration <= 0 || duration > 180) {
       r.set({
         error:
-          "Keep the complete analysis, including explanation pauses, within 60 seconds.",
+          "Keep the complete analysis, including explanation pauses and slow motion, within 180 seconds.",
       });
       return;
     }
@@ -793,7 +778,7 @@ function Operator() {
             if (runtime.view !== "replay")
               await sourceRef.current?.seek(plan.sourceAt(time).time);
             flushSync(() => r.set({ time: plan.sourceAt(time).time }));
-          } else flushSync(() => s.set({ previewTime: time }));
+          } else flushSync(() => s.set({ previewTime: time*speed }));
           let raw: HTMLCanvasElement | null;
           if (runtime.view === "replay") {
             const snapshot: ProgramSnapshot = {
@@ -801,7 +786,7 @@ function Operator() {
               board,
               view: runtime.view,
               camera: runtime.camera,
-              time: sourceMode ? plan.sourceAt(time).time : start + time,
+              time: sourceMode ? plan.sourceAt(time).time : start + time*speed,
               playing: false,
               rate: 1,
               takenAt: 0,
@@ -811,9 +796,9 @@ function Operator() {
               replayRef.current?.renderFrame(
                 sourceMode
                   ? reconstructedFrame(snapshot, null)
-                  : frameAt(board, time),
+                  : frameAt(board, time*speed),
               ) || null;
-          } else raw = capture();
+          } else {if(runtime.view==='split'&&board.studio?.comparisonView==='3d')replayRef.current?.renderFrame(reconstructedFrame({id:'export',board,view:'split',camera:runtime.camera,time:plan.sourceAt(time).time,playing:false,rate:1,takenAt:0,black:false},null));raw = capture();}
           if (!raw) throw Error("The analysis view is not ready.");
           return productionFrame(
             raw,
@@ -1232,7 +1217,7 @@ function Operator() {
                     aria-label="3D camera angle"
                     value={r.camera}
                     onChange={(e) =>
-                      r.set({ camera: e.target.value as typeof r.camera })
+                      {editDesk(d=>{d.cameraPose=undefined;});r.set({ camera: e.target.value as typeof r.camera });}
                     }
                   >
                     <option value="broadcast">Broadcast camera</option>
@@ -1302,7 +1287,7 @@ function Operator() {
               </div>
               {r.view === "stats" ? (
                 <StatsStage ref={statsRef} />
-              ) : r.view === "replay" ? (
+              ) : r.view === "replay" || r.view==='split'&&desk.comparisonView==='3d' ? (
                 <Suspense
                   fallback={
                     <div className="tl-stage-message">
@@ -1437,7 +1422,7 @@ function Operator() {
         {r.sidebar === "show" ? (
           <ShowChecks />
         ) : r.sidebar === "tactics" ? (
-          <FilmBuilder onImport={()=>importRef.current?.click()} onFreeze={()=>void freezeFrame(asset,sourceRef.current)} onFilm={()=>void film()} source={sourceRef}/>
+          <FilmBuilder onImport={()=>importRef.current?.click()} onFreeze={()=>void freezeFrame(asset,sourceRef.current)} onFilm={()=>r.set({modal:'export'})} source={sourceRef}/>
         ) : r.sidebar === "broadcast" ? (
           <BroadcastPanel />
         ) : r.sidebar === "inspector" ? (
@@ -1569,6 +1554,7 @@ function Operator() {
           <div>
             <strong>Your export is ready.</strong>
             <span>{exportReady.name}</span>
+            {/\.(mp4|webm)$/i.test(exportReady.name)&&<details><summary>Preview film</summary><video src={exportReady.url} controls playsInline preload="metadata"/></details>}
           </div>
           <a href={exportReady.url} download={exportReady.name}>
             <Download size={16} />
@@ -1648,6 +1634,7 @@ function Operator() {
       />
       <Modals onPNG={still} onVideo={film} onJSON={json} />
       {r.tabletPanel && <PairTablets />}
+      {r.modal==='media'&&<MediaWorkspace/>}
       <input
         ref={importRef}
         hidden

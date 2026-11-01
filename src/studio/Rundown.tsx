@@ -17,7 +17,7 @@ import {
 import { useStudio } from "../store";
 import { useRuntime, editDesk } from "./runtime";
 import { defaultBroadcast, emptyStudio } from "./types";
-import { copy, uid, frameAt } from "../core";
+import { copy, uid, frameAt, activeSceneTime } from "../core";
 import { recallCue, saveCue, stepCue, updateCue, makeCue } from "./showControl";
 import { inspectCue, viewLabels } from "./readiness";
 import { cueContentKey } from "./cueModel";
@@ -54,7 +54,7 @@ export default function Rundown() {
         b,
         r.view,
         r.camera,
-        r.time,
+        r.view==='board'||r.view==='replay'&&!b.studio?.tracking[b.studio?.assetId||'']?s.previewTime??activeSceneTime(b):r.time,
         s.previewTime === null ? undefined : frameAt(b, s.previewTime),
       )
     : null;
@@ -156,6 +156,7 @@ export default function Rundown() {
               key={cue.id}
               ref={selected ? selectedRow : undefined}
             >
+              {cue.segmentTitle&&cues[i-1]?.segmentId!==cue.segmentId&&<div className="prepared-segment-heading">{cue.segmentTitle}</div>}
               <button
                 className="director-cue-row"
                 aria-label={`Recall shot ${i + 1}: ${cue.title}`}
@@ -180,7 +181,7 @@ export default function Rundown() {
                 <span className="director-cue-label">
                   <strong>{cue.title}</strong>
                   <small>
-                    {viewLabels[cue.view]} · {cue.duration}s
+                    {cue.view==='split'&&cue.comparisonView==='3d'?'Source + 3D':viewLabels[cue.view]} · {cue.duration}s
                   </small>
                   <em
                     className={

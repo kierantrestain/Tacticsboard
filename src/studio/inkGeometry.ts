@@ -1,8 +1,9 @@
 import type { Drawing } from "../types";
 import type { MediaInk } from "./types";
+import { curvedPoints } from './mediaModel';
 import { invert3, project } from "./geometry";
 export function expandedPoints(d: Drawing): number[] {
-  const p = d.points;
+  const p = curvedPoints(d);
   if (p.length !== 4) return p;
   if (d.type === "zone")
     return [p[0], p[1], p[2], p[1], p[2], p[3], p[0], p[3]];
