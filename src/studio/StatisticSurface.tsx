@@ -7,18 +7,19 @@ function StatisticsScroller({info,onScroll}:{info:StatsViewport;onScroll:(value:
   const sync=useCallback(()=>{const el=ref.current;if(!el||Date.now()<userUntil.current)return;const current=latest.current,top=current.offset*el.clientHeight/current.capacity;if(Math.abs(top-el.scrollTop)>.8)el.scrollTop=top;},[]);
   useLayoutEffect(()=>{
     const el=ref.current;if(!el)return;
-    sync();const observer=new ResizeObserver(sync);observer.observe(el);return()=>observer.disconnect();
+    sync();const observer=new ResizeObserver(()=>{userUntil.current=0;clearTimeout(timer.current);sync();});observer.observe(el);return()=>observer.disconnect();
   },[info.capacity,info.rows,sync]);
   useLayoutEffect(sync,[info.offset,sync]);
   useLayoutEffect(()=>()=>clearTimeout(timer.current),[]);
-  return <div ref={ref} className="statistics-scroller" role="region" tabIndex={0} aria-label="Scroll selected statistics" style={{top:`${info.top/9}%`,height:`${info.height/9}%`}} onScroll={e=>{const el=e.currentTarget;userUntil.current=Date.now()+180;clearTimeout(timer.current);timer.current=setTimeout(sync,200);if(el.clientHeight)onScroll(el.scrollTop*info.capacity/el.clientHeight);}}>
+  const beginInput=()=>{userUntil.current=Date.now()+400;};
+  return <div ref={ref} className="statistics-scroller" role="region" tabIndex={0} aria-label="Scroll selected statistics" style={{top:`${info.top/9}%`,height:`${info.height/9}%`}} onWheel={beginInput} onPointerDown={beginInput} onPointerMove={e=>{if(e.buttons)beginInput();}} onKeyDown={beginInput} onScroll={e=>{if(Date.now()>userUntil.current){sync();return;}const el=e.currentTarget;userUntil.current=Date.now()+180;clearTimeout(timer.current);timer.current=setTimeout(sync,200);if(el.clientHeight)onScroll(el.scrollTop*info.capacity/el.clientHeight);}}>
     <div aria-hidden="true" style={{height:`${info.rows/info.capacity*100}%`}}/>
   </div>;
 }
 export default function StatisticSurface({children,info,onScroll}:{children:ReactNode;info:StatsViewport;onScroll?:(value:number)=>void}){
   const ref=useRef<HTMLDivElement>(null),[size,setSize]=useState({width:0,height:0});
   useLayoutEffect(()=>{const el=ref.current;if(!el)return;const resize=()=>{const width=Math.max(0,Math.min(el.clientWidth,el.clientHeight*16/9));setSize(old=>old.width===width?old:{width,height:width*9/16});};resize();const observer=new ResizeObserver(resize);observer.observe(el);return()=>observer.disconnect();},[]);
-  return <div ref={ref} className="statistics-surface"><div className="statistics-canvas-wrap" style={size.width?size:undefined}>{children}{info.maxOffset>0&&onScroll&&<StatisticsScroller info={info} onScroll={onScroll}/>}</div></div>;
+  return <div ref={ref} className="statistics-surface"><div className="statistics-canvas-wrap" style={size.width?size:undefined}>{children}{size.width>0&&info.maxOffset>0&&onScroll&&<StatisticsScroller info={info} onScroll={onScroll}/>}</div></div>;
 }
 export function StatisticsNavigation({info,onScroll,disabled=false}:{info:StatsViewport;onScroll:(value:number)=>void;disabled?:boolean}){
   if(!info.maxOffset)return null;

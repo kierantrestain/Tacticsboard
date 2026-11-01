@@ -50,3 +50,5 @@ The existing source/video detection, manual identity review, report-based illust
 The previous eight-metric selection cap is removed from match reports, the comparison workspace, graphic controls, saved moments and portable project validation. **Select all** prepares all available metrics in one click. The producer and active host can scroll the data area, return to the top, or move through the selection with the arrow controls. The programme follows scrolling only under the existing live-follow rule; held output stays held until Take. Captures retain a fixed 16:9 viewport while complete data remains saved. Rendering only draws the visible rows, so a large selection does not create an enormous canvas.
 
 Checks cover more-than-eight-field validation, fractional/bounded scrolling, the final selected metric, tiles, later-row canvas rendering, saved positions, host dispatch and the actual ZIP handoff.
+
+Scroll restoration also survives reloading and a resized viewport: layout-driven scrollbar events do not overwrite the saved row position.
