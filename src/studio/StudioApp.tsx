@@ -129,6 +129,7 @@ import PairTablets from './host/PairTablets';
 import HostTablet from './host/HostTablet';
 import { useProducerRoom } from './host/producer';
 import { clipPlan } from './filmPlan';
+import { importSelection } from './mediaModel';
 const Pitch3D = lazy(() => import("./Pitch3D"));
 function hydrate(data: Catalogue, details: Record<string, MatchDetails>) {
   for (const t of data.teams)
@@ -626,7 +627,11 @@ function Operator() {
     }
   };
   const onFiles = async (files: FileList | null) => {
-    if(files?.length)r.set({pendingFiles:Array.from(files),modal:'media',mediaPlaying:false});
+    if(!files?.length)return;
+    try {
+      if(importSelection(Array.from(files))==='project')await importProject(files[0]);
+      else r.set({pendingFiles:Array.from(files),modal:'media',mediaPlaying:false});
+    }catch(e){r.set({error:e instanceof Error?e.message:'Import failed'});}
   };
   const capture = () => {
     const state = useRuntime.getState();
@@ -877,7 +882,8 @@ function Operator() {
       r.set({ error: "Choose an analysis JSON smaller than 10 MB." });
       return;
     }
-    r.set({ busy: "Opening project", error: "" });
+    setLiveFollow(false);
+    r.set({ busy: "Opening project", error: "", activeCueId:null, reverseReview:false });
     try {
       const board = /\.zip$/i.test(file.name)
         ? await importPack(file)
@@ -1639,7 +1645,7 @@ function Operator() {
         ref={importRef}
         hidden
         type="file"
-        accept="image/*,video/*,.mov,.mkv"
+        accept="image/*,video/*,.mov,.mkv,.json,.zip"
         multiple
         onChange={(e) => {
           void onFiles(e.target.files);

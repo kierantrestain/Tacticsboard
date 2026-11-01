@@ -29,6 +29,7 @@ export function saveCue() {
     b.studio ||= emptyStudio();
     (b.studio.cues ||= []).push(cue);
   });
+  s.save();
   r.set({ activeCueId: cue.id });
   s.notify("Shot saved to the show rundown · M saves the next one");
 }
@@ -100,5 +101,6 @@ export function updateCue() {
     const i = board.studio!.cues!.findIndex((c) => c.id === previous.id);
     board.studio!.cues![i] = replaceCueContent(previous, current);
   });
+  s.save();
   s.notify("Shot updated. Preview it again before marking it reviewed.");
 }

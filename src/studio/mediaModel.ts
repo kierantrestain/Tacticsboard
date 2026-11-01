@@ -113,6 +113,15 @@ export function sourceGeometry(
 export const MAX_SOURCE_BYTES = 2 * 1024 ** 3;
 export const MAX_ANALYSIS_SECONDS = 60;
 export const MAX_TRACKING_SECONDS = 20;
+/** Project packs replace the draft; do not silently mix them into source batches. */
+export function importSelection(files: { name: string }[]) {
+  const projects = files.filter((f) => /\.(zip|json)$/i.test(f.name));
+  if (projects.length && files.length !== 1)
+    throw Error(
+      "Open one project pack or JSON at a time. Import source media separately.",
+    );
+  return projects.length ? "project" : "media";
+}
 export function mediaKind(file: {
   name: string;
   type: string;

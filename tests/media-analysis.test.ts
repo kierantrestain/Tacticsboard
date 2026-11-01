@@ -4,6 +4,7 @@ import catalogue from "../public/data/catalogue.json";
 import type { Team } from "../src/types";
 import type { MediaAsset, MediaInk, TrackFrame } from "../src/studio/types";
 import {
+  importSelection,
   defaultPresentation,
   sourceGeometry,
   validPresentation,
@@ -33,6 +34,19 @@ const board = () =>
     catalogue.teams[0] as unknown as Team,
     catalogue.teams[1] as unknown as Team,
   );
+it("routes project packs and JSON through project restore and rejects mixed destructive imports", () => {
+  expect(importSelection([{ name: "analysis.touchline.zip" }])).toBe("project");
+  expect(importSelection([{ name: "analysis.JSON" }])).toBe("project");
+  expect(importSelection([{ name: "clip.mp4" }, { name: "still.png" }])).toBe(
+    "media",
+  );
+  expect(() =>
+    importSelection([{ name: "analysis.zip" }, { name: "clip.mp4" }]),
+  ).toThrow("one project");
+  expect(() =>
+    importSelection([{ name: "one.json" }, { name: "two.json" }]),
+  ).toThrow("one project");
+});
 const asset = (id = "source"): MediaAsset => ({
   id,
   name: "Match passage.mp4",
