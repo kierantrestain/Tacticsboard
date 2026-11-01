@@ -197,19 +197,19 @@ export default function ProgramOutput() {
                   </span>
                   <span className="tl-program-source">
                     {snapshot.view === "stats"
-                      ? "MATCH INTELLIGENCE"
+                      ? "FOOTBALL DATA"
                       : snapshot.view === "footage"
                         ? "MATCH ANALYSIS"
                         : snapshot.view === "replay"
                           ? "VIRTUAL REPLAY"
                           : "TACTICAL ANALYSIS"}{" "}
-                    <i />
+                    {snapshot.view !== 'stats' && <><i />
                     {asset &&
                     ["footage", "split", "replay"].includes(snapshot.view)
                       ? timecode(snapshot.time, b.studio?.fps)
                       : b.match?.completed
                         ? "FULL TIME"
-                        : "ANALYST RECONSTRUCTION"}
+                        : "ANALYST RECONSTRUCTION"}</>}
                   </span>
                 </>
               )}
