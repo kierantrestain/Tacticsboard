@@ -110,6 +110,7 @@ export const defaultBroadcast = (): BroadcastStyle => ({
 /** A cue holds a frame, never a nested Board/StudioDocument. */
 export interface RundownCue {
   comparison?: ComparisonSnapshot;
+  statsScroll?: number;
   recreation?: ReportRecreation;
   sequence?: Scene[];
   explainStops?: ExplainStop[];
@@ -147,6 +148,7 @@ export interface RundownCue {
 }
 export interface StudioDocument {
   comparison?: ComparisonSnapshot;
+  statsScroll?: number;
   explainStops?: Record<string, ExplainStop[]>;
   statsSnapshot?: MatchStats;
   statsFields?: string[];
@@ -217,6 +219,7 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
   return (
     d.version === 2 &&
     (d.comparison === undefined || validComparison(d.comparison)) &&
+    (d.statsScroll === undefined || Number.isFinite(d.statsScroll) && d.statsScroll >= 0 && d.statsScroll <= 1500) &&
     (d.view === undefined ||
       ["board", "footage", "split", "replay", "stats"].includes(d.view)) &&
     !!d.trim &&
@@ -328,6 +331,7 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
           return (
             !!c &&
             (c.comparison === undefined || validComparison(c.comparison)) &&
+            (c.statsScroll === undefined || Number.isFinite(c.statsScroll) && c.statsScroll >= 0 && c.statsScroll <= 1500) &&
             (c.recreation === undefined || isReportRecreation(c.recreation)) &&
             (c.explainStops === undefined || validStops(c.explainStops)) &&
             (c.sequence === undefined || (Array.isArray(c.sequence) && c.sequence.length > 0 && c.sequence.length <= 100 && new Set(c.sequence.map(s=>s.id)).size === c.sequence.length && c.sequence.every(s => (s.ballAction === undefined || isFootballAction(s.ballAction)) && typeof s.id === 'string' && typeof s.title === 'string' && s.title.length <= 120 && typeof s.note === 'string' && Number.isFinite(s.duration) && s.duration >= .25 && s.duration <= 60 && point(s.ball) && Array.isArray(s.players) && s.players.length <= 44 && new Set(s.players.map(p=>p.uid)).size === s.players.length && validBall(s.ball,s.players) && validMotion(s) && s.players.every(p=>point(p) && typeof p.uid === 'string' && typeof p.name === 'string' && typeof p.number === 'string' && typeof p.playerId === 'string' && ['home','away'].includes(p.side)) && Array.isArray(s.drawings) && s.drawings.length <= 500 && s.drawings.every(i=>i && typeof i.id === 'string' && typeof i.color === 'string' && Number.isFinite(i.width) && Number.isFinite(i.opacity) && Array.isArray(i.points) && i.points.length <= 20000 && i.points.every(Number.isFinite))))) &&
@@ -527,7 +531,7 @@ export const timecode = (seconds: number, fps = 25) => {
 function validFields(fields: unknown): fields is string[] {
   return (
     Array.isArray(fields) &&
-    fields.length <= 8 &&
+    fields.length <= 1500 &&
     fields.every((f) => typeof f === "string" && f.length < 100) &&
     new Set(fields).size === fields.length
   );

@@ -25,6 +25,7 @@ export function makeCue(
       : undefined;
   return {
     comparison: view==='stats'?copy(desk.comparison):undefined,
+    statsScroll: view==='stats'?desk.statsScroll:undefined,
     recreation: copy(board.recreation),
     sequence: !source && ['board','replay'].includes(view) ? copy(board.scenes) : undefined,
     explainStops: source ? copy(desk.explainStops?.[source] || []) : undefined,
@@ -128,6 +129,7 @@ export function cueBoard(board: Board, cue: RundownCue): Board {
   next.studio.view = cue.view;
   next.studio.statsSnapshot = copy(cue.report);
   next.studio.comparison = copy(cue.comparison);
+  next.studio.statsScroll = cue.statsScroll;
   next.studio.statsFields = copy(cue.statsFields);
   if (cue.broadcast) next.studio.broadcast = copy(cue.broadcast);
   else if (next.studio.broadcast)
@@ -178,6 +180,7 @@ export function cueContentKey(cue: RundownCue): string {
     cue.broadcast,
     cue.report,
     cue.comparison,
+    cue.statsScroll,
     cue.statsFields,
     cue.statsPlayerId,
     cue.statsComparePlayerId,

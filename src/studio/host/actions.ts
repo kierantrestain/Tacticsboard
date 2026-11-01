@@ -7,6 +7,7 @@ import { addFootballAction } from '../footballActions';
 import type { HostCommand } from './protocol';
 import { availableHostViews, explanationPause } from './tabletModel';
 import { addCounterattack, moveUnit, setDefensiveShape } from '../teamMovement';
+import { scrollStats } from '../scrollStats';
 import { buildPlay } from '../playbook';
 import { giveBall, dropBall } from '../possession';
 import { editSequence, createMovement } from '../sequenceEditing';
@@ -27,6 +28,7 @@ function stopAtEditableFrame() {
 export function executeHostCommand(command: HostCommand) {
   const s = useStudio.getState(), r = useRuntime.getState(), b = s.board;
   if (!b || r.busy || s.loading) throw Error('The producer is preparing the next view.');
+  if(command.type==='stats-scroll'){if(r.view!=='stats'||!Number.isFinite(command.value))throw Error('Open a prepared statistic graphic to scroll.');scrollStats(command.value);return;}
   if (command.type === 'cancel-gesture') { cancelHostGesture(); return; }
   const boardTools = ['possession','sequence-edit','motion','move', 'highlight', 'link', 'focus', 'start-move', 'finish-move', 'cancel-move','ball-action','unit-move','team-shape','counterattack','build-play'];
   if (boardTools.includes(command.type) && r.view !== 'board') throw Error('Open the tactical board to move or select players.');

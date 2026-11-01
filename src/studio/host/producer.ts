@@ -7,6 +7,7 @@ import { captureHostPreview } from '../capture';
 import { setLiveFollow } from '../production';
 import { connectRoom, studioRequest } from './connection';
 import { cancelHostGesture, executeHostCommand } from './actions';
+import { statsViewport } from '../statsViewport';
 import { availableHostViews } from './tabletModel';
 import type { CommandEnvelope, HostState, RoomPresence, RoomSession } from './protocol';
 
@@ -50,7 +51,7 @@ export function hostSnapshot(includeImage = false): HostState | null {
   const isMedia = r.view === 'footage' || r.view === 'split' || r.view === 'replay' && !!s.board.studio?.tracking[asset?.id || ''];
   const preview=includeImage && r.view!=='board'?captureHostPreview():undefined;
   const visibleInk=r.view==='footage' ? (s.board.studio?.ink[asset?.id||'']||[]).filter(d=>r.time>=d.from-.03&&r.time<=d.to+.03):[];
-  return { board, availableViews:availableHostViews(s.board,r.assets,r.assetAvailability),mediaType:asset?.type,rate:isMedia?r.rate:s.speed,visibleInk, previewAspect:preview?.aspect, frame: s.previewTime === null ? { players: board.players, drawings: board.drawings, ball: board.ball } : copy(frameAt(s.board, s.previewTime)), view: r.view, camera: r.camera, time: isMedia ? r.time : s.previewTime ?? activeSceneTime(board), duration: isMedia ? board.studio?.trim.end || asset?.duration || 0 : totalDuration(board), playing: isMedia ? r.mediaPlaying : s.playing, activeCueId: r.activeCueId, recordingMove: !!r.movementDraft, recordingId: r.movementDraft?.sceneId, follow: r.follow, black: !!r.program?.black, outputConnected: r.outputConnected, busy: !!r.busy || s.loading, previewImage: preview?.image, mediaName: asset?.name, canUndo: s.past.length > 0, canRedo: s.future.length > 0 };
+  return { board, statsViewport:r.view==='stats'?statsViewport(s.board):undefined, availableViews:availableHostViews(s.board,r.assets,r.assetAvailability),mediaType:asset?.type,rate:isMedia?r.rate:s.speed,visibleInk, previewAspect:preview?.aspect, frame: s.previewTime === null ? { players: board.players, drawings: board.drawings, ball: board.ball } : copy(frameAt(s.board, s.previewTime)), view: r.view, camera: r.camera, time: isMedia ? r.time : s.previewTime ?? activeSceneTime(board), duration: isMedia ? board.studio?.trim.end || asset?.duration || 0 : totalDuration(board), playing: isMedia ? r.mediaPlaying : s.playing, activeCueId: r.activeCueId, recordingMove: !!r.movementDraft, recordingId: r.movementDraft?.sceneId, follow: r.follow, black: !!r.program?.black, outputConnected: r.outputConnected, busy: !!r.busy || s.loading, previewImage: preview?.image, mediaName: asset?.name, canUndo: s.past.length > 0, canRedo: s.future.length > 0 };
 }
 export function useProducerRoom() {
   const session = useStudioLink(s => s.session);

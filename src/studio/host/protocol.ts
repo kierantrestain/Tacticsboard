@@ -2,12 +2,14 @@ import type { BallActionRequest } from "../footballActionTypes";
 import type { Board, Drawing, Frame } from '../../types';
 import type { CameraPreset, ViewMode } from '../types';
 import type { AttackDirection, CounterattackOptions, DefensiveShape, UnitMovement } from '../teamMovement';
+import type { StatsViewport } from '../statsViewport';
 import type { PlayRequest } from '../playbookTypes';
 export type HostRole = 'host1' | 'host2';
 export type RoomRole = HostRole | 'producer';
 export interface RoomSession { room: string; token: string; role: RoomRole }
 export interface RoomPresence { owner: HostRole | null; epoch: number; requested: HostRole | null; connected: Record<RoomRole, boolean>; armed: boolean }
 export interface HostState {
+  statsViewport?: StatsViewport;
   board: Board;
   frame: Frame;
   view: ViewMode;
@@ -33,6 +35,7 @@ export interface HostState {
   canRedo: boolean;
 }
 export type HostCommand =
+  | { type: 'stats-scroll'; value: number }
   | { type: 'possession'; playerId: string | null }
   | { type: 'sequence-edit'; id: string; action: 'duplicate' | 'earlier' | 'later' }
   | { type: 'motion'; easing: 'smooth' | 'linear'; cut: boolean; playerId?: string; curve?: number }

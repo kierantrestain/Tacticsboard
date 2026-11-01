@@ -55,3 +55,8 @@ it('validates and saves actual run curves through the shared controller command'
  const next=createMovement(state.studio.board);state.studio.board=next;const id=next.players[1].uid;executeHostCommand({type:'motion',easing:'linear',cut:false,playerId:id,curve:.5});expect(next.scenes[1].motion).toEqual({easing:'linear',curves:{[id]:.5}});expect(()=>executeHostCommand({type:'motion',easing:'linear',cut:false,playerId:id,curve:Infinity})).toThrow('valid movement');
  state.runtime.movementDraft={sceneId:next.activeScene};expect(()=>executeHostCommand({type:'sequence-edit',id:next.activeScene,action:'duplicate'})).toThrow('Finish');
 });
+it('scrolls a complete prepared statistic graphic through the host command without losing selections',()=>{
+ const b=state.studio.board,stats=Object.fromEntries(Array.from({length:20},(_,i)=>['s'+i,{label:'Stat '+i,value:i}]));b.studio.comparison={kind:'teams',title:'Clubs',scope:'PL',source:'ESPN',basis:'totals',fields:Object.keys(stats),entities:[{id:'a',name:'A',stats},{id:'b',name:'B',stats}]};state.runtime.view='stats';
+ executeHostCommand({type:'stats-scroll',value:500});expect(state.studio.set).toHaveBeenCalledWith(expect.objectContaining({board:expect.objectContaining({studio:expect.objectContaining({statsScroll:12,comparison:expect.objectContaining({fields:expect.any(Array)})})})}));
+ expect(b.studio.comparison.fields).toHaveLength(20);state.runtime.view='board';expect(()=>executeHostCommand({type:'stats-scroll',value:1})).toThrow('prepared statistic');
+});
