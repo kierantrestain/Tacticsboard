@@ -113,7 +113,7 @@ export function buildReportReplay(current: Board, catalogue: Catalogue, match: M
   if (options.assisterId && (!assister || assister.id === actor.id || assister.side !== actor.side)) throw Error('Choose a different teammate for the build-up.');
   if (!['left', 'right'].includes(options.goalSide) || !Number.isFinite(options.seconds) || options.seconds < .5 || options.seconds > 5) throw Error('Choose a valid direction and ball travel time.');
   for (const p of [options.origin, options.assistOrigin]) if (p && ![p.x, p.y].every(n => Number.isFinite(n) && n >= .025 && n <= .975)) throw Error('Keep player positions inside the pitch.');
-  const fresh = newBoard(home, away), b: Board = { ...fresh, id: current.id, competition: match.league, studio: copy(current.studio || emptyStudio()), managerNotes: copy(current.managerNotes), context: boardContext(home, away), match: copy(match) };
+  const fresh = newBoard(home, away), b: Board = { ...fresh, id: current.id, title:current.title, competition: match.league, studio: copy(current.studio || emptyStudio()), managerNotes: copy(current.managerNotes), context: boardContext(home, away), match: copy(match) };
   b.players = [];
   if (options.includeXI) for (const [side, team] of [['home', home], ['away', away]] as const) {
     const line = report.lineups.find(l => l.teamId === team.id);
@@ -142,7 +142,7 @@ export function buildReportReplay(current: Board, catalogue: Catalogue, match: M
     p.x = assistPoint.x; p.y = assistPoint.y;
   }
   const title = `${actor.name} · ${moment.title.split(' · ').at(-1)}`;
-  b.title = `${moment.minute} · ${title}`.slice(0, 120);
+  if(!b.studio?.episodeNamed&&!b.studio?.cues?.length)b.title = `${moment.minute} · ${title}`.slice(0, 120);
   b.recreation = { version: 1, matchId: match.id, eventId: moment.id, minute: moment.minute, title: title.slice(0, 120), sourceText: (moment.event.text || '').slice(0, 4000), sourceUrl: report.sourceUrl || match.sourceUrl, actorId: actor.id, assisterId: assister?.id, coordinateBasis: !options.origin && reportedPoint(moment, options.goalSide) ? 'provider' : 'illustrative', layoutBasis: 'illustrative', createdAt: new Date().toISOString() };
   b.lineupSource = { home: 'Report recreation · off-ball layout illustrative', away: 'Report recreation · off-ball layout illustrative' };
   b.settings = { ...b.settings, tokenStyle: 'disc', ballVisible: true, focusPlayer: undefined, teamShape: false, teamLines: false };

@@ -1,7 +1,7 @@
 {
   "name": "fixture-tactics-studio",
   "private": true,
-  "version": "5.2.0",
+  "version": "6.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -13,7 +13,8 @@
     "prebuild": "node scripts/prepare-reports.mjs && node scripts/prepare-vision.mjs",
     "data:season": "python3 scripts/fetch-season.py && node scripts/enrich-season.mjs && node scripts/pack-reports.mjs",
     "postbuild": "node scripts/package-hub.mjs",
-    "studio": "node scripts/studio-hub.mjs"
+    "studio": "node scripts/studio-hub.mjs",
+    "data:events": "node --max-old-space-size=4096 scripts/prepare-event-archive.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

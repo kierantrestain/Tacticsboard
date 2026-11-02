@@ -81,6 +81,7 @@ export default function EpisodeLibrary({ onImport }: { onImport: () => void }) {
               if (title && title !== s.board?.title) {
                 s.commit((b) => {
                   b.title = title;
+                  b.studio!.episodeNamed=true;
                 });
                 void s.save();
               }

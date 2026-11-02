@@ -1,3 +1,6 @@
+import {validMatchSource,validMatchCorrection} from './matchModel';
+import type {MatchCorrection} from './matchModel';
+import type {Match} from '../types';
 import type { Board, Drawing, Frame, Side, MatchDetails, Scene } from "../types";
 import { isFootballAction } from "./footballActionTypes";
 import { isReportRecreation } from "../football/recreationTypes";
@@ -8,6 +11,8 @@ import { validBall } from './possession';
 import { validMotion } from './motion';
 import { validPresentation, validCameraPose, validGraphicExtras } from './mediaModel';
 import type { SourcePresentation, CameraPose } from './mediaModel';
+import {validGraphic} from '../football/events/import';
+import type {DataGraphic} from '../football/events/types';
 export type ViewMode = "board" | "footage" | "split" | "replay" | "stats";
 export type MatchStats = Pick<
   MatchDetails,
@@ -122,6 +127,8 @@ export const defaultBroadcast = (): BroadcastStyle => ({
 });
 /** A cue holds a frame, never a nested Board/StudioDocument. */
 export interface RundownCue {
+  matchSource?:Match;matchCorrection?:MatchCorrection;matchRefreshedAt?:string;
+  dataGraphic?:DataGraphic;
   presenterNotes?: { host1?: string; host2?: string; producer?: string };
   landmarks?: Landmark[];
   targets?: TrackedTarget[];
@@ -170,6 +177,9 @@ export interface RundownCue {
   lowerThird: string;
 }
 export interface StudioDocument {
+  episodeNamed?:boolean;
+  matchSource?:Match;matchCorrection?:MatchCorrection;matchRefreshedAt?:string;
+  dataGraphic?:DataGraphic;
   resume?: {view:ViewMode;time:number;phaseTime:number|null;cueId?:string|null};
   resourceIds?:string[];
   sourcePresentations?: Record<string, SourcePresentation>;
@@ -250,6 +260,9 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
     !!x && typeof x === "object" && !Array.isArray(x);
   return (
     d.version === 2 &&
+    (d.episodeNamed===undefined||typeof d.episodeNamed==='boolean') &&
+    (d.dataGraphic===undefined||validGraphic(d.dataGraphic)) &&
+    (d.matchSource===undefined||validMatchSource(d.matchSource))&&(d.matchCorrection===undefined||validMatchCorrection(d.matchCorrection))&&(d.matchRefreshedAt===undefined||typeof d.matchRefreshedAt==='string'&&d.matchRefreshedAt.length<=100) &&
     (d.resume===undefined||!!d.resume&&['board','footage','split','replay','stats'].includes(d.resume.view)&&Number.isFinite(d.resume.time)&&d.resume.time>=0&&d.resume.time<=1000000&&(d.resume.phaseTime===null||Number.isFinite(d.resume.phaseTime)&&d.resume.phaseTime>=0&&d.resume.phaseTime<=6000)&&(d.resume.cueId==null||typeof d.resume.cueId==='string'&&d.resume.cueId.length<=100)) &&
     (d.resourceIds===undefined||Array.isArray(d.resourceIds)&&d.resourceIds.length<=500&&d.resourceIds.every(id=>typeof id==='string'&&/^[a-zA-Z0-9-]{1,150}$/.test(id))) &&
     (d.sourcePresentations === undefined || record(d.sourcePresentations) && Object.keys(d.sourcePresentations).length<=500 && Object.values(d.sourcePresentations).every(validPresentation)) &&
@@ -369,6 +382,8 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
             [p.x, p.y].every((n) => Number.isFinite(n) && n >= 0 && n <= 1);
           return (
             !!c &&
+            (c.dataGraphic===undefined||validGraphic(c.dataGraphic)) &&
+            (c.matchSource===undefined||validMatchSource(c.matchSource))&&(c.matchCorrection===undefined||validMatchCorrection(c.matchCorrection))&&(c.matchRefreshedAt===undefined||typeof c.matchRefreshedAt==='string'&&c.matchRefreshedAt.length<=100) &&
             (c.landmarks===undefined||validCalibration(c.landmarks)) &&
             (c.targets===undefined||validTargets(c.targets)) &&
             (c.phaseTime===undefined||Number.isFinite(c.phaseTime)&&c.phaseTime>=0&&c.phaseTime<=6000) &&

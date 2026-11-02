@@ -20,6 +20,8 @@ import { buildPlay } from "../playbook";
 import { giveBall, dropBall } from "../possession";
 import { editSequence, createMovement } from "../sequenceEditing";
 
+import {changeGraphic,seekSelectedEvent} from '../../football/events/actions';
+import {mergeFilterChanges} from '../../football/events/graphic';
 export { createMovement } from "../sequenceEditing";
 export function playerMarks(
   board: Board,
@@ -113,12 +115,19 @@ export function executeHostCommand(command: HostCommand) {
     r.set({ loopClip: command.enabled });
     return;
   }
+  if(command.type==='analysis-filter'){
+    if(r.view!=='stats'||!b.studio?.dataGraphic)throw Error('Open a prepared event analysis first.');
+    if(!command.patch||Object.keys(command.patch).some(k=>!['kind','selectedEventIds','playerIds','radarMetrics','position','minimumMinutes','basis','radarOffset'].includes(k)))throw Error('This tablet cannot replace a prepared data source or footage alignment.');
+    changeGraphic({...command.patch,...(command.filterChanges?{filters:mergeFilterChanges(b.studio.dataGraphic.filters,command.filterChanges)}:{})});return;
+  }
+  if(command.type==='analysis-seek'){if(r.view!=='stats')throw Error('Open a prepared event analysis first.');seekSelectedEvent();return;}
   if (command.type === "stats-scroll") {
     if (r.view !== "stats" || !Number.isFinite(command.value))
       throw Error("Open a prepared statistic graphic to scroll.");
     scrollStats(command.value);
     return;
   }
+  if(command.type==='clear'&&r.view==='stats')throw Error('Open the footage or tactical view to clear drawings.');
   if (command.type === "cancel-gesture") {
     cancelHostGesture();
     return;

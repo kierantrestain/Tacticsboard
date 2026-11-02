@@ -1,5 +1,5 @@
 /** Shared by the LAN relay and compiled tablet/producer. No stateful editor lives here. */
-export const STUDIO_PROTOCOL = 2;
+export const STUDIO_PROTOCOL = 4;
 export function commandContext(state) {
   return JSON.stringify([
     state?.board?.id,
@@ -7,6 +7,7 @@ export function commandContext(state) {
     state?.view,
     state?.activeCueId,
     state?.board?.studio?.assetId,
+    state?.board?.studio?.dataGraphic?.resourceId,
   ]);
 }
 export function privateHostState(state, role) {

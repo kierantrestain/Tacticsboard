@@ -16,6 +16,8 @@ export function episodeMediaIds(b: Board, assets: MediaAsset[] = []) {
         "sourcePresentations",
         "explainStops",
       ].flatMap((key) => Object.keys((d as any)?.[key] || {})),
+      d?.dataGraphic?.alignment?.assetId,
+      ...(d?.cues||[]).map(c=>c.dataGraphic?.alignment?.assetId),
       ...(d?.stillOrder || []),
       ...b.scenes.map((s) => s.source?.assetId),
       ...(d?.bookmarks.map((m) => m.assetId) || []),
@@ -53,6 +55,7 @@ export function remapEpisodeMedia(b: Board, remap: Record<string, string>) {
       if (key === "tracking") record[id].assetId = id;
     }
   }
+  for(const g of [d.dataGraphic,...(d.cues||[]).map(c=>c.dataGraphic)])if(g?.alignment)g.alignment.assetId=remap[g.alignment.assetId]||g.alignment.assetId;
   if (d.assetId) d.assetId = remap[d.assetId] || d.assetId;
   if (d.stillOrder) d.stillOrder = d.stillOrder.map((id) => remap[id] || id);
   d.bookmarks.forEach((m) => (m.assetId = remap[m.assetId] || m.assetId));
@@ -75,6 +78,7 @@ export function remapEpisodeMedia(b: Board, remap: Record<string, string>) {
 export function duplicateEpisode(b: Board) {
   const next = copy(b);
   next.id = uid();
+  if(next.studio)next.studio.episodeNamed=true;
   next.title = (b.title + " · copy").slice(0, 120);
   return next;
 }

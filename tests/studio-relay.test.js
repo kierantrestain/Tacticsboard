@@ -207,3 +207,10 @@ it("invalidates old credentials after Hub restart without replaying commands", a
       .status,
   ).toBe(401);
 });
+
+it('rejects an event/radar action prepared for a different immutable source snapshot',async()=>{
+ const r=await room();const oldState={...r.state,view:'stats',board:{...r.state.board,studio:{...r.state.board.studio,dataGraphic:{resourceId:'old-resource'}}}};await post('state',r.producer,{state:oldState});
+ const old={...r.command,context:commandContext(oldState),command:{type:'analysis-filter',patch:{selectedEventIds:['event-1']}}};
+ await post('state',r.producer,{state:{...oldState,board:{...oldState.board,studio:{...oldState.board.studio,dataGraphic:{resourceId:'replacement-resource'}}}}});
+ expect((await post('command',r.host1,old)).status).toBe(409);expect(r.p.items.filter(e=>e.type==='command')).toHaveLength(0);
+});

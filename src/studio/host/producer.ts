@@ -1,3 +1,4 @@
+import {eventHostSnapshot} from '../../football/events/hostModel';
 import {
   STUDIO_PROTOCOL,
   commandContext,
@@ -107,6 +108,7 @@ export function hostSnapshot(includeImage = false): HostState | null {
       landmarks: {},
       dataReports: undefined,
       statsSnapshot: undefined,
+      matchCorrection:undefined,matchSource:undefined,
       comparison: undefined,
       ink: {},
       bookmarks: [],
@@ -114,6 +116,7 @@ export function hostSnapshot(includeImage = false): HostState | null {
         ...c,
         sequence: undefined,
         report: undefined,
+        matchCorrection:undefined,matchSource:undefined,
         comparison: undefined,
         tracking: undefined,
         thumbnail: undefined,
@@ -138,10 +141,12 @@ export function hostSnapshot(includeImage = false): HostState | null {
   return {
     protocol: STUDIO_PROTOCOL,
     appVersion,
+    previewTitle:s.board.studio?.dataGraphic?.title||s.board.studio?.comparison?.title||s.board.scenes.find(scene=>scene.id===s.board!.activeScene)?.title||s.board.title,
     loop: isMedia ? r.loopClip : s.loop,
     outputTitle: r.program?.title,
     board,
-    statsViewport: r.view === "stats" ? statsViewport(s.board) : undefined,
+    eventAnalysis: r.view==='stats'?eventHostSnapshot(s.board):undefined,
+    statsViewport: r.view === "stats" && !s.board.studio?.dataGraphic ? statsViewport(s.board) : undefined,
     availableViews: availableHostViews(s.board, r.assets, r.assetAvailability),
     mediaType: asset?.type,
     rate: isMedia ? r.rate : s.speed,

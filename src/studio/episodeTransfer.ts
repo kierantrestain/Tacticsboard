@@ -11,10 +11,13 @@ import {
   commitImportedMedia,
 } from "./assetStore";
 import { mediaDB } from "../media";
+import {analysisResourceIds,validateGraphicResource} from '../football/events/graphic';
+import {validateResource} from '../football/events/import';
 export const BACKUP_CHUNK_BYTES = 32 * 1048576;
 const MAX_TOTAL_BYTES = 8 * 1024 ** 3,
   MAX_ASSETS = 256;
 export interface BackupPart {
+  kind?:"media"|"resource";
   name: string;
   assetId: string;
   offset: number;
@@ -23,13 +26,13 @@ export interface BackupPart {
 }
 export interface EpisodeBackup {
   format: "bangon-episode";
-  version: 1;
+  version: 1|2;
   id: string;
   createdAt: string;
   board: Board;
   assets: MediaAsset[];
   parts: BackupPart[];
-  resources?: { id: string; value: unknown }[];
+  resources?: { id: string; value?: unknown; size?:number }[];
 }
 export const backupStem = (backup: Pick<EpisodeBackup, "id" | "board">) =>
   filename(backup.board.title).slice(0, 100) + "-" + backup.id;
@@ -131,15 +134,22 @@ export async function prepareEpisodeBackup(
       progress(total ? done / total : 1);
     }
   }
-  const resources: { id: string; value: unknown }[] = [];
-  for (const resourceId of (board.studio as any)?.resourceIds || []) {
+  const resources: { id: string; size?:number; value?:unknown }[] = [];
+  let inlineResourceBytes=0;
+  for (const resourceId of analysisResourceIds(board)) {
     const value = await getRecord("resources", resourceId);
     if (!value) throw Error(`Prepared data snapshot missing: ${resourceId}`);
-    resources.push({ id: resourceId, value });
+    validateGraphicResource(board,resourceId,value);
+    const blob=new Blob([JSON.stringify(value)],{type:'application/json'});
+    if(blob.size<=128*1024&&inlineResourceBytes+blob.size<=1048576){inlineResourceBytes+=blob.size;resources.push({id:resourceId,value});continue;}
+    if(blob.size>64*1048576)throw Error('A prepared data snapshot exceeds 64 MB. Split the event selection into smaller source datasets.');
+    for(let offset=0;offset<blob.size;offset+=BACKUP_CHUNK_BYTES){const chunk=blob.slice(offset,offset+BACKUP_CHUNK_BYTES);parts.push({kind:'resource',name:`${backupStem({id,board})}.touchline.part${String(parts.length+1).padStart(4,'0')}.zip`,assetId:resourceId,offset,size:chunk.size,digest:await digestChunk(chunk)});}
+    resources.push({id:resourceId,size:blob.size});
   }
+  if(resources.reduce((n,r)=>n+(r.size||0),0)>256*1048576)throw Error('Prepared data exceeds the 256 MB episode transfer budget. Split this episode.');
   return {
     format: "bangon-episode",
-    version: 1,
+    version: 2,
     id,
     createdAt: new Date().toISOString(),
     board: copy(board),
@@ -155,7 +165,8 @@ export async function renderBackupPart(
 ) {
   const part = backup.parts[index];
   if (!part) throw Error("Unknown backup volume.");
-  const blob = await read(part.assetId);
+  const value=part.kind==='resource'?await getRecord('resources',part.assetId):null;
+  const blob = part.kind==='resource'?value?new Blob([JSON.stringify(value)]):null:await read(part.assetId);
   if (!blob) throw Error("Source disappeared during backup.");
   const chunk = blob.slice(part.offset, part.offset + part.size);
   if ((await digestChunk(chunk)) !== part.digest)
@@ -177,16 +188,19 @@ export function validateBackup(value: unknown): asserts value is EpisodeBackup {
   if (
     !v ||
     v.format !== "bangon-episode" ||
-    v.version !== 1 ||
+    ![1,2].includes(v.version) ||
     !isBoard(v.board) ||
     !Array.isArray(v.assets) ||
     v.assets.length > MAX_ASSETS ||
     !Array.isArray(v.parts) ||
-    v.parts.length > 512 ||
+    v.parts.length > 1024 ||
     typeof v.id !== "string" ||
     v.id.length > 100
   )
     throw Error("Invalid complete-episode manifest.");
+  if(v.resources!==undefined&&(!Array.isArray(v.resources)||v.resources.length>500||v.resources.some(r=>!r||typeof r.id!=='string'||!/^[a-zA-Z0-9-]{1,150}$/.test(r.id)||!(r.value||v.version===2&&Number.isSafeInteger(r.size)&&r.size!>0&&r.size!<=64*1048576))||new Set(v.resources.map(r=>r.id)).size!==v.resources.length))throw Error('Invalid prepared data snapshots.');
+  const resourceSizes=new Map((v.resources||[]).filter(r=>r.size!==undefined).map(r=>[r.id,r.size!]));
+  if([...resourceSizes.values()].reduce((a,b)=>a+b,0)>256*1048576)throw Error('Prepared data exceeds the 256 MB episode transfer budget. Split this episode.');
   const ids = new Set<string>(),
     names = new Set<string>();
   let total = 0;
@@ -216,6 +230,7 @@ export function validateBackup(value: unknown): asserts value is EpisodeBackup {
       a.thumbnail.length > 1000000
     )
       throw Error("Invalid or duplicate source in episode manifest.");
+    if(resourceSizes.has(a.id))throw Error('Media and resource identities conflict.');
     ids.add(a.id);
     total += a.size;
   }
@@ -227,7 +242,7 @@ export function validateBackup(value: unknown): asserts value is EpisodeBackup {
       typeof p.name !== "string" ||
       !/^[^/\\]{1,200}\.touchline\.part\d{4}\.zip$/.test(p.name) ||
       names.has(p.name) ||
-      !ids.has(p.assetId) ||
+      !(p.kind==='resource'?v.version===2&&resourceSizes.has(p.assetId):(p.kind===undefined||p.kind==='media')&&ids.has(p.assetId)) ||
       !Number.isInteger(p.offset) ||
       p.offset < 0 ||
       !Number.isInteger(p.size) ||
@@ -238,7 +253,7 @@ export function validateBackup(value: unknown): asserts value is EpisodeBackup {
       throw Error("Invalid backup volume metadata.");
     names.add(p.name);
   }
-  for (const a of v.assets) {
+  for (const a of [...v.assets,...[...resourceSizes].map(([id,size])=>({id,size}))]) {
     const parts = v.parts
       .filter((p) => p.assetId === a.id)
       .sort((a, b) => a.offset - b.offset);
@@ -254,25 +269,12 @@ export function validateBackup(value: unknown): asserts value is EpisodeBackup {
   if ([...episodeMediaIds(v.board, v.assets)].some((id) => !ids.has(id)))
     throw Error("Manifest omits a referenced source.");
   if (
-    v.resources !== undefined &&
-    (!Array.isArray(v.resources) ||
-      v.resources.length > 500 ||
-      v.resources.some(
-        (r) =>
-          !r ||
-          typeof r.id !== "string" ||
-          !/^[a-zA-Z0-9-]{1,150}$/.test(r.id) ||
-          !r.value,
-      ) ||
-      new Set(v.resources.map((r) => r.id)).size !== v.resources.length)
-  )
-    throw Error("Invalid prepared data snapshots.");
-  if (
-    v.board.studio?.resourceIds?.some(
+    analysisResourceIds(v.board).some(
       (id) => !v.resources?.some((r) => r.id === id),
     )
   )
     throw Error("Prepared data snapshot missing from episode backup.");
+  for(const r of v.resources||[])if(r.value){if((r.value as any)?.format==='bangon-graphic-resource')validateResource(r.value);validateGraphicResource(v.board,r.id,r.value);}
 }
 async function removeStaging(keys: string[]) {
   const db = await mediaDB();
@@ -349,7 +351,7 @@ export async function importEpisodeBackup(
     const estimate = await globalThis.navigator?.storage
         ?.estimate?.()
         .catch(() => null),
-      sourceBytes = v.assets.reduce((n, a) => n + a.size, 0);
+      sourceBytes = v.parts.reduce((n,p)=>n+p.size,0);
     if (
       estimate?.quota &&
       estimate.usage !== undefined &&
@@ -372,6 +374,7 @@ export async function importEpisodeBackup(
         part.backupId !== v.id ||
         part.index !== i ||
         part.assetId !== expected.assetId ||
+        part.kind !== expected.kind ||
         part.offset !== expected.offset ||
         blob.size !== expected.size ||
         (await digestChunk(blob)) !== expected.digest
@@ -430,7 +433,14 @@ export async function importEpisodeBackup(
       throw Error(
         "Not enough browser storage to publish the complete episode. Existing episodes are retained.",
       );
-    await commitImportedMedia(items, v.resources || []);
+    const resources:{id:string;value:unknown}[]=[];
+    for(const resource of v.resources||[]){
+      let value=resource.value;
+      if(resource.size!==undefined){const chunks:Blob[]=[];const indexed=v.parts.map((p,i)=>({p,i})).filter(({p})=>p.kind==='resource'&&p.assetId===resource.id).sort((a,b)=>a.p.offset-b.p.offset);for(const {i}of indexed){const staged=await getRecord<{blob:Blob}>('staging',`${staging}:${i}`);if(!staged?.blob)throw Error('Prepared data import was interrupted.');chunks.push(staged.blob);}const blob=new Blob(chunks);if(blob.size!==resource.size)throw Error('Prepared data length does not match its manifest.');value=JSON.parse(await blob.text());}
+      if((value as any)?.format==='bangon-graphic-resource')validateResource(value);
+      if(!value)throw Error('Missing prepared data snapshot.');validateGraphicResource(v.board,resource.id,value);resources.push({id:resource.id,value});
+    }
+    await commitImportedMedia(items, resources);
     return remapEpisodeMedia(copy(v.board), remap);
   } finally {
     await removeStaging(keys).catch(() => {});

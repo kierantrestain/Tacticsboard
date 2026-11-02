@@ -233,7 +233,7 @@ export function invalidateSourceReview(board: Board, id: string) {
   if (!d) return;
   if (d.tracking[id]) d.tracking[id].reviewed = false;
   for (const c of d.cues || [])
-    if (c.assetId === id) {
+    if (c.assetId === id||c.dataGraphic?.alignment?.assetId===id) {
       c.reviewedAt = undefined;
       if (c.tracking) c.tracking.reviewed = false;
     }

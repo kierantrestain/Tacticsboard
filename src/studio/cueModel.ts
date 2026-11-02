@@ -24,6 +24,7 @@ export function makeCue(
       ? desk.assetId
       : undefined;
   return {
+    matchSource:copy(desk.matchSource),matchCorrection:copy(desk.matchCorrection),matchRefreshedAt:desk.matchRefreshedAt,
     landmarks:source?copy(desk.landmarks[source]||[]):undefined,
     targets:source?copy(desk.targets[source]||[]):undefined,
     phaseTime:!source&&['board','replay'].includes(view)?time:undefined,
@@ -31,6 +32,7 @@ export function makeCue(
     comparisonView: desk.comparisonView,
     cameraPose: copy(desk.cameraPose),
     playbackRate: desk.playbackRate || 1,
+    dataGraphic: view==='stats'?copy(desk.dataGraphic):undefined,
     comparison: view==='stats'?copy(desk.comparison):undefined,
     statsScroll: view==='stats'?desk.statsScroll:undefined,
     recreation: copy(board.recreation),
@@ -60,7 +62,7 @@ export function makeCue(
     match: copy(board.match),
     id: uid(),
     title: (view === "stats"
-      ? desk.comparison ? desk.comparison.title : statsPlayer
+      ? desk.dataGraphic ? desk.dataGraphic.title : desk.comparison ? desk.comparison.title : statsPlayer
         ? `${statsPlayer.name} · match stats`
         : `${board.context?.home.shortName || "Home"} v ${board.context?.away.shortName || "Away"} · numbers`
       : board.scenes.find((s) => s.id === board.activeScene)?.title ||
@@ -90,6 +92,7 @@ export function makeCue(
 export function cueBoard(board: Board, cue: RundownCue): Board {
   const next = copy(board);
   next.recreation = copy(cue.recreation);
+  if(cue.recreation&&!next.studio?.episodeNamed&&!next.studio?.cues?.length)next.title=(cue.recreation.minute+' · '+cue.recreation.title).slice(0,120);
   const changedContext =
     !!cue.homeTeamId &&
     (cue.homeTeamId !== board.homeTeamId ||
@@ -137,8 +140,10 @@ export function cueBoard(board: Board, cue: RundownCue): Board {
   next.studio.playbackRate=cue.playbackRate||1;
   next.studio.comparisonView=cue.comparisonView;
   if(cue.assetId){(next.studio.sourcePresentations||={})[cue.assetId]=copy(cue.sourcePresentation||{original:false,annotations:true,rotation:0,crop:{x:0,y:0,width:1,height:1},brightness:1,contrast:1});}
+  next.studio.matchSource=copy(cue.matchSource);next.studio.matchCorrection=copy(cue.matchCorrection);next.studio.matchRefreshedAt=cue.matchRefreshedAt;
   next.studio.view = cue.view;
   next.studio.statsSnapshot = copy(cue.report);
+  next.studio.dataGraphic = copy(cue.dataGraphic);
   next.studio.comparison = copy(cue.comparison);
   next.studio.statsScroll = cue.statsScroll;
   next.studio.statsFields = copy(cue.statsFields);
@@ -203,12 +208,15 @@ export function cueContentKey(cue: RundownCue): string {
     cue.broadcast,
     cue.report,
     cue.comparison,
+    cue.dataGraphic,
     cue.statsScroll,
     cue.statsFields,
     cue.statsPlayerId,
     cue.statsComparePlayerId,
     cue.statsLayout,
-    cue.match?.id,
+    cue.match,
+    cue.matchSource,
+    cue.matchCorrection,
     cue.tracking,
     cue.sequence,
     cue.explainStops,

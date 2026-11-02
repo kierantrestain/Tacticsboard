@@ -84,6 +84,7 @@ export function takeToAir({ capture = true }: { capture?: boolean } = {}) {
     black: false,
     cueId: cue?.id,
     title:
+      board.studio?.dataGraphic?.title ||
       cue?.title ||
       board.scenes.find((scene) => scene.id === board.activeScene)?.title ||
       board.title,

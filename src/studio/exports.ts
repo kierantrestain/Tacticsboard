@@ -1,3 +1,5 @@
+import {analysisResourceIds,validateGraphicResource} from '../football/events/graphic';
+import {validateResource} from '../football/events/import';
 import { validMediaMetadata } from './mediaModel';
 import { zipSync, unzipSync, strToU8, strFromU8 } from "fflate";
 import { copy, download, filename, isBoard } from "../core";
@@ -103,21 +105,7 @@ export function productionFrame(
 }
 export async function exportPack(board: Board, assets: MediaAsset[]) {
   const b = copy(board),
-    ids = new Set(
-      [
-        b.studio?.assetId,
-        ...Object.keys(b.studio?.ink || {}),
-        ...Object.keys(b.studio?.tracking || {}),
-        ...Object.keys(b.studio?.landmarks || {}),
-        ...Object.keys(b.studio?.targets || {}),
-        ...Object.keys(b.studio?.sourceRanges || {}),
-        ...Object.keys(b.studio?.sourcePresentations || {}),
-        ...b.scenes.map((s) => s.source?.assetId),
-        ...(b.studio?.bookmarks || []).map((m) => m.assetId),
-        ...(b.studio?.cues || []).map((c) => c.assetId),
-        ...(b.studio?.cues || []).flatMap(c=>c.sequence?.map(s=>s.source?.assetId)||[]),
-      ].filter(Boolean) as string[],
-    ),
+    ids = episodeMediaIds(b,assets),
     included = assets.filter((a) => ids.has(a.id));
   const entries: Record<string, Uint8Array> = {},
     meta: MediaAsset[] = [];
@@ -142,7 +130,7 @@ export async function exportPack(board: Board, assets: MediaAsset[]) {
     meta.push(a);
   }
   const resources:{id:string;value:unknown}[]=[];
-  for(const id of b.studio?.resourceIds||[]){const value=await getRecord('resources',id);if(!value)throw Error('A prepared data snapshot is missing. Restore it before backup.');resources.push({id,value});}
+  for(const id of analysisResourceIds(b)){const value=await getRecord('resources',id);if(!value)throw Error('A prepared data snapshot is missing. Restore it before backup.');validateGraphicResource(b,id,value);resources.push({id,value});}
   entries["project.json"] = strToU8(
     JSON.stringify({
       format: "touchline-project",
@@ -152,6 +140,7 @@ export async function exportPack(board: Board, assets: MediaAsset[]) {
       resources,
     }),
   );
+  if(size+entries['project.json'].length>200*1048576)throw Error('Use Complete episode backup for media and prepared data exceeding the legacy ZIP limit.');
   return {
     blob: new Blob([zipSync(entries, { level: 0 }) as BlobPart], {
       type: "application/zip",
@@ -218,7 +207,8 @@ export async function importPack(file: File,accept:(b:Board)=>boolean=()=>true):
   }
   if([...episodeMediaIds(b)].some(id=>!remap[id]))throw Error('The pack omits a referenced source. Existing episodes are unchanged.');
   if(manifest.resources!==undefined&&(!Array.isArray(manifest.resources)||manifest.resources.length>500||manifest.resources.some((r:any)=>!r||typeof r.id!=='string'||!/^[a-zA-Z0-9-]{1,150}$/.test(r.id)||!r.value)))throw Error('Invalid prepared data snapshots.');
-  if(b.studio?.resourceIds?.some(id=>!manifest.resources?.some((r:any)=>r.id===id)))throw Error('A prepared data snapshot is missing from this pack.');
+  if(analysisResourceIds(b).some(id=>!manifest.resources?.some((r:any)=>r.id===id)))throw Error('A prepared data snapshot is missing from this pack.');
+  for(const r of manifest.resources||[]){if(r.value?.format==='bangon-graphic-resource')validateResource(r.value);validateGraphicResource(b,r.id,r.value);}
   await commitImportedMedia(items,manifest.resources||[]);
   if (b.studio) {
     const d = b.studio;
@@ -241,6 +231,7 @@ export async function importPack(file: File,accept:(b:Board)=>boolean=()=>true):
         if (key === "tracking") record[id].assetId = id;
       }
     }
+    for(const g of [d.dataGraphic,...(d.cues||[]).map(c=>c.dataGraphic)])if(g?.alignment)g.alignment.assetId=remap[g.alignment.assetId]||g.alignment.assetId;
     if (d.assetId) d.assetId = remap[d.assetId] || d.assetId;
     if(d.stillOrder)d.stillOrder=d.stillOrder.map(id=>remap[id]||id);
     d.bookmarks.forEach((m) => (m.assetId = remap[m.assetId] || m.assetId));

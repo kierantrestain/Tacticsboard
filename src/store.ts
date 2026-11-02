@@ -1,3 +1,4 @@
+import {setLiveFollow} from './studio/production';
 import { removeFootballActionLinks } from "./studio/footballActions";
 import { loadReport } from "./football/data";
 import { saveProject, loadProject, recoveredEpisode } from "./studio/assetStore";
@@ -365,6 +366,7 @@ export const useStudio = create<Studio>((set, get) => ({
     get().notify(`${f} shape applied`);
   },
   chooseTeams: (h, a) => {
+    setLiveFollow(false);
     matchLoadId++;
     const { catalogue } = get();
     if (!catalogue) return;
@@ -384,10 +386,11 @@ export const useStudio = create<Studio>((set, get) => ({
       b.players = next.players;
       b.drawings = [];
       b.match = undefined;
-      b.title = `${ht.shortName} v ${at.shortName} — match analysis`;
+      if(!b.studio?.episodeNamed&&!b.studio?.cues?.length)b.title = `${ht.shortName} v ${at.shortName} — match analysis`;
       if (b.studio) {
         b.studio.assetId = undefined;
         b.studio.view = "board";
+        b.studio.dataGraphic=undefined;b.studio.comparison=undefined;b.studio.matchSource=undefined;b.studio.matchCorrection=undefined;b.studio.matchRefreshedAt=undefined;
         b.studio.statsReportId = undefined;
         b.studio.statsPlayerId = undefined;
         b.studio.statsComparePlayerId = undefined;
@@ -411,6 +414,7 @@ export const useStudio = create<Studio>((set, get) => ({
     get().notify("Teams and recent starting selections loaded");
   },
   loadMatch: async (m) => {
+    setLiveFollow(false);
     const { catalogue } = get();
     if (!catalogue) return;
     const ht = catalogue.teams.find((t) => t.id === m.homeId),
@@ -440,6 +444,7 @@ export const useStudio = create<Studio>((set, get) => ({
       if (b.studio) {
         if (b.match && b.match.id !== m.id) b.studio.assetId = undefined;
         b.studio.view = "board";
+        b.studio.dataGraphic=undefined;b.studio.comparison=undefined;b.studio.matchSource=undefined;b.studio.matchCorrection=undefined;b.studio.matchRefreshedAt=undefined;
         b.studio.statsReportId = m.id;
         b.studio.statsPlayerId = undefined;
         b.studio.statsComparePlayerId = undefined;
@@ -460,7 +465,7 @@ export const useStudio = create<Studio>((set, get) => ({
         }
       }
       b.match = m;
-      b.title = `${ht.shortName} v ${at.shortName} — match analysis`;
+      if(!b.studio?.episodeNamed&&!b.studio?.cues?.length)b.title = `${ht.shortName} v ${at.shortName} — match analysis`;
       b.colors = {
         home: ht.color,
         away: at.color === ht.color ? "#65b5ff" : at.color,

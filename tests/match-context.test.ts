@@ -54,6 +54,7 @@ beforeEach(() => {
   });
 });
 describe("fixture and source context", () => {
+  it('preserves a deliberately named episode across fixture changes',async()=>{const b=useStudio.getState().board!;b.title='Bang On · Episode 12';b.studio!.episodeNamed=true;mocks.loadReport.mockResolvedValue(report('named'));await useStudio.getState().loadMatch(match('named'));expect(useStudio.getState().board!.title).toBe('Bang On · Episode 12');});
   it("a later match selection wins when an earlier report finishes last", async () => {
     let finishFirst!: (r: MatchDetails) => void;
     mocks.loadReport.mockImplementation((m: Match) =>

@@ -176,7 +176,7 @@ export default function MatchCentre() {
     if (days.length <= 4)
       void Promise.allSettled(days.map((day) => refreshMatchday(day, league)));
   }, [league, week, date, historic]);
-  const match = all.find((m) => m.id === selected),
+  const match = filtered.find((m) => m.id === selected),
     rounds =
       league === "eng.1"
         ? historic
@@ -244,6 +244,7 @@ export default function MatchCentre() {
       onCancel={() => useStudio.getState().set({ modal: null })}
     >
       <header className="fc-header">
+        <button onClick={()=>{useStudio.getState().set({modal:null});useRuntime.setState({modal:"events"});}}>Maps & radars</button>
         <div>
           <span className="tl-eyebrow">
             FOOTBALL INTELLIGENCE / {year}/{String(year + 1).slice(-2)}

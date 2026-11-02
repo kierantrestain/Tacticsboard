@@ -1,4 +1,8 @@
-# Production handoff — Touchline Studio 3
+Current operator instructions: [Studio 6](OPERATOR_V6.md). Complete backups use a manifest plus checked 32 MiB ZIP volumes for up to 8 GB of source media; the legacy 200 MB ZIP is for small episodes. Event/cohort snapshots transfer with the complete episode.
+
+# Historical production handoff — Touchline Studio 3
+
+The remainder of this file records the version 3 workflow and evidence. Its limits and control behaviour are historical; use the Studio 6 operator handoff above for the current build.
 
 ## Prepare a segment
 

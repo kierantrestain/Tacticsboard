@@ -24,6 +24,8 @@ export interface RoomPresence {
   armed: boolean;
 }
 export interface HostState {
+  previewTitle?:string;
+  eventAnalysis?:import('../../football/events/hostModel').EventHostSnapshot;
   protocol: number;
   appVersion: string;
   loop: boolean;
@@ -54,6 +56,8 @@ export interface HostState {
   canRedo: boolean;
 }
 export type HostCommand =
+  | {type:"analysis-filter";patch:Omit<Partial<import("../../football/events/types").DataGraphic>,"filters">;filterChanges?:import("../../football/events/graphic").EventFilterChanges}
+  | {type:"analysis-seek"}
   | {
       type: "programme";
       action: "take" | "hold" | "follow" | "blackout" | "restore";

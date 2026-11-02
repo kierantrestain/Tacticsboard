@@ -35,6 +35,12 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(Error("offline")));
 });
 describe("saved football source recovery", () => {
+  it('keeps prepared scores and manual overrides fixed during incoming research updates',async()=>{
+    const fixture={...match,id:'background-update-safety',homeId:'h',awayId:'a',homeScore:'1',awayScore:'0',completed:false,status:'Live'};
+    const board={id:'episode',match:{...fixture},studio:{matchCorrection:{reason:'Producer checked'}}};cache.state.board=board;
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({id:fixture.id,lineups:[],teamStats:[],events:[],score:[{teamId:'h',score:'3'}],status:'Full time',state:'post',updatedAt:'2026-11-02'})}));
+    await loadReport(fixture,true);expect(cache.state.summaries[fixture.id].score[0].score).toBe('3');expect(cache.state.board).toBe(board);expect(board.match.homeScore).toBe('1');expect(board.match.completed).toBe(false);
+  });
   it('upgrades legacy event evidence during an outage without overwriting a newer score or reviving an archived goal', async () => {
     const fixture = { ...match, id: '778899' };
     const saved = { id: fixture.id, lineups: [], teamStats: [{ teamId: 'h', stats: { totalShots: { display: '22', label: 'Shots' } } }], score: [{ teamId: 'h', score: '2' }], events: [{ minute: "30'", text: 'Confirmed goal', type: 'Goal' }], updatedAt: '2026-10-30T12:00:00Z' };

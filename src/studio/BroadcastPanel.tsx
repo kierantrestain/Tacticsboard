@@ -1,3 +1,4 @@
+import MatchCorrections from './MatchCorrections';
 import { Monitor, Radio, SlidersHorizontal } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useStudio } from "../store";
@@ -110,6 +111,7 @@ export default function BroadcastPanel() {
             </button>
           ))}
         </div>
+        <MatchCorrections key={b.match?.id}/>
         <div className="ts-section-title">OUTPUT CONTROL</div>
         <button className="ts-wide-action" onClick={openProgram}>
           <Monitor size={16} />

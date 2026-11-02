@@ -1,0 +1,10 @@
+import {it,expect} from 'vitest';
+import {correctedMatch,matchFromReport,validMatchCorrection} from '../src/studio/matchModel';
+import {newBoard} from '../src/core';
+import {makeCue,cueBoard} from '../src/studio/cueModel';
+import catalogue from '../public/data/catalogue.json';
+import type {Match,MatchDetails} from '../src/types';
+const source:Match={id:'m',league:'eng.1',date:'2026-11-01',name:'Home v Away',homeId:'h',awayId:'a',homeName:'Home',awayName:'Away',homeScore:'1',awayScore:'0',status:'Live',state:'in',completed:false,sourceUrl:'https://example.com/match'};
+const correction={matchId:'m',homeScore:'2',awayScore:'1',state:'post' as const,status:'Full time',reason:'Producer verified against the match log',at:'2026-11-02'};
+it('keeps source data distinct, retains overrides across refresh and removes them deliberately',()=>{const updated=matchFromReport(source,{id:'m',score:[{teamId:'h',score:'3'},{teamId:'a',score:'2'}],state:'post',status:'Full time'} as MatchDetails);expect(source.homeScore).toBe('1');expect(correctedMatch(updated,correction)).toMatchObject({homeScore:'2',awayScore:'1',completed:true});expect(correctedMatch(updated)).toMatchObject({homeScore:'3',awayScore:'2'});expect(()=>matchFromReport(source,{id:'other'} as MatchDetails)).toThrow();expect(()=>correctedMatch({...source,id:'other'},correction)).toThrow();expect(validMatchCorrection({...correction,homeScore:'NaN'})).toBe(false);});
+it('retains a moment’s original source and correction without leaking one match’s override into another recall',()=>{const b=newBoard(catalogue.teams[0] as any,catalogue.teams[1] as any);b.match=correctedMatch(source,correction);b.studio!.matchSource=source;b.studio!.matchCorrection=correction;const cue=makeCue(b,'board','broadcast',0);const other=makeCue({...b,studio:{...b.studio!,matchCorrection:undefined,matchSource:undefined}},'board','broadcast',0);expect(cueBoard(b,cue).studio!.matchCorrection).toEqual(correction);expect(cueBoard(b,other).studio!.matchCorrection).toBeUndefined();});

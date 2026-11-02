@@ -1,6 +1,6 @@
 # Two-host filming operation
 
-Use the Hub packaged from the same build as the producer and tablets. The tablet header identifies the app version. Control protocol **2** rejects incompatible old clients; reload all clients before enabling a new build. Never update/reload the show computer during a recording.
+Use the Hub packaged from the same build as the producer and tablets. The tablet header identifies the app version. Control protocol **4** rejects incompatible old clients; reload all clients before enabling a new build. Never update/reload the show computer during a recording.
 
 1. Build with `npm run build`, then `npm run studio`, or unzip the packaged Studio Hub and run `node scripts/studio-hub.mjs`. Use Node.js 22+. Open the producer at `http://localhost:4174`. The terminal prints the version and tablet network address. Keep it open and the show computer awake.
 2. Resume the correct episode. Browser storage belongs to the address/profile; transfer an episode backup when changing computers/addresses. For volume backups, select the manifest and **all** numbered ZIPs together with Import. Inspect source availability before filming. A browser save is not an external backup.
@@ -19,3 +19,5 @@ Sleep, reconnect and recovery:
 - If the network fails, use the producer's Hold/Blackout and local controls. Check actual TV/OBS/capture; the browser's output acknowledgement alone cannot certify the capture chain.
 
 Rehearse physical tablets, Wi-Fi sleep/wake, GPU playback and the actual output chain before recording. Browser emulation is separate evidence.
+
+Studio 6 adds the prepared event-analysis filters, event inspection/highlight, radar reference filters/metric paging and verified period-alignment recall to this same owner-fenced protocol. See [the v6 handoff](OPERATOR_V6.md) and [data definitions](EVENT_DATA.md).

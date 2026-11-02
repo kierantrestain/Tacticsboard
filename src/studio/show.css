@@ -2283,3 +2283,8 @@
   }
 }
 .tl-tool-rail{scrollbar-color:#ffffff20 transparent}
+
+/* Shared output styles load independently of the producer's media editor. */
+body .tl-program{position:fixed;inset:auto;left:50%;top:50%;transform:translate(-50%,-50%);width:min(100vw,177.777778vh);height:min(100vh,56.25vw);min-height:0;max-height:100vh;overflow:hidden}
+.tl-program-stage.is-split{padding:0 1.25vw;gap:1vw;grid-template-columns:1fr 1fr}
+.tl-program .tl-program-stage.is-split>.tl-replay-stage{width:100%;height:auto;max-height:100%;align-self:center;aspect-ratio:16/9}

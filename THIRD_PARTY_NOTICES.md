@@ -183,3 +183,7 @@ ESPN public football JSON and the official Premier League FPL public feeds provi
 ## Version 3 server-side HTML adapter
 
 Cheerio 1.1.2 (MIT) parses the public, source-attributed ESPN competition career tables in the football function. Its licence and transitive dependency notices remain with the deployed npm package; it is not bundled into the browser.
+
+## Historical football event archive
+
+Luca Pappalardo & Emanuele Massucco (2019), Soccer match event dataset, Figshare; Wyscout. https://doi.org/10.6084/m9.figshare.c.4415000.v5 . Original Events, Matches, Players, Teams and identifier mappings report CC BY 4.0: https://creativecommons.org/licenses/by/4.0/ . Adapted by Bang On: coordinate/type/tag/name normalisation, club subsets, regulation minutes, metrics and percentile calculations. No endorsement is implied. Source checksums, exact coverage and limitations are recorded in docs/EVENT_DATA.md.

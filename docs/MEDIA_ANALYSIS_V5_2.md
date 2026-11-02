@@ -1,5 +1,7 @@
 # Media analysis in 5.2
 
+This is the historical 5.2 release record. Studio 6 preserves this layer and adds complete bounded-volume backup for sources over 200 MB; external trimming is no longer the only transfer route. Use [OPERATOR_V6.md](OPERATOR_V6.md) for current instructions.
+
 This release improves the existing source viewer, local media store, telestration, calibration/tracking, still builder, rundown, 3D renderers, programme output and exporters. It does not introduce a second analysis engine.
 
 ## Producer workflow

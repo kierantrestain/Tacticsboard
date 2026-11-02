@@ -1,3 +1,4 @@
+import {setLiveFollow} from './production';
 import {
   forwardRef,
   useEffect,
@@ -18,7 +19,11 @@ import { allComparisonMetrics } from '../football/comparisonModel';
 import { reportRows, statsViewport } from './statsViewport';
 import { scrollStats } from './scrollStats';
 import StatisticSurface, { StatisticsNavigation } from './StatisticSurface';
+import EventStage from '../football/events/Stage';
+import {cachedResource} from '../football/events/resource';
+import {eventCanvas} from '../football/events/canvas';
 export function statsCanvas(board: Board, report?: MatchStats, playerId?: string) {
+  if(board.studio?.dataGraphic)return eventCanvas(cachedResource(board.studio.dataGraphic.resourceId),board.studio.dataGraphic);
   if(board.studio?.comparison)return comparisonCanvas(board.studio.comparison,board.studio.statsScroll);
   const canvas=document.createElement("canvas");canvas.width=1600;canvas.height=900;const c=canvas.getContext("2d")!;
   const lime="#ccf56f",teal="#63d9db",white="#f5f8f7",muted="#9caeb4";
@@ -45,17 +50,20 @@ export function statsCanvas(board: Board, report?: MatchStats, playerId?: string
   return canvas;
 }
 export async function presentMatchData(match: Match, playerId?: string, options: { comparePlayerId?: string; fields?: string[] } = {}) {
+  setLiveFollow(false);
+  const requestedCue=useRuntime.getState().activeCueId;
   const s = useStudio.getState();
   if (s.board?.match?.id !== match.id) await s.loadMatch(match);
   const projectId = useStudio.getState().board?.id;
   const report = await loadReport(match);
   if (
-    useStudio.getState().board?.id !== projectId ||
+    useStudio.getState().board?.id !== projectId || useRuntime.getState().activeCueId!==requestedCue ||
     useStudio.getState().board?.match?.id !== match.id
   )
     return;
   s.commit((b) => {
     b.studio ||= emptyStudio();
+    b.studio.dataGraphic=undefined;
     b.studio.comparison=undefined;
     (b.studio.dataReports ||= {})[match.id] = {
       id: report.id,
@@ -89,7 +97,7 @@ export async function presentMatchData(match: Match, playerId?: string, options:
 export interface StatsHandle {
   capture: () => HTMLCanvasElement;
 }
-const StatsStage = forwardRef<
+const LegacyStatsStage = forwardRef<
   StatsHandle,
   { board?: Board; report?: MatchStats; program?: boolean }
 >(({ board: external, report: provided, program = false }, ref) => {
@@ -252,4 +260,5 @@ const StatsStage = forwardRef<
     </div>
   );
 });
+const StatsStage=forwardRef<StatsHandle,{board?:Board;report?:MatchStats;program?:boolean}>((props,ref)=>{const current=useStudio(s=>s.board);const board=props.board||current;return board?.studio?.dataGraphic?<EventStage ref={ref} board={board} program={props.program}/>:<LegacyStatsStage ref={ref} {...props}/>;});
 export default StatsStage;

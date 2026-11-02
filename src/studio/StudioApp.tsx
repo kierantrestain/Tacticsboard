@@ -1,3 +1,4 @@
+import EventWorkspace from '../football/events/Workspace';
 import MediaWorkspace from './MediaWorkspace';
 import {
   bootFootball,
@@ -655,16 +656,16 @@ function Operator() {
         replay = useStudio.getState().board?.studio?.comparisonView==='3d'?replayRef.current?.capture():boardRef.current?.stage()?.toCanvas({ pixelRatio: 2 });
       if (!source || !replay) return null;
       const out = document.createElement("canvas");
-      out.width = 2560;
-      out.height = 900;
+      out.width = 1920;
+      out.height = 1080;
       const ctx = out.getContext("2d")!;
       ctx.fillStyle = "#080f1d";
       ctx.fillRect(0, 0, out.width, out.height);
       for (const [i, image] of [source, replay].entries()) {
-        const scale = Math.min(1250 / image.width, 850 / image.height),
+        const scale = Math.min(934 / image.width, 916 / image.height),
           w = image.width * scale,
           h = image.height * scale;
-        ctx.drawImage(image, i * 1280 + (1280 - w) / 2, (900 - h) / 2, w, h);
+        ctx.drawImage(image, i * 960 + (960 - w) / 2, 70+(940 - h) / 2, w, h);
       }
       return out;
     }
@@ -969,6 +970,18 @@ function Operator() {
     isReconstruction = !!asset && !!desk.tracking[asset.id];
   const commands: StudioCommand[] = [
     {
+      title: "Open episodes & recovery",
+      detail: "Create, rename, duplicate, resume or restore a checkpoint",
+      Icon: FolderOpen,
+      action: () => r.set({ modal: "projects" }),
+    },
+    {
+      title: "Back up complete episode",
+      detail: "Keep all media, prepared graphics and notes in checked volumes",
+      Icon: Download,
+      action: () => r.set({ modal: "backup" }),
+    },
+    {
       title: "Open tactical setups",
       detail: "Build-up, pressing, blocks, counters and player guides",
       Icon: Target,
@@ -1091,6 +1104,7 @@ function Operator() {
             r.set({ modal: "projects" });
           }}
           aria-label="Touchline Studio home"
+          title="Open episodes and recovery"
         >
           <Mark />
           <span>
@@ -1107,6 +1121,7 @@ function Operator() {
             onBlur={(e) => {
               if (e.target.value !== b.title)
                 s.commit((b) => {
+                  b.studio!.episodeNamed=true;
                   b.title =
                     e.target.value.trim().slice(0, 120) || "Untitled analysis";
                 });
@@ -1652,6 +1667,7 @@ function Operator() {
           </button>
         </div>
       )}
+      {r.modal==='events'&&<EventWorkspace/>}
       <Dialogs
         onPNG={still}
         onVideo={film}

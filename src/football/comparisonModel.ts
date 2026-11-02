@@ -1,3 +1,4 @@
+import {EVENT_METRICS} from './events/metrics';
 import type { Stat } from '../types';
 import { canPer90, metricText, numericMetric, displayMetric } from './metrics';
 export interface ComparisonEntity {
@@ -39,6 +40,7 @@ export function comparisonValue(entity:ComparisonEntity,key:string,basis:Compari
   return displayMetric(stat);
 }
 export function teamCountMetric(key:string,label='') {
+  if(key.startsWith('event:'))return !!EVENT_METRICS.find(m=>m.key===key.slice(6))?.rate;
   return !key.startsWith('avg:')&&!/rank|ppg|rate|pct|percent|%|played|point.?difference|pointdifferential|overall|advanced|deduction/i.test(key+' '+label)&&/goal|points|win|loss|ties|draw|clean.?sheet|scored|conced/i.test(key+' '+label);
 }
 export function comparisonLabel(key:string,label:string,basis:ComparisonSnapshot['basis']){

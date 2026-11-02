@@ -4,6 +4,8 @@ import { cueBoard } from "./cueModel";
 import { statCardRows } from "../football/reportTools";
 import { validComparison } from '../football/comparisonModel';
 
+import { cachedResource } from '../football/events/resource';
+import { validGraphic } from '../football/events/import';
 export interface ReadinessIssue {
   code: string;
   level: "block" | "review";
@@ -71,7 +73,9 @@ export function inspectView(
         "Rebuild this tracking sequence: observations or player identities are missing.",
     });
   if(view==='stats'&&d?.comparison&&(!validComparison(d.comparison)||!d.comparison.fields.length))issues.push({code:'invalid-comparison',level:'block',message:'Choose two to five entries and at least one statistic.'});
-  if (view === "stats"&&!d?.comparison) {
+  if(view==='stats'&&d?.dataGraphic&&(!validGraphic(d.dataGraphic)||!cachedResource(d.dataGraphic.resourceId)))issues.push({code:'missing-event-resource',level:'block',message:'Wait for the saved event/cohort snapshot, or restore the complete episode backup.'});
+  if(view==='stats'&&d?.dataGraphic?.kind==='radar'&&(!d.dataGraphic.playerIds.length||!d.dataGraphic.radarMetrics.length))issues.push({code:'empty-radar',level:'block',message:'Choose a radar player and at least one metric before presenting.'});
+  if (view === "stats"&&!d?.comparison&&!d?.dataGraphic) {
     const report =
       d?.statsSnapshot ||
       (d?.statsReportId ? d.dataReports?.[d.statsReportId] : undefined);

@@ -1,6 +1,8 @@
 # Touchline Studio
 
-A standalone football analysis workspace for preparing and presenting studio segments. Version 5.2 connects source management, picture adjustments, editable graphics, clip preparation, reviewed reconstruction and ordered presentation views. Version 5.1 added carried possession, curved player movement, sequence editing, spatial inspection, a rebuilt data centre, and two-to-five player/team comparisons with saved broadcast graphics. The unified tactical playbook includes six open-play routines and five set-piece builders. It combines the season match centre, report-driven goal recreations, still and short-clip telestration, reconstruction, a virtual 3D pitch, saved show moments and clean programme output.
+Studio **6.0.1** adds event maps, independent-cohort percentile radars, deep event profiles and five-way historical comparisons, frozen saved data resources, complete bounded-volume backups, explicit match corrections and fenced two-host controls. Start with the [v6 operator handoff](docs/OPERATOR_V6.md), [event source/definitions guide](docs/EVENT_DATA.md) and [production evidence](docs/PRODUCTION_EVIDENCE.md).
+
+A standalone football analysis workspace for preparing and presenting studio segments. The preserved 5.2 media layer connects source management, picture adjustments, editable graphics, clip preparation, reviewed reconstruction and ordered presentation views. Version 5.1 added carried possession, curved player movement, sequence editing, spatial inspection, a rebuilt data centre, and two-to-five player/team comparisons with saved broadcast graphics. The unified tactical playbook includes six open-play routines and five set-piece builders. It combines the season match centre, report-driven goal recreations, still and short-clip telestration, reconstruction, a virtual 3D pitch, saved show moments and clean programme output.
 
 See the [show workflow](docs/SHOW_WORKFLOW.md) for complete segment preparation, saved shots, TV design and presenter controls.
 
@@ -31,7 +33,7 @@ All published UCL league-phase pairings are included. Future knockout pairings c
    For a set of pictures, map and review each still, assign real player identities, then use **Still sequence** to order two to twenty images into editable phases. Stable identities link the same player across images. Movement between stills is an illustrative interpolation; unseen movement and off-screen players are not reconstructed.
 5. **Present the explanation.** Compare the source with a top-down or 3D reconstruction. In **Analysis → Present**, save an ordered segment of original, annotated, 2D, 3D and comparison shots. Each retains its own settings, review state, graphics and camera. Use broadcast, overhead, goal or touchline cameras; orbit the pitch, move players and draw in perspective. Optional single-pose source cutouts are available in Display. Bookmark moments and add presenter notes to the rundown.
 6. **Control the programme.** Open the clean output on a second display or capture its window in OBS. Preview edits stay private by default. Use **Take preview** to send a shot, or explicitly enable **Live follow** for live drawing. Opening the output does not take anything. Blackout restores the same held shot; it never substitutes the current preview. Presenter mode includes explicit take, follow and blackout controls. Change the caption alongside a saved shot or in TV design.
-7. **Export and transfer.** Export a 4K PNG, a silent frame-timed 1080p/25 fps analysis film, an editable JSON document or a portable ZIP including its source files. Open a ZIP on another computer to restore the complete analysis. A JSON document alone does not include the media.
+7. **Export and transfer.** Export a 4K PNG, a silent frame-timed 1080p/25 fps analysis film or an editable document. Use **Back up complete episode** for a checked manifest and all numbered ZIP volumes, including media and frozen event/cohort snapshots. Import that complete set together on the other computer. The single legacy ZIP is limited to 200 MB; a lightweight analysis JSON alone does not include media.
 
 ## What reconstruction means here
 
@@ -39,7 +41,7 @@ This is an analyst-assisted interpretation. Local general-purpose people detecti
 
 Distance estimates assume a 105 × 68 m pitch and depend on the analyst's calibration. Perspective reference lines are explanatory graphics, not a certified VAR/offside system. Use the virtual-player view when cutout edges or kit colours key poorly.
 
-The app does not implement native SDI/NDI/EVS integration, cross-device control, multi-user cloud collaboration or a broadcast appliance SLA. Clean programme synchronisation uses windows in the **same browser profile on one computer**. No Sky Sports affiliation or parity certification is implied.
+The Studio Hub provides two-host tablet control over the trusted local studio network. The producer remains authoritative; the clean programme uses windows in the **same browser profile on the show computer**. Native SDI/NDI/EVS integration and multi-user cloud collaboration are outside this implementation.
 
 ## Controls
 

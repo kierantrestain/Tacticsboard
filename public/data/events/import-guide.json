@@ -1,0 +1,120 @@
+{
+  "_documentation": {
+    "purpose": "Synthetic schema example only; replace every source/identity/event field with permitted provider data.",
+    "csv": "Select CSV plus this metadata JSON with events omitted. Numeric columns: revision, period, clock, xG, xA, postShotXG, startX, startY, endX, endY. Use | within qualifiers/providerTags.",
+    "clock": "Seconds elapsed in the specified period, not cumulative video time.",
+    "directions": "Fixed input needs matchId:teamId:period -> left/right for each located event; normalisation rotates both axes when attacking left.",
+    "coverage": "Complete/partial/unavailable must describe the actual supplied fields. Missing is not zero. No pass endpoints, xG or recipient may be invented.",
+    "revisions": "Keep canonical id and sourceId stable; increase revision for corrections. deleted is a boolean tombstone."
+  },
+  "format": "bangon-events",
+  "version": 1,
+  "id": "synthetic-import-example",
+  "competition": "Synthetic schema demonstration",
+  "season": "Example only",
+  "source": {
+    "provider": "Bang On synthetic import example",
+    "url": "https://example.com/bang-on-synthetic-import-example",
+    "licence": "CC0 synthetic schema example",
+    "attribution": "Bang On synthetic data for validating the import schema; no real match performance is represented.",
+    "revision": "example-1",
+    "retrievedAt": "2026-11-02T00:00:00Z",
+    "historical": true
+  },
+  "coordinates": {
+    "width": 100,
+    "height": 100,
+    "origin": "top-left",
+    "orientation": "fixed",
+    "directions": {
+      "example-match:example-home:1": "right",
+      "example-match:example-home:2": "left"
+    }
+  },
+  "coverage": {
+    "types": {
+      "pass": "complete",
+      "shot": "unavailable",
+      "tackle": "unavailable",
+      "touch": "unavailable"
+    },
+    "coordinates": "complete",
+    "outcomes": "complete",
+    "xG": "unavailable",
+    "xA": "unavailable",
+    "recipients": "unavailable",
+    "goalmouth": "unavailable",
+    "possessions": "unavailable",
+    "notes": [
+      "Synthetic schema fixture only. One pass is deliberately supplied; no player-quality claim."
+    ],
+    "metricCoverage": {
+      "crosses": "unavailable",
+      "assists": "unavailable",
+      "keyPasses": "unavailable"
+    }
+  },
+  "matches": [
+    {
+      "id": "example-match",
+      "competition": "Synthetic schema demonstration",
+      "season": "Example only",
+      "date": "2026-01-01T00:00:00Z",
+      "label": "Synthetic Home v Synthetic Away",
+      "homeId": "example-home",
+      "awayId": "example-away"
+    }
+  ],
+  "teams": [
+    {
+      "id": "example-home",
+      "name": "Synthetic Home"
+    },
+    {
+      "id": "example-away",
+      "name": "Synthetic Away"
+    }
+  ],
+  "players": [
+    {
+      "id": "example-player",
+      "name": "Synthetic Player",
+      "position": "Midfielder",
+      "teamIds": [
+        "example-home"
+      ]
+    }
+  ],
+  "minutes": [
+    {
+      "playerId": "example-player",
+      "teamId": "example-home",
+      "matchId": "example-match",
+      "minutes": 90,
+      "basis": "Synthetic fixture denominator, not real playing time"
+    }
+  ],
+  "events": [
+    {
+      "id": "example-event",
+      "sourceId": "example-event",
+      "revision": 1,
+      "matchId": "example-match",
+      "teamId": "example-home",
+      "playerId": "example-player",
+      "period": 1,
+      "clock": 10,
+      "type": "pass",
+      "outcome": "completed",
+      "start": {
+        "x": 25,
+        "y": 35
+      },
+      "end": {
+        "x": 65,
+        "y": 45
+      },
+      "qualifiers": []
+    }
+  ]
+}

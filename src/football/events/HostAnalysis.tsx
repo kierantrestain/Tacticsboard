@@ -1,0 +1,9 @@
+import type {HostCommand} from '../../studio/host/protocol';
+import type {EventHostSnapshot} from './hostModel';
+import Controls from './Controls';
+import {filterDifference} from './graphic';
+import './events.css';
+export default function HostAnalysis({analysis:a,disabled,send}:{analysis:EventHostSnapshot;disabled:boolean;send:(command:HostCommand)=>void}){
+ const change=(patch:Partial<EventHostSnapshot['graphic']>)=>{const {filters,...fields}=patch;send({type:'analysis-filter',patch:fields,filterChanges:filters?filterDifference(a.graphic.filters,filters):undefined});};
+ return <div className="host-event-controls"><p>{a.summary}</p><Controls graphic={a.graphic} options={a.options} disabled={disabled} onChange={change}/>{a.graphic.kind==='map'?<label>Inspect / highlight event<select aria-label="Host selected event" disabled={disabled} value={a.graphic.selectedEventIds[0]||''} onChange={e=>change({selectedEventIds:e.target.value?[e.target.value]:[]})}><option value="">Choose an event ({a.total} filtered)</option>{a.events.map(e=><option key={e.id} value={e.id}>{e.label}</option>)}</select></label>:<><label>Focus radar player<select aria-label="Host radar player" disabled={disabled} value={a.graphic.playerIds[0]||''} onChange={e=>change({playerIds:e.target.value?[e.target.value]:[]})}><option value="">Choose a reference player</option>{a.options.players.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><button disabled={disabled||!a.graphic.radarOffset} onClick={()=>change({radarOffset:Math.max(0,(a.graphic.radarOffset||0)-8)})}>Previous metrics</button><button disabled={disabled||(a.graphic.radarOffset||0)+8>=a.graphic.radarMetrics.length} onClick={()=>change({radarOffset:(a.graphic.radarOffset||0)+8})}>Next metrics</button></>}{a.graphic.alignment&&<button disabled={disabled} onClick={()=>send({type:'analysis-seek'})}>Recall aligned footage privately</button>}</div>;
+}

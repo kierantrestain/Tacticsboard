@@ -1,3 +1,4 @@
+import {EVENT_METRICS} from './events/metrics';
 import type { Stat } from '../types';
 export const metricGroups = ['All', 'Attack', 'Passing', 'Defending', 'Goalkeeping', 'Discipline', 'Playing time', 'Results', 'Fantasy', 'Other'] as const;
 export type MetricGroup = typeof metricGroups[number];
@@ -20,6 +21,7 @@ export function numericMetric(stat?: Stat | { display: string; label: string }):
   const n=Number(String(raw).replace(/[% ,]/g,''));return Number.isFinite(n)?n:null;
 }
 export function canPer90(key:string,label=''){
+  if(key.startsWith('event:'))return !!EVENT_METRICS.find(m=>m.key===key.slice(6))?.rate;
   const v=key+' '+label;
   if(/per[ _-]?(90|game|match)|pct|percent|%|minutes?|appearance|starts|form|price|cost|points|index|rank|rating|chance.?of|creativity|influence|threat|selected|transfer|age|height|weight|average|avg|ratio/i.test(v))return false;
   return /goal|assist|shot|save|clean.?sheet|pass|cross|long.?ball|tackle|intercept|clearance|block|recover|defens|card|foul|offside|penalt|corner|touch|dribbl|chance.?creat|key.?pass/i.test(v);

@@ -1,3 +1,4 @@
+import HostAnalysis from '../../football/events/HostAnalysis';
 import {
   STUDIO_PROTOCOL,
   commandContext,
@@ -437,7 +438,7 @@ export default function HostTablet() {
                   ? "SOURCE ANALYSIS"
                   : "TACTICAL ANALYSIS"}
           </span>
-          <h1>{cue?.title || "Waiting for the studio…"}</h1>
+          <h1>{cue?.title || state?.previewTitle || "Waiting for the studio…"}</h1>
           <small className="host-episode-name">
             {b?.title} · v{state?.appVersion || "—"}
           </small>
@@ -557,6 +558,7 @@ export default function HostTablet() {
               onScroll={(value) => send({ type: "stats-scroll", value })}
             />
           )}
+          {state?.eventAnalysis&&<HostAnalysis analysis={state.eventAnalysis} disabled={!canControl} send={send}/>}
           <fieldset
             className="host-programme-controls"
             disabled={!ownsControl}

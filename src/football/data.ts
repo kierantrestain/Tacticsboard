@@ -214,19 +214,9 @@ export async function refreshMatchday(date: string, league: string) {
 function acceptReport(m: Match, d: MatchDetails) {
   const s = useStudio.getState();
   useStudio.setState({ summaries: { ...s.summaries, [m.id]: d } });
-  if (s.board?.match?.id === m.id) {
-    const match = { ...s.board.match, ...d.match };
-    if (d.status) match.status = d.status;
-    if (d.state) {
-      match.state = d.state;
-      match.completed = d.state === "post";
-    }
-    for (const score of d.score || []) {
-      if (score.teamId === match.homeId) match.homeScore = score.score;
-      if (score.teamId === match.awayId) match.awayScore = score.score;
-    }
-    useStudio.setState({ board: { ...s.board, match } });
-  }
+  // Background research updates never mutate a prepared score, lineup, graphic or held TV shot.
+  // The producer explicitly refreshes the prepared match in TV design.
+
 }
 const reports = new Map<string, Promise<MatchDetails>>();
 export async function loadReport(
