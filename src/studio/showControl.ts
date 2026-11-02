@@ -2,7 +2,7 @@ import { emptyStudio } from "./types";
 import { frameAt, activeSceneTime } from "../core";
 import { useStudio } from "../store";
 import { useRuntime } from "./runtime";
-import { takeToAir } from "./production";
+import { takeToAir, setLiveFollow } from "./production";
 import { captureThumbnail } from "./capture";
 import { makeCue, cueBoard, replaceCueContent } from "./cueModel";
 export { makeCue, cueBoard } from "./cueModel";
@@ -40,6 +40,7 @@ export function recallCue(id: string, take = false) {
   const cue = b?.studio?.cues?.find((c) => c.id === id);
   if (!b || !cue) return;
   if(r.movementDraft){s.notify("Finish or cancel the movement first.");return;}
+  setLiveFollow(false);
   if (cue.assetId && !r.assets.some((a) => a.id === cue.assetId)) {
     s.notify(
       "Source missing. The shot is open for inspection; restore its media before taking it to programme.",

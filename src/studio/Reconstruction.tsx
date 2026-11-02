@@ -1,7 +1,8 @@
 import { appendTrackingPhases } from "./reconstructionBoard";
 import { playerCutout } from "./cutouts";
 import StillSequence from "./StillSequence";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { setLiveFollow } from "./production";
 import {
   Check,
   ChevronRight,
@@ -41,6 +42,7 @@ export default function Reconstruction({
   asset?: MediaAsset;
   source: React.RefObject<SourceHandle | null>;
 }) {
+  useEffect(()=>setLiveFollow(false),[]);
   const s = useStudio(),
     r = useRuntime(),
     b = s.board!;

@@ -678,6 +678,7 @@ function Operator() {
   const still = async () => {
     const board = useStudio.getState().board;
     if (!board) return;
+    setLiveFollow(false);
     r.set({ modal: null });
     const selection = {
       selected: s.selected,
@@ -739,6 +740,7 @@ function Operator() {
       runtime = useRuntime.getState(),
       board = state.board;
     if (!board) return;
+    setLiveFollow(false);
     const a = runtime.assets.find((a) => a.id === board.studio?.assetId),
       sourceMode =
         !!a &&
@@ -843,13 +845,14 @@ function Operator() {
         busy: "",
         progress: 0,
         time: runtime.time,
-        follow: useRuntime.getState().program?.black ? false : runtime.follow,
+        follow: false,
       });
       abortRef.current = null;
     }
   };
   const pack = async () => {
     if (!b) return;
+    setLiveFollow(false);
     r.set({
       busy: "Packing project and source files",
       progress: 0,
@@ -869,6 +872,7 @@ function Operator() {
   };
   const json = () => {
     if (!b) return;
+    setLiveFollow(false);
     s.save();
     download(
       new Blob([JSON.stringify(b, null, 2)], { type: "application/json" }),
