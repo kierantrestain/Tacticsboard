@@ -122,6 +122,7 @@ export const defaultBroadcast = (): BroadcastStyle => ({
 });
 /** A cue holds a frame, never a nested Board/StudioDocument. */
 export interface RundownCue {
+  presenterNotes?: { host1?: string; host2?: string; producer?: string };
   landmarks?: Landmark[];
   targets?: TrackedTarget[];
   phaseTime?: number;
@@ -433,6 +434,7 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
             typeof c.id === "string" &&
             typeof c.title === "string" &&
             c.title.length <= 80 &&
+            (c.presenterNotes === undefined || (typeof c.presenterNotes === "object" && c.presenterNotes !== null && Object.entries(c.presenterNotes).every(([key,value]) => ["host1","host2","producer"].includes(key) && typeof value === "string" && value.length <= 4000))) &&
             typeof c.note === "string" &&
             c.note.length <= 4000 &&
             typeof c.lowerThird === "string" &&

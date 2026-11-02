@@ -55,3 +55,5 @@ Status vocabulary: **Verified** means checked in this run with evidence below; *
 - Keep exact checks and failures in [PRODUCTION_EVIDENCE.md](PRODUCTION_EVIDENCE.md). At any execution limit, commit a continuation checkpoint with exact next actions; do not label remaining stages complete.
 
 - Stage B implementation checkpoint: complete episode library/recovery, atomic ordered saves and bounded SHA-256 volume backups implemented. Targeted tests and large-file browser preflight are recorded in the evidence. B4/B5 remain **Partial** until actual ZIP browser download and fresh-profile transfer pass; B6 snapshot storage/transport foundation exists and needs D/E integration. Directory saving is implemented but unverified. Continue C now; retain these acceptance gaps.
+
+- Stage C core controls/protocol/private notes implemented and exercised with four independent browser tabs; affected tests and build passed. See evidence and HOST_OPERATIONS.md. Physical operation remains unverified; map/radar commands will extend the same protocol in D/E. Continue D data-source foundation and graphics now.

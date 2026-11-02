@@ -5,6 +5,7 @@ import type {Team} from '../src/types';
 const state=vi.hoisted(()=>({studio:{} as any,runtime:{} as any}));
 vi.mock('../src/store',()=>({useStudio:{getState:()=>state.studio}}));
 vi.mock('../src/studio/runtime',()=>({useRuntime:{getState:()=>state.runtime,setState:(v:any)=>Object.assign(state.runtime,v)},editDesk:(fn:any)=>fn(state.studio.board.studio)}));
+vi.mock('../src/studio/production',()=>({setLiveFollow:vi.fn(),takeToAir:vi.fn(()=>({id:'held'})),toggleBlackout:vi.fn()}));
 vi.mock('../src/studio/showControl',()=>({recallCue:vi.fn(),saveCue:vi.fn(),updateCue:vi.fn()}));
 import {executeHostCommand} from '../src/studio/host/actions';
 import {saveCue,updateCue} from '../src/studio/showControl';
@@ -65,3 +66,10 @@ it('changes board replay speed when an untracked source remains selected',()=>{
  state.runtime.view='replay';state.studio.board.studio.assetId='untracked-source';state.studio.previewTime=2.5;
  executeHostCommand({type:'rate',value:.5});expect(state.studio.set).toHaveBeenCalledWith({speed:.5,playhead:2.5});expect(state.studio.board.studio.playbackRate).toBe(.5);
 });
+
+it('freezes at the current source position and controls looping without resetting source time',()=>{
+ state.runtime.time=8.35;state.runtime.mediaPlaying=true;executeHostCommand({type:'freeze'});expect(state.runtime).toMatchObject({time:8.35,mediaPlaying:false});
+ executeHostCommand({type:'loop',enabled:true});expect(state.runtime.loopClip).toBe(true);expect(state.studio.set).toHaveBeenCalledWith({loop:true});
+});
+
+it('keeps emergency TV hold and blackout available while heavy preparation is busy',async()=>{const {setLiveFollow,toggleBlackout}=await import('../src/studio/production');state.runtime.busy='Rendering film';state.runtime.program={black:false};executeHostCommand({type:'programme',action:'hold'});expect(setLiveFollow).toHaveBeenCalledWith(false);executeHostCommand({type:'programme',action:'blackout'});expect(toggleBlackout).toHaveBeenCalledOnce();});

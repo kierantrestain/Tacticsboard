@@ -1,10 +1,11 @@
 import { createServer } from 'node:http';
 import { createReadStream, existsSync } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { stat, readFile } from 'node:fs/promises';
 import { resolve, extname, sep, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createStudioRooms, studioOrigins } from '../server/studio-room.mjs';
 
+const appVersion = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../dist');
 const portArgument = process.argv.indexOf('--port');
 const port = Number(process.env.TOUCHLINE_PORT || process.env.PORT || (portArgument >= 0 ? process.argv[portArgument + 1] : 4174));
@@ -32,7 +33,7 @@ const server = createServer(async (req, res) => {
 });
 server.requestTimeout = 15_000;
 server.listen(port, '0.0.0.0', () => {
-  console.log(`\nTouchline Studio · filming hub\nOpen the producer desk: http://localhost:${port}\nTablet address: ${studioOrigins(port).map(o => o + '/?host=1').join('\nTablet address: ') || 'Connect this computer to your studio Wi-Fi'}\nKeep this window open while filming. Ctrl+C ends tablet connections.\n`);
+  console.log(`\nTouchline Studio v${appVersion} · filming hub · control protocol 2\nOpen the producer desk: http://localhost:${port}\nTablet address: ${studioOrigins(port).map(o => o + '/?host=1').join('\nTablet address: ') || 'Connect this computer to your studio Wi-Fi'}\nKeep this window open while filming. Ctrl+C ends tablet connections.\n`);
 });
 server.on('error', e => { console.error(e.code === 'EADDRINUSE' ? `Port ${port} is in use. Close the existing hub, or set TOUCHLINE_PORT.` : e.message); process.exitCode = 1; rooms.close(); });
 process.on('SIGINT', () => { rooms.close(); server.close(); });

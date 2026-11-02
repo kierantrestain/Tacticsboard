@@ -6,7 +6,7 @@ import { rolldown } from 'rolldown';
 const root=fileURLToPath(new URL('../',import.meta.url)),dist=resolve(root,'dist'),files={};
 async function collect(dir){for(const name of await readdir(dir)){const file=resolve(dir,name);if(name.startsWith('.')||name==='touchline-studio-hub.zip')continue;if((await stat(file)).isDirectory())await collect(file);else files['Touchline-Studio/'+relative(root,file)]=new Uint8Array(await readFile(file));}}
 await collect(dist);
-for(const name of ['scripts/studio-hub.mjs','server/studio-room.mjs'])files['Touchline-Studio/'+name]=new Uint8Array(await readFile(resolve(root,name)));
+for(const name of ['scripts/studio-hub.mjs','server/studio-room.mjs','server/studio-protocol.mjs'])files['Touchline-Studio/'+name]=new Uint8Array(await readFile(resolve(root,name)));
 const bundle=await rolldown({input:resolve(root,'api/football.js'),platform:'node'});
 const generated=await bundle.generate({format:'esm'});await bundle.close();
 for(const chunk of generated.output)files['Touchline-Studio/api/'+(chunk.type==='chunk'&&chunk.isEntry?'football.js':chunk.fileName)]=typeof(chunk.code??chunk.source)==='string'?strToU8(chunk.code??chunk.source):new Uint8Array(chunk.source);

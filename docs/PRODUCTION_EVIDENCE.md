@@ -69,3 +69,17 @@ Checks actually run:
 - Actual browser manifest download succeeded (JSON). First 32 MiB ZIP volume was prepared, but `waitForEvent(download)` and the supported link-download operation both timed out. **Actual browser ZIP download/fresh-profile browser transfer remain unverified**, as do directory-picker saving and physical transfer. Do not substitute the unit round trip for these checks.
 
 Next: two-host controls/recovery, then data foundation/graphics and integrated acceptance. Stage A hardware/native cases remain outstanding. No production deployment performed.
+
+## Stage C implementation and emulated checks — 2 November 2026
+
+Extended the existing Hub/command queue/HostTablet (no second protocol): separate role-private notes, independent searchable moment inspection with explicit preview recall, comparison view switching, Freeze & draw, loop, explicit Take/Hold/Live follow/Blackout/Restore, version identification and pending/applied/rejected acknowledgements. Enabling host control no longer enables TV follow. Emergency commands bypass preparation busy checks. Shared command context now includes episode, scene, view, source and selected cue; version/expiry/epoch/sequence fences are checked at the relay and current context again at the producer. Refresh/loss/episode changes disarm ownership; sleep clears queued gestures and releases ownership when connected.
+
+- **27 tests / 5 affected files passed**, including new real loopback HTTP/SSE relay tests for per-role note filtering (including reconnect), ownership/context/version/time/dedup fences, applied acknowledgement, producer replacement, episode changes and Hub restart invalidation. TypeScript passed.
+- Full production build and Hub packaging passed: 2301 modules, 41.7 MB / 196 packaged files. Shared relay protocol is included in the Hub.
+- Managed Chrome/Vite, four independent producer/Host 1/Host 2/output tabs on the same cloud browser: paired both roles; enabled host controls without TV follow; requested Host 1 ownership; recalled the annotated source privately, looped/played/froze it; comparison remained held. Host 2 privately inspected another moment; handover to Host 2 disabled Host 1 shared controls.
+- Entered distinct H1/H2/producer notes. Accessibility inspection verified each tablet contained its own note and neither the other host's nor producer's private text. Shared script remained available separately.
+- Producer refresh left both hosts connected but controls disarmed/producer-owned and follow off. Episode resumed paused at the saved source position. Held comparison remained selected. This is browser receipt evidence, not a studio capture-chain check.
+- One automation click-to-paused-visible measurement: **651 ms** (includes automation/cloud-preview overhead; single sample, not physical LAN latency). No claim of physical Wi-Fi performance.
+- A temporary, excluded iframe harness gave the actual host document **1024×768** and **1366×1024** CSS viewports. Both main elements had scroll width/height equal to client width/height (no page overflow). Inspected 1024×768 screenshot: filming controls, searchable scrollable rundown and private notes fit. Physical touch accuracy, sleep/wake and device performance remain unverified.
+
+Operator instructions: `docs/HOST_OPERATIONS.md`. Final integrated data controls/rehearsal/recovery audit remains pending, as do physical devices and capture chain.

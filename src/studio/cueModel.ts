@@ -172,6 +172,7 @@ export function replaceCueContent(
     id: previous.id,
     title: previous.title,
     note: previous.note,
+    presenterNotes: previous.presenterNotes,
     duration: previous.duration,
     reviewedAt: undefined,
     segmentId: previous.segmentId,

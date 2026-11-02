@@ -259,6 +259,10 @@ export default function Rundown() {
                       }
                     />
                   </label>
+                  {(["host1", "host2", "producer"] as const).map((role) => <label key={role}>
+                    {role === "producer" ? "PRODUCER PRIVATE NOTE" : role === "host1" ? "HOST 1 PRIVATE NOTE" : "HOST 2 PRIVATE NOTE"}
+                    <textarea aria-label={`Shot ${i + 1} ${role} private notes`} key={cue.id + (cue.presenterNotes?.[role] || "")} defaultValue={cue.presenterNotes?.[role] || ""} maxLength={4000} placeholder="Visible only to this role and the producer" onBlur={e => editDesk(d => { const c=d.cues!.find(c=>c.id===cue.id)!; (c.presenterNotes||={})[role]=e.target.value.slice(0,4000); })}/>
+                  </label>)}
                   <div className="director-cue-timing">
                     <label>
                       Planned{" "}
