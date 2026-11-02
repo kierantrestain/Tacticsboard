@@ -1,5 +1,5 @@
 import { mediaDB, saveMedia, getMedia } from "../media";
-import { uid } from "../core";
+import { uid, copy, isBoard } from "../core";
 import type { Board } from "../types";
 import type { MediaAsset } from "./types";
 import { mediaKind, validateSourceFile } from "./mediaModel";
@@ -12,7 +12,7 @@ export async function putRecord(store: string, id: string, value: unknown) {
       db.close();
       resolve();
     };
-    t.onerror = () => {
+    t.onabort = t.onerror = () => {
       db.close();
       reject(t.error);
     };
@@ -53,8 +53,160 @@ export async function listAssets(): Promise<MediaAsset[]> {
     };
   });
 }
-export const saveProject = (b: Board) => putRecord("projects", b.id, b);
-export const loadProject = (id: string) => getRecord<Board>("projects", id);
+const saves = new Map<string, Promise<void>>();
+function ordered(id: string, run: () => Promise<void>) {
+  const work = (saves.get(id) || Promise.resolve()).catch(() => {}).then(run);
+  saves.set(id, work);
+  void work
+    .finally(() => {
+      if (saves.get(id) === work) saves.delete(id);
+    })
+    .catch(() => {});
+  return work;
+}
+export interface EpisodeCheckpoint {
+  at: string;
+  label: string;
+  board: Board;
+}
+interface EpisodeRecovery {
+  previous?: EpisodeCheckpoint;
+  manual: EpisodeCheckpoint[];
+}
+/** Per-episode ordering plus an atomic previous-valid/head transaction. No media blobs are copied. */
+export function saveProject(b: Board): Promise<void> {
+  if (!isBoard(b))
+    return Promise.reject(
+      Error("Invalid episode; the previous valid save is retained."),
+    );
+  return ordered(b.id, async () => {
+    const db = await mediaDB();
+    return new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(["projects", "checkpoints"], "readwrite"),
+        projects = tx.objectStore("projects"),
+        history = tx.objectStore("checkpoints");
+      const old = projects.get(b.id),
+        recover = history.get(b.id);
+      let remaining = 2;
+      const write = () => {
+        if (--remaining) return;
+        const value: EpisodeRecovery = recover.result || { manual: [] };
+        if (isBoard(old.result))
+          value.previous = {
+            at: new Date().toISOString(),
+            label: "Previous valid save",
+            board: old.result,
+          };
+        try {
+          history.put(value, b.id);
+          projects.put(b, b.id);
+        } catch {
+          // A failed clone must roll back the checkpoint and head together.
+          tx.abort();
+        }
+      };
+      old.onsuccess = write;
+      recover.onsuccess = write;
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      tx.onabort = tx.onerror = () => {
+        db.close();
+        reject(
+          tx.error ||
+            Error("Episode save interrupted; the last valid save is retained."),
+        );
+      };
+    });
+  });
+}
+const recoveryNotices = new Map<string, string>();
+export const recoveredEpisode = (id: string) => recoveryNotices.get(id);
+export async function loadProject(id: string) {
+  const b = await getRecord<Board>("projects", id);
+  if (isBoard(b)) {
+    recoveryNotices.delete(id);
+    return b;
+  }
+  const recovery = (await listCheckpoints(id)).sort((a, b) =>
+    b.at.localeCompare(a.at),
+  )[0];
+  if (recovery) {
+    recoveryNotices.set(
+      id,
+      "Recovered the latest valid episode checkpoint. Inspect it and save before filming.",
+    );
+    return copy(recovery.board);
+  }
+  return null;
+}
+export async function listCheckpoints(id: string) {
+  const r = await getRecord<EpisodeRecovery>("checkpoints", id);
+  return [...(r?.manual || []), ...(r?.previous ? [r.previous] : [])].filter(
+    (c) => isBoard(c.board),
+  );
+}
+export async function checkpointProject(b: Board, label: string) {
+  return ordered(b.id, async () => {
+    const current = (await getRecord<EpisodeRecovery>("checkpoints", b.id)) || {
+      manual: [],
+    };
+    current.manual = [
+      {
+        at: new Date().toISOString(),
+        label: label.slice(0, 100),
+        board: copy(b),
+      },
+      ...current.manual,
+    ].slice(0, 3);
+    await putRecord("checkpoints", b.id, current);
+  });
+}
+/** Validate everything before one transaction publishes any newly imported media. */
+export async function commitImportedMedia(
+  items: { asset: MediaAsset; blob: Blob }[],
+  resources: { id: string; value: unknown }[] = [],
+) {
+  const db = await mediaDB();
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(["assets", "meta", "resources"], "readwrite");
+    try {
+      for (const item of items) {
+        tx.objectStore("assets").put(item.blob, item.asset.id);
+        tx.objectStore("meta").put(item.asset, item.asset.id);
+      }
+      for (const resource of resources) {
+        const store = tx.objectStore("resources"),
+          existing = store.get(resource.id);
+        existing.onsuccess = () => {
+          if (existing.result !== undefined) {
+            if (
+              JSON.stringify(existing.result) !== JSON.stringify(resource.value)
+            )
+              tx.abort();
+          } else store.put(resource.value, resource.id);
+        };
+      }
+    } catch (error) {
+      tx.abort();
+      db.close();
+      reject(error);
+      return;
+    }
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    tx.onabort = tx.onerror = () => {
+      db.close();
+      reject(
+        tx.error ||
+          Error("Import interrupted. The previous episode is unchanged."),
+      );
+    };
+  });
+}
 /** Decode a preview and bounded packet metadata; the complete File is never converted to an ArrayBuffer. */
 export async function inspectAsset(file: File): Promise<MediaAsset> {
   validateSourceFile(file);

@@ -321,6 +321,7 @@ export default function MediaWorkspace() {
         }}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
+          e.stopPropagation();
           e.preventDefault();
           r.set({ pendingFiles: Array.from(e.dataTransfer.files) });
         }}

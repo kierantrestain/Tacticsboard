@@ -122,6 +122,8 @@ export const defaultBroadcast = (): BroadcastStyle => ({
 });
 /** A cue holds a frame, never a nested Board/StudioDocument. */
 export interface RundownCue {
+  landmarks?: Landmark[];
+  targets?: TrackedTarget[];
   phaseTime?: number;
   sourcePresentation?: SourcePresentation;
   comparisonView?: '2d' | '3d';
@@ -167,6 +169,8 @@ export interface RundownCue {
   lowerThird: string;
 }
 export interface StudioDocument {
+  resume?: {view:ViewMode;time:number;phaseTime:number|null;cueId?:string|null};
+  resourceIds?:string[];
   sourcePresentations?: Record<string, SourcePresentation>;
   comparisonView?: '2d' | '3d';
   cameraPose?: CameraPose;
@@ -245,6 +249,8 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
     !!x && typeof x === "object" && !Array.isArray(x);
   return (
     d.version === 2 &&
+    (d.resume===undefined||!!d.resume&&['board','footage','split','replay','stats'].includes(d.resume.view)&&Number.isFinite(d.resume.time)&&d.resume.time>=0&&d.resume.time<=1000000&&(d.resume.phaseTime===null||Number.isFinite(d.resume.phaseTime)&&d.resume.phaseTime>=0&&d.resume.phaseTime<=6000)&&(d.resume.cueId==null||typeof d.resume.cueId==='string'&&d.resume.cueId.length<=100)) &&
+    (d.resourceIds===undefined||Array.isArray(d.resourceIds)&&d.resourceIds.length<=500&&d.resourceIds.every(id=>typeof id==='string'&&/^[a-zA-Z0-9-]{1,150}$/.test(id))) &&
     (d.sourcePresentations === undefined || record(d.sourcePresentations) && Object.keys(d.sourcePresentations).length<=500 && Object.values(d.sourcePresentations).every(validPresentation)) &&
     (d.comparisonView === undefined || ['2d','3d'].includes(d.comparisonView)) &&
     (d.cameraPose === undefined || validCameraPose(d.cameraPose)) &&
@@ -362,6 +368,8 @@ export function isStudioDocument(v: unknown): v is StudioDocument {
             [p.x, p.y].every((n) => Number.isFinite(n) && n >= 0 && n <= 1);
           return (
             !!c &&
+            (c.landmarks===undefined||validCalibration(c.landmarks)) &&
+            (c.targets===undefined||validTargets(c.targets)) &&
             (c.phaseTime===undefined||Number.isFinite(c.phaseTime)&&c.phaseTime>=0&&c.phaseTime<=6000) &&
             (c.sourcePresentation === undefined || validPresentation(c.sourcePresentation)) &&
             (c.comparisonView === undefined || ['2d','3d'].includes(c.comparisonView)) &&
@@ -578,3 +586,5 @@ function validFields(fields: unknown): fields is string[] {
   );
 }
 function validStops(stops: unknown): stops is ExplainStop[] { return Array.isArray(stops) && stops.length <= 20 && new Set(stops.map(s=>s?.id)).size === stops.length && stops.every(s=>s && typeof s.id === 'string' && Number.isFinite(s.time) && s.time >= 0 && Number.isFinite(s.hold) && s.hold >= .5 && s.hold <= 10); }
+function validCalibration(v:unknown):v is Landmark[] {return Array.isArray(v)&&v.length<=4&&v.every(l=>l&&[l.image?.x,l.image?.y,l.pitch?.x,l.pitch?.y].every(Number.isFinite));}
+function validTargets(v:unknown):v is TrackedTarget[] {return Array.isArray(v)&&v.length<=44&&v.every(t=>t&&typeof t.id==='string'&&typeof t.name==='string'&&['home','away'].includes(t.side)&&[t.image?.x,t.image?.y].every(Number.isFinite)&&(t.cutout===undefined||typeof t.cutout==='string'&&t.cutout.length<=500000&&/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(t.cutout)));}

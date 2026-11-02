@@ -3,6 +3,7 @@ import { zipSync, strToU8 } from "fflate";
 const media = vi.hoisted(() => new Map<string, Blob>());
 const records = vi.hoisted(() => new Map<string, unknown>());
 vi.mock("../src/studio/assetStore", () => ({
+  commitImportedMedia:async(items:any[])=>{for(const {asset,blob} of items){media.set(asset.id,blob);records.set(asset.id,asset);}},
   getMedia: async (id: string) => media.get(id) || null,
   saveMedia: async (id: string, value: Blob) => {
     media.set(id, value);
@@ -10,6 +11,7 @@ vi.mock("../src/studio/assetStore", () => ({
   putRecord: async (_: string, id: string, value: unknown) => {
     records.set(id, value);
   },
+  getRecord:async(_:string,id:string)=>records.get(id)||null,
 }));
 import { exportPack, importPack } from "../src/studio/exports";
 import { newBoard } from "../src/core";

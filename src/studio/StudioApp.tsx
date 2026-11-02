@@ -79,7 +79,7 @@ import {
   catalogueWithBoardTeams,
   activeSceneTime,
 } from "../core";
-import type { Catalogue, MatchDetails, Tool, Frame } from "../types";
+import type { Board, Catalogue, MatchDetails, Tool, Frame } from "../types";
 import { useRuntime, editDesk, selectAsset } from "./runtime";
 import { defaultBroadcast, emptyStudio, timecode } from "./types";
 import type {
@@ -130,6 +130,9 @@ import HostTablet from './host/HostTablet';
 import { useProducerRoom } from './host/producer';
 import { clipPlan } from './filmPlan';
 import { importSelection } from './mediaModel';
+import EpisodeBackup from './EpisodeBackup';
+import { importEpisodeBackup } from './episodeTransfer';
+import { resumeEpisode } from './episodeControl';
 const Pitch3D = lazy(() => import("./Pitch3D"));
 function hydrate(data: Catalogue, details: Record<string, MatchDetails>) {
   for (const t of data.teams)
@@ -208,6 +211,7 @@ function Operator() {
     projectRef = useRef<HTMLInputElement>(null),
     abortRef = useRef<AbortController | null>(null),
     installRef = useRef<any>(null);
+  const lastEpisode=useRef(b?.id);
   const dataCheckedAt = useFootball((s) => s.checkedAt);
   useEffect(() => {
     const timer = setInterval(() => {
@@ -258,7 +262,6 @@ function Operator() {
           saved && isBoard(saved)
             ? catalogueWithBoardTeams(hydrate(data, matches), saved)
             : hydrate(data, matches);
-        s.init(restoredCatalogue, matches);
         if (
           saved &&
           isBoard(saved) &&
@@ -266,6 +269,7 @@ function Operator() {
           restoredCatalogue.teams.some((t: any) => t.id === saved.awayTeamId)
         )
           useStudio.setState({ board: saved });
+        s.init(restoredCatalogue, matches);
         const old = useStudio.getState().board!;
         if (!old.studio) {
           const next = copy(old);
@@ -280,6 +284,7 @@ function Operator() {
           program: readProgram(),
           view: useStudio.getState().board?.studio?.view || "board",
         });
+        resumeEpisode(false);
         s.set({ color: "#66d9ff" });
         void bootFootball();
       })
@@ -417,8 +422,16 @@ function Operator() {
     }
   }, [r.time, r.mediaPlaying, r.mediaHolding, r.rate, s.previewTime, r.follow, r.busy]);
   useEffect(() => {
-    r.set({ activeCueId: null, movementDraft: null,ballActionKind:null,ballTargetPicking:false,ballTarget:null,multiSelect:false });
+    if(lastEpisode.current&&lastEpisode.current!==b?.id)setLiveFollow(false);
+    lastEpisode.current=b?.id;
+    r.set({ activeCueId: b?.studio?.resume?.cueId||null, movementDraft: null,ballActionKind:null,ballTargetPicking:false,ballTarget:null,multiSelect:false });
   }, [b?.id]);
+  useEffect(()=>{
+    if(!b||r.mediaPlaying||s.playing)return;
+    const id=b.id,resume={view:r.view,time:r.time,phaseTime:s.previewTime,cueId:r.activeCueId};
+    const timer=setTimeout(()=>{const current=useStudio.getState();if(current.board?.id!==id||JSON.stringify(current.board.studio?.resume)===JSON.stringify(resume))return;const next=copy(current.board);next.studio||=emptyStudio();next.studio.resume=resume;current.set({board:next});},250);
+    return()=>clearTimeout(timer);
+  },[b?.id,r.time,r.view,r.activeCueId,r.mediaPlaying,s.previewTime,s.playing]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement,
@@ -628,8 +641,9 @@ function Operator() {
   };
   const onFiles = async (files: FileList | null) => {
     if(!files?.length)return;
+    if(useRuntime.getState().busy){s.notify('Finish the current media operation before importing another set.');return;}
     try {
-      if(importSelection(Array.from(files))==='project')await importProject(files[0]);
+      if(importSelection(Array.from(files))!=='media')await importProject(files[0],Array.from(files));
       else r.set({pendingFiles:Array.from(files),modal:'media',mediaPlaying:false});
     }catch(e){r.set({error:e instanceof Error?e.message:'Import failed'});}
   };
@@ -881,16 +895,18 @@ function Operator() {
     r.set({ modal: null });
     s.notify("Editable analysis document exported");
   };
-  const importProject = async (file: File) => {
-    if (!/\.zip$/i.test(file.name) && file.size > 10 * 1048576) {
+  const importProject = async (file: File,related:File[]=[file]) => {
+    const complete=importSelection(related)==='episode';
+    if (!complete&&!/\.zip$/i.test(file.name) && file.size > 10 * 1048576) {
       r.set({ error: "Choose an analysis JSON smaller than 10 MB." });
       return;
     }
     setLiveFollow(false);
     r.set({ busy: "Opening project", error: "", activeCueId:null, reverseReview:false });
     try {
-      const board = /\.zip$/i.test(file.name)
-        ? await importPack(file)
+      const accept=(board:Board)=>{const teams=catalogueWithBoardTeams(useStudio.getState().catalogue!,board).teams;return teams.some(t=>t.id===board.homeTeamId)&&teams.some(t=>t.id===board.awayTeamId);};
+      const board = complete?await importEpisodeBackup(related,progress=>r.set({progress}),accept):/\.zip$/i.test(file.name)
+        ? await importPack(file,accept)
         : JSON.parse(await file.text());
       if (!s.importBoard(board))
         throw Error(
@@ -903,13 +919,14 @@ function Operator() {
         time: 0,
         mediaPlaying: false,
       });
+      resumeEpisode();
       s.notify("Project opened as a separate analysis");
     } catch (e) {
       r.set({
         error: e instanceof Error ? e.message : "Project import failed",
       });
     } finally {
-      r.set({ busy: "" });
+      r.set({ busy: "",progress:0 });
     }
   };
   if (error)
@@ -1062,6 +1079,8 @@ function Operator() {
   return (
     <main
       className={`tl-app film-workspace unified-workspace ${r.presenter ? "tl-presenting" : ""} ${r.compactTimeline ? "ts-compact" : ""} ${r.view === "stats" ? "ts-data" : ""}`}
+      onDragOver={e=>{if(Array.from(e.dataTransfer.types).includes('Files'))e.preventDefault();}}
+      onDrop={e=>{if(e.defaultPrevented)return;e.preventDefault();void onFiles(e.dataTransfer.files);}}
     >
       <header className="tl-header">
         <a
@@ -1636,7 +1655,7 @@ function Operator() {
       <Dialogs
         onPNG={still}
         onVideo={film}
-        onPack={pack}
+        onPack={()=>r.set({modal:'backup'})}
         onJSON={json}
         onImport={() => projectRef.current?.click()}
         commands={commands}
@@ -1645,6 +1664,7 @@ function Operator() {
       <Modals onPNG={still} onVideo={film} onJSON={json} />
       {r.tabletPanel && <PairTablets />}
       {r.modal==='media'&&<MediaWorkspace/>}
+      {r.modal==='backup'&&<EpisodeBackup legacy={pack}/>}
       <input
         ref={importRef}
         hidden
@@ -1661,9 +1681,9 @@ function Operator() {
         hidden
         type="file"
         accept=".json,.zip"
+        multiple
         onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) void importProject(file);
+          void onFiles(e.target.files);
           e.target.value = "";
         }}
       />

@@ -47,7 +47,7 @@ interface Runtime {
   outputAck: { id: string; black: boolean; thumbnail?: string } | null;
   assetAvailability: Record<string, boolean>;
   cueClock: { startedAt: number | null; elapsed: number };
-  modal: "export" | "projects" | "shortcuts" | "commands" | "media" | null;
+  modal: "export" | "projects" | "shortcuts" | "commands" | "media" | "backup" | null;
   presenter: boolean;
   follow: boolean;
   program: ProgramSnapshot | null;

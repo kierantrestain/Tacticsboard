@@ -28,6 +28,7 @@ export function saveCue() {
   s.commit((b) => {
     b.studio ||= emptyStudio();
     (b.studio.cues ||= []).push(cue);
+    b.studio.resume={view:r.view,time:r.time,phaseTime:s.previewTime,cueId:cue.id};
   });
   s.save();
   r.set({ activeCueId: cue.id });
@@ -101,6 +102,7 @@ export function updateCue() {
   s.commit((board) => {
     const i = board.studio!.cues!.findIndex((c) => c.id === previous.id);
     board.studio!.cues![i] = replaceCueContent(previous, current);
+    board.studio!.resume={view:r.view,time:r.time,phaseTime:s.previewTime,cueId:previous.id};
   });
   s.save();
   s.notify("Shot updated. Preview it again before marking it reviewed.");

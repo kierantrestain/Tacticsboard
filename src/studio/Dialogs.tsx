@@ -22,6 +22,7 @@ import { useStudio } from "../store";
 import { dateLabel } from "../core";
 import { totalDuration } from '../core';
 import { clipPlan } from './filmPlan';
+import EpisodeLibrary from './EpisodeLibrary';
 export function Dialog({
   title,
   kicker,
@@ -169,75 +170,7 @@ export default function Dialogs({
       </Dialog>
     );
   if (r.modal === "projects")
-    return (
-      <Dialog title="Your analysis room." kicker="PROJECT LIBRARY">
-        <div className="tl-dialog-toolbar">
-          <button
-            className="tl-primary"
-            onClick={() => {
-              s.create();
-              r.set({
-                modal: null,
-                view: "board",
-                time: 0,
-                mediaPlaying: false,
-              });
-            }}
-          >
-            <Plus size={15} />
-            New analysis
-          </button>
-          <button className="tl-secondary" onClick={onImport}>
-            <FolderOpen size={15} />
-            Open project pack / JSON
-          </button>
-        </div>
-        <div className="tl-project-list">
-          {s.library.map((b) => (
-            <button
-              key={b.id}
-              onClick={async () => {
-                await s.load(b.id);
-                r.set({
-                  modal: null,
-                  view: useStudio.getState().board?.studio?.view || "board",
-                  time: 0,
-                  mediaPlaying: false,
-                });
-              }}
-            >
-              <span className="tl-project-icon">
-                <Box size={22} />
-              </span>
-              <div>
-                <strong>{b.title}</strong>
-                <span>
-                  {
-                    s.catalogue?.teams.find((t) => t.id === b.homeTeamId)
-                      ?.shortName
-                  }{" "}
-                  /{" "}
-                  {
-                    s.catalogue?.teams.find((t) => t.id === b.awayTeamId)
-                      ?.shortName
-                  }{" "}
-                  · {b.scenes} phases
-                </span>
-              </div>
-              <time>{dateLabel(b.updatedAt)}</time>
-              <ArrowRight size={16} />
-            </button>
-          ))}
-        </div>
-        <div className="tl-dialog-note">
-          <ShieldCheck size={15} />
-          <p>
-            Projects autosave to this browser’s device storage. Use a portable
-            project pack for backup and transfer.
-          </p>
-        </div>
-      </Dialog>
-    );
+    return <Dialog title="Your episodes." kicker="EPISODES & RECOVERY"><EpisodeLibrary onImport={onImport}/></Dialog>;
   if (r.modal === "shortcuts")
     return (
       <Dialog title="Designed for the moment." kicker="PRESENTER CONTROLS">

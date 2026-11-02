@@ -5,7 +5,8 @@ import type { Board } from "../types";
 import type { MediaAsset } from "./types";
 import { defaultBroadcast } from "./types";
 import type { BroadcastStyle } from "./types";
-import { getMedia, saveMedia, putRecord } from "./assetStore";
+import { getMedia, getRecord, saveMedia, putRecord, commitImportedMedia } from "./assetStore";
+import { remapEpisodeMedia, episodeMediaIds } from './episodeModel';
 import { uid } from "../core";
 export function productionFrame(
   raw: CanvasImageSource,
@@ -135,17 +136,20 @@ export async function exportPack(board: Board, assets: MediaAsset[]) {
     size += blob.size;
     if (size > 200 * 1048576)
       throw Error(
-        "This project exceeds the 200 MB portable-pack limit. Export JSON and keep the original source files with it.",
+        "This project exceeds the legacy ZIP limit. Use Complete episode backup for bounded numbered volumes.",
       );
     entries[`sources/${a.id}.bin`] = new Uint8Array(await blob.arrayBuffer());
     meta.push(a);
   }
+  const resources:{id:string;value:unknown}[]=[];
+  for(const id of b.studio?.resourceIds||[]){const value=await getRecord('resources',id);if(!value)throw Error('A prepared data snapshot is missing. Restore it before backup.');resources.push({id,value});}
   entries["project.json"] = strToU8(
     JSON.stringify({
       format: "touchline-project",
       version: 2,
       board: b,
       assets: meta,
+      resources,
     }),
   );
   return {
@@ -155,7 +159,7 @@ export async function exportPack(board: Board, assets: MediaAsset[]) {
     name: filename(b.title) + ".touchline.zip",
   };
 }
-export async function importPack(file: File): Promise<Board> {
+export async function importPack(file: File,accept:(b:Board)=>boolean=()=>true): Promise<Board> {
   if (file.size > 210 * 1048576)
     throw Error("Choose a project pack under 210 MB.");
   let total = 0,
@@ -189,6 +193,7 @@ export async function importPack(file: File): Promise<Board> {
     throw Error("The project manifest is invalid.");
   const b: Board = manifest.board,
     remap: Record<string, string> = {};
+  if(!accept(b))throw Error('The episode match context is invalid. No sources were imported.');
   for (const a of manifest.assets) {
     if (
       !validMediaMetadata(a) ||
@@ -203,13 +208,18 @@ export async function importPack(file: File): Promise<Board> {
       throw Error("A media record is invalid.");
     const data = files[`sources/${a.id}.bin`];
     if (!data) throw Error("A source file is missing from this project pack.");
+    if(remap[a.id]||!Number.isInteger(a.size)||a.size!==data.byteLength||typeof a.mime!=='string'||!/^(image|video)\/[a-zA-Z0-9.+-]+$/.test(a.mime))throw Error('Duplicate source, invalid size or media type in project pack.');
     remap[a.id] = uid();
   }
+  const items:{asset:MediaAsset;blob:Blob}[]=[];
   for(const a of manifest.assets){
     const id=remap[a.id],data=files[`sources/${a.id}.bin`];
-    await saveMedia(id,new Blob([data as BlobPart],{type:a.mime}));
-    await putRecord('meta',id,{...a,id,sourceAssetId:a.sourceAssetId?remap[a.sourceAssetId]||a.sourceAssetId:undefined,filmstrip:undefined});
+    items.push({blob:new Blob([data as BlobPart],{type:a.mime}),asset:{...a,id,sourceAssetId:a.sourceAssetId?remap[a.sourceAssetId]||a.sourceAssetId:undefined,filmstrip:undefined}});
   }
+  if([...episodeMediaIds(b)].some(id=>!remap[id]))throw Error('The pack omits a referenced source. Existing episodes are unchanged.');
+  if(manifest.resources!==undefined&&(!Array.isArray(manifest.resources)||manifest.resources.length>500||manifest.resources.some((r:any)=>!r||typeof r.id!=='string'||!/^[a-zA-Z0-9-]{1,150}$/.test(r.id)||!r.value)))throw Error('Invalid prepared data snapshots.');
+  if(b.studio?.resourceIds?.some(id=>!manifest.resources?.some((r:any)=>r.id===id)))throw Error('A prepared data snapshot is missing from this pack.');
+  await commitImportedMedia(items,manifest.resources||[]);
   if (b.studio) {
     const d = b.studio;
     for (const key of [

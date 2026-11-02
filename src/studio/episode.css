@@ -1,0 +1,69 @@
+.episode-recovery {
+  padding: 18px;
+  border: 1px solid #334a52;
+  border-radius: 14px;
+  background: #14262e;
+  margin: 18px 0;
+  display: grid;
+  gap: 12px;
+}
+.episode-recovery label {
+  display: grid;
+  gap: 6px;
+}
+.episode-recovery input {
+  padding: 12px;
+  border: 1px solid #49616c;
+  border-radius: 8px;
+  background: #0d1c25;
+  color: #f3f7ef;
+}
+.episode-recovery .tl-secondary,
+.episode-volume-list .tl-secondary,
+.episode-library-row button {
+  min-height: 44px;
+}
+.episode-volume-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  max-height: 230px;
+  overflow: auto;
+  margin: 15px 0;
+}
+.episode-library-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  background: #142630;
+  border-radius: 12px;
+}
+.episode-library-row > div {
+  display: grid;
+  gap: 6px;
+  margin-right: auto;
+}
+.episode-library-row small {
+  color: #afc7c7;
+}
+.tl-dialog progress {
+  display: block;
+  width: 100%;
+  margin: 12px 0;
+}
+.tl-save-state.error {
+  color: #ffb4a4;
+}
+@media (max-width: 680px) {
+  .episode-library-row {
+    flex-wrap: wrap;
+  }
+  .episode-library-row > div {
+    width: 100%;
+  }
+  .episode-recovery .tl-dialog-toolbar {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}

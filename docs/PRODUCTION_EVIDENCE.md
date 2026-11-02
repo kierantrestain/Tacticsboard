@@ -53,3 +53,19 @@ This file records only checks performed for the master-prompt run begun 1 Novemb
 ## Readiness
 
 Controlled rehearsal: not yet assessed. Recording: not approved or certified. A successful build, passing tests or demonstration chart alone will not change this judgement.
+
+## Stage B checkpoint — 2 November 2026
+
+Implemented ordered per-episode saves with an atomic previous-valid checkpoint, three explicit producer checkpoints, fallback recovery, scoped draft reset, stable naming, duplicate/resume and accurate pending/failed states. Resuming is paused and private. Large media remains in IndexedDB rather than repeated localStorage/autosave copies. Source calibration/targets are now captured per show moment.
+
+Complete episode backup uses one manifest plus bounded 32 MiB ZIP volumes, SHA-256 checks, original byte/time preservation and immutable resource snapshots. Up to 8 GB per episode/256 sources, still subject to device quota. Import validates all references/volumes, stages chunks, then atomically publishes media and resources. Interrupted operations retain the existing episode. Expired isolated import staging is reclaimed after 24 hours. Existing JSON and <=200 MB ZIP routes remain compatible. No giant ZIP-limit increase.
+
+Checks actually run:
+- Targeted media/persistence run: **35 tests / 5 files passed** before final hardening. Then **17 tests / 3 persistence files passed**, including synchronous clone failure rollback after hardening.
+- TypeScript and full production build/Studio Hub package passed before final clone/staging hardening; final regression must cover the later changes.
+- Fake IndexedDB fresh-context volume round trip retained source bytes, IDs remapped consistently, source timing, timed ink and immutable data snapshots. Corrupt/missing/mismatched volumes, conflicting resources and interrupted writes rejected without replacing the valid episode.
+- A 201 MiB + 3 byte test source produced seven bounded chunks; maximum source read was 32 MiB. This is a storage test, not long match-footage evidence.
+- Managed Chrome UI imported and decoded a valid padded **210,763,793-byte**, 10-second synthetic MP4. The existing comparison stayed held. Complete backup preflight/hash succeeded and offered 11 volumes for five referenced sources. This verifies large file size, **not** representative long/VFR footage.
+- Actual browser manifest download succeeded (JSON). First 32 MiB ZIP volume was prepared, but `waitForEvent(download)` and the supported link-download operation both timed out. **Actual browser ZIP download/fresh-profile browser transfer remain unverified**, as do directory-picker saving and physical transfer. Do not substitute the unit round trip for these checks.
+
+Next: two-host controls/recovery, then data foundation/graphics and integrated acceptance. Stage A hardware/native cases remain outstanding. No production deployment performed.

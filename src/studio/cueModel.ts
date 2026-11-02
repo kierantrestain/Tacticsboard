@@ -24,6 +24,8 @@ export function makeCue(
       ? desk.assetId
       : undefined;
   return {
+    landmarks:source?copy(desk.landmarks[source]||[]):undefined,
+    targets:source?copy(desk.targets[source]||[]):undefined,
     phaseTime:!source&&['board','replay'].includes(view)?time:undefined,
     sourcePresentation: source ? copy(desk.sourcePresentations?.[source]) : undefined,
     comparisonView: desk.comparisonView,
@@ -88,7 +90,6 @@ export function makeCue(
 export function cueBoard(board: Board, cue: RundownCue): Board {
   const next = copy(board);
   next.recreation = copy(cue.recreation);
-  if (cue.recreation) next.title = `${cue.recreation.minute} · ${cue.recreation.title}`.slice(0, 120);
   const changedContext =
     !!cue.homeTeamId &&
     (cue.homeTeamId !== board.homeTeamId ||
@@ -152,6 +153,8 @@ export function cueBoard(board: Board, cue: RundownCue): Board {
   next.studio.trim = copy(cue.trim);
   next.studio.lowerThird = cue.lowerThird;
   if (cue.assetId) {
+    if(cue.landmarks)next.studio.landmarks[cue.assetId]=copy(cue.landmarks);
+    if(cue.targets||cue.tracking?.targets)next.studio.targets[cue.assetId]=copy(cue.targets||cue.tracking!.targets);
     (next.studio.explainStops ||= {})[cue.assetId] = copy(cue.explainStops || []);
     next.studio.ink[cue.assetId] = copy(cue.ink);
     if (cue.tracking) next.studio.tracking[cue.assetId] = copy(cue.tracking);
@@ -179,6 +182,8 @@ export function replaceCueContent(
 export function cueContentKey(cue: RundownCue): string {
   return JSON.stringify([
     cue.view,
+    cue.landmarks,
+    cue.targets,
     cue.phaseTime,
     cue.sourcePresentation,
     cue.comparisonView,

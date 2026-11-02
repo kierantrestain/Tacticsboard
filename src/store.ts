@@ -1,6 +1,6 @@
 import { removeFootballActionLinks } from "./studio/footballActions";
 import { loadReport } from "./football/data";
-import { saveProject, loadProject } from "./studio/assetStore";
+import { saveProject, loadProject, recoveredEpisode } from "./studio/assetStore";
 import { create } from "zustand";
 import type {
   Board,
@@ -34,6 +34,8 @@ let interaction: Board | null = null;
 let matchLoadId = 0;
 let timer: ReturnType<typeof setTimeout>;
 let saveTimer: ReturnType<typeof setTimeout>;
+let saveRevision=0;
+let projectLoadRevision=0;
 export const channel =
   typeof BroadcastChannel !== "undefined"
     ? new BroadcastChannel("fixture-program")
@@ -94,7 +96,7 @@ interface Studio {
   redo: () => void;
   set: (patch: Partial<Studio>) => void;
   notify: (text: string) => void;
-  save: () => void;
+  save: () => Promise<void>;
   load: (id: string) => void;
   importBoard: (b: unknown) => boolean;
   create: () => void;
@@ -223,19 +225,10 @@ export const useStudio = create<Studio>((set, get) => ({
   save: async () => {
     const b = get().board;
     if (!b || IS_OUTPUT) return;
+    const revision=++saveRevision;
     set({ savePending: true });
     try {
       await saveProject(b);
-      for (let i = localStorage.length - 1; i >= 0; i--) {
-        const key = localStorage.key(i);
-        if (key?.startsWith(PREFIX) && key !== PREFIX + b.id) {
-          try {
-            const old = JSON.parse(localStorage.getItem(key) || "null");
-            if (isBoard(old)) await saveProject(old);
-            localStorage.removeItem(key);
-          } catch {}
-        }
-      }
       const at = new Date().toISOString();
       const entry = {
         id: b.id,
@@ -250,12 +243,7 @@ export const useStudio = create<Studio>((set, get) => ({
         ...readIndex().filter((x) => x.id !== b.id),
       ].slice(0, 100);
       localStorage.setItem(INDEX, JSON.stringify(library));
-      if (get().board?.id === b.id) {
-        try {
-          localStorage.setItem(PREFIX + b.id, JSON.stringify(b));
-        } catch {
-          localStorage.removeItem(PREFIX + b.id);
-        }
+      if (get().board?.id === b.id && revision===saveRevision) {
         localStorage.setItem(ACTIVE, b.id);
         set({
           savedAt: at,
@@ -265,6 +253,7 @@ export const useStudio = create<Studio>((set, get) => ({
         });
       }
     } catch {
+      if(get().board?.id!==b.id||revision!==saveRevision)return;
       set({ saveError: true, savePending: false });
       get().notify(
         "Autosave needs more browser storage. Export a project pack to keep this analysis.",
@@ -272,6 +261,7 @@ export const useStudio = create<Studio>((set, get) => ({
     }
   },
   load: async (id) => {
+    const revision=++projectLoadRevision;
     try {
       const b =
         (await loadProject(id)) ||
@@ -280,6 +270,7 @@ export const useStudio = create<Studio>((set, get) => ({
         isBoard(b) && get().catalogue
           ? catalogueWithBoardTeams(get().catalogue!, b)
           : null;
+      if(revision!==projectLoadRevision)return;
       if (
         !isBoard(b) ||
         !catalogue?.teams.some((t) => t.id === b.homeTeamId) ||
@@ -299,13 +290,14 @@ export const useStudio = create<Studio>((set, get) => ({
         profileId: null,
       });
       get().save();
-      get().notify("Analysis opened");
+      get().notify(recoveredEpisode(id)||"Episode opened privately");
     } catch {
       get().notify("That analysis could not be opened.");
     }
   },
   importBoard: (value) => {
     if (!isBoard(value)) return false;
+    projectLoadRevision++;
     const catalogue = get().catalogue
       ? catalogueWithBoardTeams(get().catalogue!, value)
       : null;
@@ -334,6 +326,7 @@ export const useStudio = create<Studio>((set, get) => ({
     return true;
   },
   create: () => {
+    projectLoadRevision++;
     const { catalogue } = get();
     if (!catalogue) return;
     get().save();

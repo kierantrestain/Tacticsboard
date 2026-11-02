@@ -115,6 +115,7 @@ export const MAX_ANALYSIS_SECONDS = 60;
 export const MAX_TRACKING_SECONDS = 20;
 /** Project packs replace the draft; do not silently mix them into source batches. */
 export function importSelection(files: { name: string }[]) {
+  if(files.some(f=>/\.touchline\.(episode\.json|part\d{4}\.zip)$/i.test(f.name))){if(files.some(f=>!/\.touchline\.(episode\.json|part\d{4}\.zip)$/i.test(f.name)))throw Error('Select only the episode manifest and its numbered ZIP volumes.');return 'episode';}
   const projects = files.filter((f) => /\.(zip|json)$/i.test(f.name));
   if (projects.length && files.length !== 1)
     throw Error(

@@ -1,12 +1,14 @@
 export async function mediaDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const r = indexedDB.open("fixture-media", 2);
+    const r = indexedDB.open("fixture-media", 3);
+    let blocked=false;
     r.onupgradeneeded = () => {
-      for (const name of ["assets", "meta", "projects"])
+      for (const name of ["assets", "meta", "projects", "checkpoints", "staging", "resources"])
         if (!r.result.objectStoreNames.contains(name))
           r.result.createObjectStore(name);
     };
-    r.onsuccess = () => resolve(r.result);
+    r.onsuccess = () => {if(blocked){r.result.close();return;}r.result.onversionchange=()=>r.result.close();resolve(r.result);};
+    r.onblocked = () => {blocked=true;reject(Error("Close older studio tabs and retry the storage upgrade. Your existing episodes are retained."));};
     r.onerror = () => reject(r.error);
   });
 }
@@ -19,7 +21,7 @@ export async function saveMedia(id: string, file: Blob) {
       db.close();
       resolve();
     };
-    t.onerror = () => {
+    t.onabort = t.onerror = () => {
       db.close();
       reject(t.error);
     };
