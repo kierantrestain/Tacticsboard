@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Draw, animate and share football tactics with Touchline.">
+  <meta name="theme-color" content="#10370e">
+  <title>Touchline • Tactics Board</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./home.css">
+  <link rel="stylesheet" href="./media.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <div id="homeView" hidden></div>
+  <div id="mediaView" hidden></div>
+  <main class="board-workspace" id="boardView" aria-label="Touchline tactics board">
+    <div class="board-content">
+      <aside class="sideline" aria-label="Teams and panels">
+        <div id="teams" class="teams"></div>
+        <div class="side-cards">
+          <button class="side-card" data-action="animation"><span data-icon="stages"></span><span><strong>Animation creator</strong><small>Capture the board as a stage, move the players and capture again.</small></span></button>
+          <button class="side-card" data-action="export"><span data-icon="camera"></span><span><strong>Export &amp; publish</strong><small>Save a pitch image or animation, or share your board with a link.</small></span></button>
+          <button class="side-card" data-action="guides"><span data-icon="guides"></span><span><strong>Spacing guides</strong><small>Show the lanes and thirds to plan your team's shape.</small></span></button>
+          <button class="side-settings" data-action="settings">All panels and settings</button>
+        </div>
+      </aside>
+      <div class="pitch-area">
+        <div id="pitch" class="pitch" aria-label="Interactive football pitch"></div>
+      </div>
+      <section class="timeline floating" id="timelinePanel" aria-label="Animation creator" hidden>
+        <div class="timeline-header">
+          <div class="timeline-title"><span data-icon="stages"></span><h2>Animation creator</h2><span id="phaseCount" class="phase-count"></span></div>
+          <div class="timeline-actions">
+            <button class="icon-button" data-action="previous" title="Previous stage" aria-label="Previous stage"><span data-icon="skipBack"></span></button>
+            <button id="play" class="button button-accent play-button" data-action="play"><span data-icon="play"></span><span>Play</span></button>
+            <button class="icon-button" data-action="next" title="Next stage" aria-label="Next stage"><span data-icon="skipForward"></span></button>
+            <button class="icon-button" data-action="animation" title="Close animation creator" aria-label="Close animation creator"><span data-icon="close"></span></button>
+          </div>
+        </div>
+        <div id="phases" class="phases"></div>
+        <div class="timeline-note"><label for="notes">Coaching notes</label><textarea class="input note" id="notes" maxlength="2000" rows="2" placeholder="Add a coaching cue…"></textarea></div>
+      </section>
+      <div id="toolPanel" class="floating" hidden></div>
+      <div id="playerPanel" class="floating" hidden></div>
+    </div>
+    <div id="toolbar" class="toolbar" aria-label="Drawing tools"></div>
+  </main>
+  <button id="exitPresent" class="button button-muted exit-present" data-action="present"><span data-icon="close"></span> Exit presentation</button>
+  <dialog id="dialog"></dialog>
+  <div id="toast" role="status" class="toast"></div>
+  <input id="importFile" type="file" accept=".json,application/json" hidden>
+</body>
+</html>
