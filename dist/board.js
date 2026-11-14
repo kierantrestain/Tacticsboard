@@ -468,14 +468,19 @@ function clamp(value, lower, upper) {
   return Math.max(lower, Math.min(upper, value));
 }
 
-function pitchPoint(container, event) {
+function pitchLimits(svg, y, allowNet) {
+  const insideGoal = allowNet && Math.abs(y - 312.5) <= 31;
+  return [Math.max(svg.viewBox.baseVal.x, insideGoal ? 10 : FIELD.left),insideGoal ? 990 : FIELD.right];
+}
+
+function pitchPoint(container, event, allowNet = false) {
   const svg = container.querySelector('svg');
   const matrix = svg?.getScreenCTM();
   if (!matrix) return null;
   const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
-  const left = Math.max(svg.viewBox.baseVal.x, FIELD.left);
+  const [left,right] = pitchLimits(svg,point.y,allowNet);
   return {
-    x: clamp(point.x, left, FIELD.right),
+    x: clamp(point.x,left,right),
     y: clamp(point.y, FIELD.top, FIELD.bottom),
   };
 }
@@ -536,9 +541,9 @@ export function bindBoard(container, callbacks) {
   function down(event) {
     if (drag || event.button !== 0 || !event.isPrimary) return;
     const target = event.target;
-    const point = pitchPoint(container, event);
-    if (!point) return;
     const tool = getTool();
+    const point = pitchPoint(container,event,tool === 'shot' || target.closest('[data-piece="ball"]'));
+    if (!point) return;
     if (arrowStart && arrowStart.type !== tool) cancelArrow();
 
     if (tool === 'select') {
@@ -588,12 +593,12 @@ export function bindBoard(container, callbacks) {
     if (!drag) {
       if (!arrowStart) return;
       if (arrowStart.type !== getTool()) return cancelArrow();
-      const point = pitchPoint(container, event);
+      const point = pitchPoint(container,event,arrowStart.type === 'shot');
       if (point) showPreview(container, { ...arrowStart, points: [arrowStart.points[0], arrowPoint(point, event.target)] });
       return;
     }
     if (drag.pointer !== event.pointerId) return;
-    const point = pitchPoint(container, event);
+    const point = pitchPoint(container,event,drag.id === 'ball' || drag.mark?.type === 'shot');
     if (!point) return;
     const dx = point.x - drag.origin.x;
     const dy = point.y - drag.origin.y;
@@ -601,9 +606,9 @@ export function bindBoard(container, callbacks) {
 
     if (drag.id) {
       if (!drag.moved) callbacks.onStart?.(drag.id);
-      const left = Math.max(container.querySelector('svg').viewBox.baseVal.x, FIELD.left);
-      const x = clamp(drag.position.x + dx, left, FIELD.right);
       const y = clamp(drag.position.y + dy, FIELD.top, FIELD.bottom);
+      const [left,right] = pitchLimits(container.querySelector('svg'),y,drag.id === 'ball');
+      const x = clamp(drag.position.x + dx,left,right);
       callbacks.onMove?.(drag.id, x, y);
     } else {
       const { mark } = drag;
@@ -656,11 +661,11 @@ export function bindBoard(container, callbacks) {
     event.preventDefault();
     const point = piecePoint(piece);
     const distance = event.shiftKey ? 20 : 5;
-    const left = Math.max(container.querySelector('svg').viewBox.baseVal.x, FIELD.left);
+    const y = clamp(point.y + distance * step[1],FIELD.top,FIELD.bottom);
+    const [left,right] = pitchLimits(container.querySelector('svg'),y,id === 'ball');
     callbacks.onSelect?.(id);
     callbacks.onStart?.(id);
-    callbacks.onMove?.(id, clamp(point.x + distance * step[0], left, FIELD.right),
-      clamp(point.y + distance * step[1], FIELD.top, FIELD.bottom));
+    callbacks.onMove?.(id,clamp(point.x + distance * step[0],left,right),y);
     callbacks.onCommit?.();
     focusPiece(id);
   }

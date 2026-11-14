@@ -76,6 +76,8 @@
             </div>
           </div>
           <div class="playback-controls">
+            <button id="restartPlay" class="icon-button playback-icon" type="button" data-action="restart-play" title="Play from start" aria-label="Play from start"><span data-icon="skipBack"></span></button>
+            <button id="stopPlay" class="icon-button playback-icon" type="button" data-action="stop-play" title="Stop preview" aria-label="Stop preview"><span data-icon="stop"></span></button>
             <label class="playhead-field"><span class="visually-hidden">Scrub animation</span><input id="playhead" type="range" min="0" max="0" step="10" value="0"><output id="playheadLabel" for="playhead">0.0 s</output></label>
             <label class="speed-field"><span class="visually-hidden">Playback speed</span><select class="input" id="animationSpeed"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label>
             <label class="loop-field"><input id="loopPlayback" type="checkbox">Loop</label>

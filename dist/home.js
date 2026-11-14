@@ -106,9 +106,9 @@ export function renderHome(container, { board, saved = [], templates = [], rende
         <div class="home-panel-head">${icon('recent')}<div><h1>Jump back in</h1><p>Your recent boards.</p></div></div>
         <div class="home-recent-grid">
           ${recentCard(current)}${recent.map(recentCard).join('')}
-          ${suggested ? `<button type="button" class="home-recent-card" data-action="template-${suggestionIndex}">
+          ${suggested ? `<button type="button" class="home-recent-card" data-action="${suggested.stages?.length > 1 ? 'preview-template' : 'template'}-${suggestionIndex}">
             <div class="home-preview" data-preview="suggested"></div>
-            <div class="home-recent-detail"><strong>${escape(suggested.name)}</strong><small>Play template</small></div>
+            <div class="home-recent-detail"><strong>${escape(suggested.name)}</strong><small>${suggested.stages?.length > 1 ? 'Play template' : 'Open template'}</small></div>
           </button>` : ''}
           <div class="home-new-card">
             <button type="button" data-action="new">${icon('plus')}<strong>New board</strong></button>
@@ -162,9 +162,9 @@ export function renderHome(container, { board, saved = [], templates = [], rende
       </section>
 
       ${training.length ? `<section class="home-panel home-starters">
-        <div class="home-panel-head">${icon('templates')}<div><h2>Try a play</h2><p>Open a template and edit it for your team.</p></div></div>
+        <div class="home-panel-head">${icon('templates')}<div><h2>Try a play</h2><p>Play a template, then edit it for your team.</p></div></div>
         <div class="home-starter-grid">${training.map((template, index) =>
-          `<button class="home-starter" type="button" data-action="template-${index}">
+          `<button class="home-starter" type="button" data-action="${template.stages?.length > 1 ? 'preview-template' : 'template'}-${index}">
             <div class="home-preview" data-preview="template-${index}"></div><span><strong>${escape(template.name)}</strong><small>${escape(template.category)}</small></span>
           </button>`).join('')}</div>
       </section>` : ''}

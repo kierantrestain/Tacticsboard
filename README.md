@@ -22,7 +22,7 @@ Catalog sources include [OpenFootball](https://github.com/openfootball) (CC0) an
 
 ## Motion
 
-Open **Animation creator** to scrub, loop, or adjust playback speed. Edit a stage to choose its outgoing ball movement and duration. The arrow palette can turn a drawn pass, dribble, lob or shot into a new stage. The **From build-up to finish** play template demonstrates all four.
+Open **Animation creator** to play from the start, scrub, loop, or adjust playback speed. Select the ball or use **Give ball** to assign a carrier. Edit a stage to set its duration, release and arrival timing, and bend. **Run arrows** combines marked player runs with one ball action, then carries unused arrows into the next stage. The **From build-up to finish** play demonstrates a ground pass, dribble, lob and shot.
 
 ## Match maps
 

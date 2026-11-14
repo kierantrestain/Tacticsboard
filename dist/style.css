@@ -288,3 +288,9 @@ dialog:has([data-match-map]) {width:min(760px,calc(100vw - 32px))}
 .match-story-events li {display:flex;gap:10px;padding:4px 0;border-bottom:1px solid #45675b72;font-size:11px}
 .match-story-events time {color:#9edbb0;min-width:30px}
 .match-story-events small {display:block;color:var(--muted)}
+
+.playback-controls .playback-icon {width:25px;height:25px;flex:none}
+.playback-controls .playback-icon svg {width:15px;height:15px}
+.stage-flight-settings {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.template-play {flex:none;padding-inline:10px;min-height:34px}
+.template-play svg {width:15px;height:15px}

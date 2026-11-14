@@ -1,8 +1,9 @@
 import { applyLook, deleteLook, savedLooks, storeLook } from './saved-looks.js';
 import { mountMatchStory, substitutionStages } from './match-story.js';
 import { resolveMark, setAnchor } from './mark-anchors.js';
+import { planArrowStage, runnableArrows } from './arrow-playback.js';
 import { clampCamera, pitchStyles } from './camera.js';
-import { coreTemplateStages, extraTemplates } from './extra-templates.js';
+import { coreTemplateStages, extraTemplates, motionDemoTemplate } from './extra-templates.js';
 import { mountMatchMap } from './match-map.js';
 import { additionalTools } from './board-tools.js';
 import { suggestCrestKit } from './crest-color.js';
@@ -13,7 +14,7 @@ import { mountMedia } from './media.js';
 import { renderHome } from './home.js';
 import { formations, makeLineup, templates as coreTemplates } from './data.js';
 import { bindBoard, canvasBoard, exportBoard, renderBoard } from './board.js';
-import { ballMotionKinds, downloadBoard, initialBoard, interpolatePlayback, listSavedBoards, loadBoard, makeId, parseBoard, removeSavedBoard, renameSavedBoard, saveBoard, sharedUrl, storeSavedBoard, transitionDuration } from './model.js';
+import { ballMotionKinds, createPlayback, downloadBoard, initialBoard, motionBetweenStages, listSavedBoards, loadBoard, makeId, parseBoard, removeSavedBoard, renameSavedBoard, saveBoard, sharedUrl, storeSavedBoard, transitionDuration } from './model.js';
 
 const icons = {
   brand:'<rect x="3" y="5" width="18" height="14" rx="1"/><path d="M12 5v14M3 9h4v6H3m18-6h-4v6h4"/><circle cx="12" cy="12" r="3"/>',
@@ -31,6 +32,7 @@ const icons = {
   sliders:'<path d="M4 7h5m4 0h7M4 17h8m4 0h4"/><circle cx="11" cy="7" r="2"/><circle cx="14" cy="17" r="2"/>',
   film:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 4v16m8-16v16M4 9h4m-4 6h4m8-6h4m-4 6h4"/>',
   play:'<path d="m8 5 12 7-12 7z" fill="currentColor"/>',
+  stop:'<rect x="7" y="7" width="10" height="10" rx="1"/>',
   pause:'<path d="M9 5H6v14h3zm9 0h-3v14h3z" fill="currentColor"/>',
   skipBack:'<path d="M6 6v12m12-12-9 6 9 6z"/>',
   skipForward:'<path d="M18 6v12M6 6l9 6-9 6z"/>',
@@ -78,7 +80,8 @@ const icons = {
   trash:'<path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/>',
 };
 
-const templates = [...coreTemplates,...extraTemplates];
+const templates = [...coreTemplates,...extraTemplates,motionDemoTemplate].map(template =>
+  ({...template,stages:template.stages ?? coreTemplateStages(template)}));
 const $ = selector => document.querySelector(selector);
 const dialog = $('#dialog');
 const pitch = $('#pitch');
@@ -92,7 +95,6 @@ const mediaView = $('#mediaView');
 let media;
 const boardView = $('#boardView');
 const phases = $('#phases');
-const animatedArrows = {arrow:'pass',dribble:'dribble',lob:'lob',shot:'shot'};
 const motionLabels = {auto:'Auto',pass:'Ground pass',dribble:'Dribble',lob:'Lob',shot:'Shot'};
 const tools = [
   ['select', 'Move', 'V', 'Drag players or the ball to reposition them'],
@@ -137,6 +139,10 @@ let animationFrame = 0;
 let playbackIndex = 0;
 let playhead = null;
 let runningClock = null;
+let playbackLimit;
+let seekPlayback;
+let seekMarkers;
+let nextTimelinePaint = 0;
 let speed = 1;
 let loopPlayback = false;
 let presentation = false;
@@ -221,6 +227,7 @@ function renderToolbar() {
     ['#ffd000','Yellow'],
   ];
   const arrow = arrowTools.includes(tool);
+  const run = arrowRunLabel();
   toolbar.innerHTML = `
     <div class="toolbar-group">
       ${button('animation','Animation creator','stages')}${button('export','Export','upload')}${button('share','Share','link')}
@@ -228,6 +235,7 @@ function renderToolbar() {
     </div>
     <div class="toolbar-divider"></div>
     <div class="toolbar-group toolbar-main">
+      ${run ? dockTool('run-arrows',run,'run',false,'data-action') : ''}
       ${dockTool('play',playing ? 'Pause' : 'Play',playing ? 'pause' : 'play',playing,'data-action')}
       ${dockTool('select','Select','select',tool === 'select')}
       ${dockTool('arrow','Arrow','arrow',arrow,'data-action')}
@@ -292,7 +300,11 @@ function renderPanels() {
   const player = phase().scene.players.find(item => item.id === selected);
   playerPanel.hidden = Boolean(panel || tool !== 'select' || !player || presentation);
   const drawing = phase().scene.marks.find(item => item.id === selectedMark);
-  if (!panel && tool === 'select' && drawing && !presentation && !playing && !playhead) {
+  if (!['arrows','more'].includes(panel) && tool === 'select' && selected === 'ball' && !playing && !playhead && !presentation) {
+    playerPanel.hidden = false;
+    playerPanel.innerHTML = `<button data-action="ball-possession">${icon('ball')} Ball possession</button>`;
+    fillIcons(playerPanel);
+  } else if (!panel && tool === 'select' && drawing && !presentation && !playing && !playhead) {
     playerPanel.hidden = false;
     playerPanel.innerHTML = `<button data-action="edit-drawing">${icon('edit')} Edit drawing</button>
       <button data-action="delete-drawing">${icon('trash')} Delete drawing</button>`;
@@ -324,6 +336,7 @@ function renderPanels() {
   }
   toolPanel.classList.remove('extended-tools');
   const arrows = panel === 'arrows';
+  const run = arrows ? arrowRunLabel() : '';
   toolPanel.innerHTML = `<div class="tool-panel-header">
     <span><strong>${arrows ? 'Arrow' : 'More tools'}</strong>${arrows ? ' · Drag to draw, or click each end.' : ' · Mark a player or a space.'}</span>
     <button class="button button-accent" data-action="done-tool">Done <span>(Esc)</span></button>
@@ -335,43 +348,43 @@ function renderPanels() {
       panelItem('erase','Eraser','erase',tool === 'erase','data-tool') +
       panelItem('guides','Guides','grid',board.settings.grid)}</div>
       ${arrows ? `<label class="toggle-row attach-drawings">Link arrows to players <input id="attachDrawings" type="checkbox" ${attachDrawings ? 'checked' : ''}></label>` : ''}
-      ${arrows && latestBallArrow() ? '<div class="tool-animate"><button class="button button-muted" data-action="animate-arrow">Animate last ball arrow</button></div>' : ''}`;
+      ${run ? `<div class="tool-animate"><button class="button button-muted" data-action="run-arrows">${run}</button></div>` : ''}`;
   fillIcons(toolPanel);
 }
 
-function latestBallArrow() {
-  return phase().scene.marks.findLast(mark => animatedArrows[mark.type] && mark.points.length > 1);
+function arrowRunLabel() {
+  if (playing || playhead || presentation) return '';
+  const count = runnableArrows(phase().scene).length;
+  return count ? `Run ${count} ${count === 1 ? 'arrow' : 'arrows'}` : '';
 }
 
-function animateArrow() {
-  const stored = latestBallArrow();
-  if (!stored) return;
-  const mark = resolveMark(stored,new Map(phase().scene.players.filter(player => !player.benched).map(player => [player.id,player])));
+function runArrows() {
+  if (!arrowRunLabel()) return;
   if (board.phases.length >= 100) return showToast('This board has reached 100 stages.');
+  const current = phase();
+  const nextIndex = board.active + 1;
+  const plan = planArrowStage(current.scene,board.settings);
+  if (!plan) return showToast('Start a run at a player, or start a pass, lob or shot at the ball.');
   mutate(() => {
-    const current = phase();
-    const kind = animatedArrows[mark.type];
-    const onPitch = ({x,y}) => ({x:Math.max(0,Math.min(1000,x)),y:Math.max(0,Math.min(625,y))});
-    const start = onPitch(mark.points[0]);
-    const end = onPitch(mark.points.at(-1));
-    current.scene.ball = {...start};
-    current.transition = kind;
-    const scene = structuredClone(current.scene);
-    scene.ball = {...end};
-    if (kind === 'dribble') {
-      const closest = scene.players.filter(player => !player.benched).sort((first, second) =>
-        Math.hypot(first.x - start.x, first.y - start.y) - Math.hypot(second.x - start.x, second.y - start.y))[0];
-      if (closest && Math.hypot(closest.x - start.x, closest.y - start.y) < 42) {
-        closest.x = Math.min(975, Math.max(25, closest.x + end.x - start.x));
-        closest.y = Math.min(601, Math.max(24, closest.y + end.y - start.y));
+    const next = {id:makeId(),title:plan.ran === 1 && plan.transition !== 'auto' ?
+      motionLabels[plan.transition] : 'After the arrows',notes:'',scene:plan.scene};
+    if (board.phases[nextIndex]) {
+      for (const key of ['transition','duration','ballTiming']) {
+        if (current[key] !== undefined) next[key] = current[key];
       }
     }
-    board.phases.splice(board.active + 1,0,{id:makeId(),title:motionLabels[kind],notes:'',scene});
+    current.scene.ball.ownerId = plan.startOwner;
+    current.transition = plan.transition;
+    current.duration = plan.duration;
+    delete current.ballTiming;
+    board.phases.splice(nextIndex,0,next);
     tool = 'select';
     panel = 'animation';
     selected = null;
+    selectedMark = null;
   });
-  play();
+  if (plan.skipped) showToast(`${plan.ran} ran · ${plan.skipped} left for the next stage`);
+  play({through:nextIndex});
 }
 
 function renderHomeView() {
@@ -492,6 +505,9 @@ function replaceRoster(item, team, starters, reserves = [], exact = false) {
   const roster = shapeFromRoster(team,formation,starters,reserves,exact,
     exact ? [] : item.scene.players.filter(player => player.team === team));
   item.scene.players = [...item.scene.players.filter(player => player.team !== team), ...roster];
+  if (item.scene.ball.ownerId && !item.scene.players.some(player => player.id === item.scene.ball.ownerId && !player.benched)) {
+    delete item.scene.ball.ownerId;
+  }
 }
 
 function openLooks() {
@@ -668,7 +684,10 @@ function renderTimeline() {
       </button>${button(`phase-edit-${position}`, `Edit ${item.title}`, 'dots', 'phase-edit')}
     </div>`).join('') + `<button class="add-phase" data-action="add-phase">${icon('plus')} Add phase</button>`;
   const notes = $('#notes');
-  if (document.activeElement !== notes) notes.value = phase().notes;
+  notes.readOnly = Boolean(playhead);
+  if (notes.readOnly || document.activeElement !== notes) notes.value = board.phases[index].notes;
+  $('#restartPlay').disabled = board.phases.length < 2;
+  $('#stopPlay').disabled = !playhead;
   fillIcons($('.timeline'));
 }
 
@@ -718,25 +737,29 @@ function clock(phases) {
   return markers;
 }
 
-function atTime(phases, markers, offset, view) {
+function atTime(sample, markers, offset) {
   let index = 0;
   while (index + 1 < markers.length && offset >= markers[index + 1]) index++;
   const duration = markers[index + 1] - markers[index];
   return {
     index,
-    scene: duration > 0 ? interpolatePlayback(phases,index,(offset - markers[index]) / duration,view)
-      : phases[index].scene,
+    scene: sample(index,duration > 0 ? (offset - markers[index]) / duration : 0),
   };
 }
 
-function drawPlayhead(offset, markers) {
-  const {index, scene} = atTime(board.phases,markers,offset,board.settings.view);
+function drawPlayhead(offset,markers,sample) {
+  const {index,scene} = atTime(sample,markers,offset);
   const moved = !playhead || index !== playbackIndex;
   playhead = {offset};
   playbackIndex = index;
   if (moved) renderTimeline();
-  $('#playhead').value = offset;
-  $('#playheadLabel').textContent = `${(offset / 1000).toFixed(1)} s`;
+  if (moved || !playing || offset >= nextTimelinePaint || offset < nextTimelinePaint - 50) {
+    nextTimelinePaint = offset + 50;
+    $('#playhead').value = offset;
+    $('#playheadLabel').textContent = `${(offset / 1000).toFixed(1)} s`;
+  }
+  const title = $('#boardTitle');
+  if (moved && title) title.textContent = `${board.title} · ${index + 1}/${board.phases.length}`;
   renderPitch(scene);
 }
 
@@ -744,47 +767,65 @@ function pause() {
   if (!playing) return;
   playing = false;
   cancelAnimationFrame(animationFrame);
+  runningClock = null;
   renderTimeline();
   renderToolbar();
 }
 
 function stop() {
-  if (!playing && !playhead) return;
   playing = false;
-  playhead = null;
   runningClock = null;
+  playbackLimit = undefined;
+  seekPlayback = undefined;
+  seekMarkers = undefined;
+  if (!playhead) return;
+  playhead = null;
   cancelAnimationFrame(animationFrame);
   renderPitch();
   renderTimeline();
   renderToolbar();
+  renderPanels();
 }
 
-function play() {
-  if (playing) return pause();
+function play({through,restart = false} = {}) {
+  if (playing && !restart) return pause();
   if (board.phases.length < 2) return;
+  if (restart) {
+    stop();
+    playbackLimit = undefined;
+  } else if (through !== undefined) playbackLimit = through;
+  const last = board.phases.length - 1;
+  const finish = playbackLimit ?? last;
   const markers = clock(board.phases);
-  const end = markers.at(-1);
-  let offset = playhead?.offset ?? markers[board.active];
-  if (offset >= end) offset = 0;
+  const end = markers[finish];
+  const from = playbackLimit === undefined ? 0 : markers[finish - 1];
+  const sample = createPlayback(board.phases,board.settings);
+  let offset = restart ? 0 : playhead?.offset ?? markers[board.active];
+  if (offset >= end || offset < from) offset = from;
   selected = null;
+  selectedMark = null;
   playing = true;
-  runningClock = { start: performance.now(), offset };
-  drawPlayhead(offset,markers);
+  runningClock = {start:performance.now(),offset};
+  drawPlayhead(offset,markers,sample);
   renderPanels();
   renderTimeline();
   renderToolbar();
   function frame(now) {
     const time = runningClock.offset + (now - runningClock.start) * speed;
-    if (time >= end && !loopPlayback) {
+    const looping = loopPlayback && playbackLimit === undefined;
+    if (time >= end && !looping) {
       playing = false;
       playhead = null;
       runningClock = null;
-      board.active = board.phases.length - 1;
+      playbackLimit = undefined;
+      board.active = finish;
       persist(false);
       render();
       return;
     }
-    drawPlayhead(time % end,markers);
+    // Pause at the last frame briefly before restarting a loop.
+    const position = looping ? Math.min(end,time % (end + 400)) : time;
+    drawPlayhead(position,markers,sample);
     animationFrame = requestAnimationFrame(frame);
   }
   animationFrame = requestAnimationFrame(frame);
@@ -827,6 +868,10 @@ function option(action, title, detail, iconName) {
   return `<button data-action="${action}" class="option">${icon(iconName)}<span><strong>${escape(title)}</strong><small>${escape(detail)}</small></span></button>`;
 }
 
+function playBoardFromStart() {
+  play({restart:true});
+}
+
 function createBoard(template, { preview = false } = {}) {
   mutate(() => {
     const defaults = initialBoard();
@@ -834,12 +879,9 @@ function createBoard(template, { preview = false } = {}) {
       defaults.title = template.name;
       defaults.settings.homeFormation = template.homeFormation;
       defaults.settings.awayFormation = template.awayFormation;
-      const stages = template.stages ?? coreTemplateStages(template);
-      if (stages?.length) {
-        defaults.phases = stages.map(stage => ({id:makeId(),...structuredClone(stage)}));
+      if (template.stages?.length) {
+        defaults.phases = template.stages.map(stage => ({id:makeId(),...structuredClone(stage)}));
         Object.assign(defaults.settings,template.settings);
-      } else if (template === coreTemplates[0]) {
-        // The built-in build-up starts from the same drawing and has a three-stage play.
       } else {
         defaults.phases = [{ id: makeId(), title: 'Starting shape', notes: template.description, scene: structuredClone(template.scene) }];
       }
@@ -860,77 +902,91 @@ function createBoard(template, { preview = false } = {}) {
   else showToast('Board created. Undo to return to the previous board.');
 }
 
-function loadMotionDemo() {
-  const example = initialBoard();
-  example.title = 'From build-up to finish';
-  const [start, receive, advance] = example.phases;
-  start.transition = 'pass';
-  receive.transition = 'dribble';
-  receive.duration = 1700;
-  receive.notes = 'The pivot carries the ball through the press before lifting it into the channel.';
-  const pivot = advance.scene.players.find(player => player.id === 'home-6');
-  Object.assign(pivot,{x:516,y:348});
-  advance.scene.ball = {x:542,y:345};
-  advance.title = 'Carry through midfield';
-  advance.notes = 'The striker runs behind the back line to receive the lob. Watch the ball rise and drop.';
-  advance.transition = 'lob';
-  advance.duration = 1600;
-  const receiving = structuredClone(advance.scene);
-  const striker = receiving.players.find(player => player.id === 'home-9');
-  Object.assign(striker,{x:790,y:286});
-  receiving.ball = {x:817,y:285};
-  const finish = structuredClone(receiving);
-  finish.ball = {x:989,y:301};
-  for (const item of example.phases) item.scene.marks = [];
-  receiving.marks = [];
-  finish.marks = [];
-  example.phases.push(
-    {id:makeId(),title:'Receive and shoot',notes:'The striker strikes early and the ball reaches the far side of the goal.',transition:'shot',duration:1150,scene:receiving},
-    {id:makeId(),title:'Finish',notes:'The runners continue after the ball has crossed the line.',scene:finish},
-  );
-  dialog.close();
-  mutate(() => {
-    board = example;
-    panel = 'animation';
-    tool = 'select';
-    selected = null;
+function editBallPossession() {
+  const {scene} = phase();
+  const players = scene.players.filter(player => !player.benched && board.settings[player.team] !== false);
+  openDialog('Ball possession',`<form><label>Player in control<select class="input" name="owner">
+    <option value="">Auto · nearest player</option>
+    <option value="loose"${scene.ball.ownerId === null ? ' selected' : ''}>Loose or placed ball</option>
+    ${players.map(player => `<option value="${escape(player.id)}"${scene.ball.ownerId === player.id ? ' selected' : ''}>
+      ${escape(board.settings[player.team + 'Name'])} · ${player.number} ${escape(player.name)}</option>`).join('')}
+  </select></label><button class="button button-accent" type="submit">Save possession</button></form>`);
+  dialog.querySelector('form').addEventListener('submit',event => {
+    event.preventDefault();
+    const value = event.currentTarget.elements.owner.value;
+    const owner = players.find(player => player.id === value);
+    dialog.close();
+    mutate(() => {
+      if (owner) giveBall(owner,scene);
+      else if (value === 'loose') scene.ball.ownerId = null;
+      else delete scene.ball.ownerId;
+    });
   });
-  setView('board');
+}
+
+function giveBall(player,scene) {
+  const direction = player.team === 'away' ? -1 : 1;
+  const offset = player.x + direction * 28;
+  scene.ball = {x:offset < 25 || offset > 975 ? player.x - direction * 28 : offset,
+    y:player.y,ownerId:player.id};
 }
 
 function editPhase(index) {
   const stage = board.phases[index];
-  const hasNext = index < board.phases.length - 1;
+  const movement = motionBetweenStages(board.phases,index,board.settings);
   openDialog('Edit stage', `<form><label>Stage name<input class="input" name="title" maxlength="80" value="${escape(stage.title)}" required autofocus></label>
-    ${hasNext ? `<div class="stage-motion-settings">
+    ${movement ? `<div class="stage-motion-settings">
       <label>Ball movement to next stage<select class="input" name="transition">${ballMotionKinds.map(kind =>
         `<option value="${kind}" ${kind === (stage.transition ?? 'auto') ? 'selected' : ''}>${motionLabels[kind]}</option>`).join('')}</select></label>
       <label>Duration (seconds)<input class="input" type="number" name="duration" min=".5" max="5" step=".05" value="${transitionDuration(board.phases,index) / 1000}" required></label>
-    </div><p class="picker-credit">Move the ball in the next stage to set its destination.</p>` : ''}
+    </div>
+    <div class="stage-flight-settings">
+      <label>Release (% of stage)<input class="input" type="number" name="release" min="0" max="90" step="1" value="${Math.round(movement.release * 100)}" required></label>
+      <label>Arrive (% of stage)<input class="input" type="number" name="arrival" min="10" max="100" step="1" value="${Math.round(movement.arrival * 100)}" required></label>
+      <label>Bend<input class="input" type="number" name="bend" min="-100" max="100" step="1" value="${stage.ballTiming?.bend ?? 0}" required></label>
+    </div>
+    <p class="picker-credit">Move the ball in the next stage to set its destination. Dribbles follow their carrier throughout the stage.</p>` : ''}
     <div class="dialog-actions">
       ${board.phases.length > 1 ? '<button class="button button-muted" type="button" data-action="remove-phase">Delete phase</button>' : ''}
       <button class="button button-accent" type="submit">Save</button>
     </div></form>`);
-  dialog.querySelector('form').addEventListener('submit', event => {
+  const form = dialog.querySelector('form');
+  form.elements.release?.addEventListener('input',() => form.elements.arrival.setCustomValidity(''));
+  form.elements.arrival?.addEventListener('input',() => form.elements.arrival.setCustomValidity(''));
+  form.addEventListener('submit', event => {
     event.preventDefault();
-    const fields = event.currentTarget.elements;
+    const fields = form.elements;
     const title = fields.title.value.trim();
     if (!title) return;
-    const transition = fields.transition?.value;
-    const duration = fields.duration ? Math.round(Number(fields.duration.value) * 1000) : null;
+    let ballTiming;
+    if (movement) {
+      const release = Number(fields.release.value);
+      const arrival = Number(fields.arrival.value);
+      const bend = Number(fields.bend.value);
+      if (arrival - release < 10) {
+        fields.arrival.setCustomValidity('Arrival must be at least 10 percentage points after release.');
+        fields.arrival.reportValidity();
+        return;
+      }
+      const changed = release !== Math.round(movement.release * 100) ||
+        arrival !== Math.round(movement.arrival * 100) || bend !== (stage.ballTiming?.bend ?? 0);
+      ballTiming = changed ? {release:release / 100,arrival:arrival / 100,bend} : stage.ballTiming;
+    }
     dialog.close();
     mutate(() => {
       stage.title = title;
-      if (transition) stage.transition = transition;
-      if (duration) stage.duration = duration;
+      if (movement) {
+        stage.transition = fields.transition.value;
+        stage.duration = Math.round(Number(fields.duration.value) * 1000);
+        if (ballTiming) stage.ballTiming = ballTiming;
+      }
     });
   });
   dialog.querySelector('[data-action=remove-phase]')?.addEventListener('click', () => {
     dialog.close();
     mutate(() => {
-      board.phases.splice(index, 1);
-      if (board.active > index) board.active -= 1;
-      if (board.active === board.phases.length) board.active -= 1;
+      board.phases.splice(index,1);
+      if (board.active > index || board.active === board.phases.length) board.active -= 1;
       selected = null;
     });
   });
@@ -959,6 +1015,7 @@ async function exportVideo() {
   stop();
   exporting = true;
   const copy = structuredClone(board);
+  const exportSpeed = speed;
   const exportPitch = document.createElement('div');
   const output = document.createElement('canvas');
   const ctx = output.getContext('2d');
@@ -980,11 +1037,13 @@ async function exportVideo() {
     showToast('Recording animation…');
     recorder.start();
     const markers = clock(copy.phases);
-    const duration = markers.at(-1) + 450;
+    const sample = createPlayback(copy.phases,copy.settings);
+    const end = markers.at(-1);
+    const duration = end / exportSpeed + 450;
     const start = performance.now();
     let elapsed = 0;
     while (elapsed < duration) {
-      renderBoard(exportPitch, atTime(copy.phases,markers,elapsed,copy.settings.view).scene, copy.settings);
+      renderBoard(exportPitch, atTime(sample,markers,Math.min(end,elapsed * exportSpeed)).scene, copy.settings);
       const frame = await canvasBoard(exportPitch, {scale:1});
       ctx.drawImage(frame, 0, 0, output.width, output.height);
       await new Promise(requestAnimationFrame);
@@ -1060,13 +1119,20 @@ async function handleAction(action) {
         mutate(() => {
           Object.assign(player,{benched:false,x:outgoing.x,y:outgoing.y});
           outgoing.benched = true;
+          const ball = phase().scene.ball;
+          if (ball.ownerId === outgoing.id) ball.ownerId = player.id;
           selected = null;
         });
         openBench(player.team);
       });
       return;
     }
-    mutate(() => { player.benched = !player.benched; selected = null; });
+    mutate(() => {
+      player.benched = !player.benched;
+      const ball = phase().scene.ball;
+      if (player.benched && ball.ownerId === player.id) ball.ownerId = null;
+      selected = null;
+    });
     return openBench(player.team);
   }
   if (action.startsWith('bench-')) return openBench(action.slice(6));
@@ -1122,7 +1188,7 @@ async function handleAction(action) {
       renderToolbar();
       renderPitch();
       return renderPanels();
-    case 'animate-arrow': return animateArrow();
+    case 'run-arrows': return runArrows();
     case 'done-tool': return setTool('select');
     case 'guides': return openGuidePicker();
     case 'guides-off':
@@ -1137,9 +1203,13 @@ async function handleAction(action) {
     case 'snap': return mutate(() => { board.settings.snap = !board.settings.snap; });
     case 'swap-teams': return mutate(() => {
       for (const item of board.phases) {
+        if (item.ballTiming?.bend) item.ballTiming.bend *= -1;
         for (const player of item.scene.players) player.x = 1000 - player.x;
         item.scene.ball.x = 1000 - item.scene.ball.x;
-        for (const mark of item.scene.marks) for (const point of mark.points) point.x = 1000 - point.x;
+        for (const mark of item.scene.marks) {
+          for (const point of mark.points) point.x = 1000 - point.x;
+          for (const anchor of mark.anchors ?? []) anchor.dx = -anchor.dx;
+        }
       }
       selected = null;
     });
@@ -1150,9 +1220,10 @@ async function handleAction(action) {
       if (player) boardBinding.startArrow?.(player.x,player.y,player.id);
       return;
     }
+    case 'ball-possession': return editBallPossession();
     case 'give-ball': {
       const player = phase().scene.players.find(item => item.id === selected);
-      if (player) mutate(() => { phase().scene.ball = { x:Math.min(975,player.x + 24), y:player.y }; });
+      if (player) mutate(() => { giveBall(player,phase().scene); });
       return;
     }
     case 'highlight-player': {
@@ -1160,7 +1231,6 @@ async function handleAction(action) {
       if (!player || phase().scene.marks.length >= 500) return;
       return mutate(() => { phase().scene.marks.push({id:makeId(),type:'highlight',color:drawingColor,points:[{x:player.x,y:player.y}]}); });
     }
-    case 'motion-demo': return loadMotionDemo();
     case 'templates': {
       const groups = new Map();
       templates.forEach((item,index) => {
@@ -1168,11 +1238,10 @@ async function handleAction(action) {
         groups.get(item.category).push({item,index});
       });
       return openDialog('Play templates', `<div class="play-template-list">
-        ${option('motion-demo','From build-up to finish','Play a five-stage example with a pass, dribble, lob and shot.','play')}
         ${[...groups].map(([category,items]) => `<section><h3>${escape(category)}</h3>${items.map(({item,index}) => {
-          const count = (item.stages ?? coreTemplateStages(item))?.length ?? (index === 0 ? 3 : 1);
+          const count = item.stages?.length ?? 1;
           return `<div class="play-template">${option(`template-${index}`,item.name,`${count} ${count === 1 ? 'stage' : 'stages'} · ${item.description}`,'pitch')}
-          ${count > 1 ? button(`preview-template-${index}`,`Play ${item.name}`,'play') : ''}</div>`;
+          ${count > 1 ? `<button class="button button-accent template-play" data-action="preview-template-${index}" aria-label="Play ${escape(item.name)}">${icon('play')} Play</button>` : ''}</div>`;
         }).join('')}</section>`).join('')}</div>`);
     }
     case 'new':
@@ -1197,6 +1266,8 @@ async function handleAction(action) {
     case 'previous': return switchPhase((playhead ? playbackIndex : board.active) - 1);
     case 'next': return switchPhase((playhead ? playbackIndex : board.active) + 1);
     case 'play': return play();
+    case 'restart-play': return playBoardFromStart();
+    case 'stop-play': return stop();
     case 'add-phase':
       if (board.phases.length >= 100) return showToast('This board has reached 100 phases.');
       return mutate(() => {
@@ -1271,7 +1342,10 @@ document.addEventListener('click', event => {
 $('#playhead').addEventListener('input', event => {
   pause();
   selected = null;
-  drawPlayhead(Number(event.target.value),clock(board.phases));
+  playbackLimit = undefined;
+  seekPlayback ??= createPlayback(board.phases,board.settings);
+  seekMarkers ??= clock(board.phases);
+  drawPlayhead(Number(event.target.value),seekMarkers,seekPlayback);
 });
 
 toolPanel.addEventListener('dragstart',event => {
@@ -1331,7 +1405,7 @@ document.addEventListener('change', async event => {
   }
   if (input.id === 'loopPlayback') loopPlayback = input.checked;
   if (input.id === 'drawingColor') { drawingColor = input.value; renderToolbar(); }
-  if (input.id === 'notes' && input.value !== phase().notes) {
+  if (input.id === 'notes' && !input.readOnly && input.value !== phase().notes) {
     snapshot();
     phase().notes = input.value;
     persist();
@@ -1421,9 +1495,15 @@ const boardBinding = bindBoard(pitch, {
   onSelectMark(id) { selectedMark = id; renderPitch(); renderPanels(); },
   onStart() { snapshot(); },
   onMove(id, x, y) {
-    const target = id === 'ball' ? phase().scene.ball : phase().scene.players.find(player => player.id === id);
+    const {scene} = phase();
+    const target = id === 'ball' ? scene.ball : scene.players.find(player => player.id === id);
     if (!target) return;
-    Object.assign(target, {x,y});
+    if (id === 'ball') delete scene.ball.ownerId;
+    else if (scene.ball.ownerId === id) {
+      scene.ball.x = Math.max(0,Math.min(1000,scene.ball.x + x - target.x));
+      scene.ball.y = Math.max(0,Math.min(625,scene.ball.y + y - target.y));
+    }
+    Object.assign(target,{x,y});
     renderPitch();
   },
   onCommit() { persist(); renderToolbar(); renderPanels(); },
