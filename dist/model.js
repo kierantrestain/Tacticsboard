@@ -9,6 +9,9 @@ const maxShareBytes = 9_000_000;
 const guideModes = ['lanes', 'thirds', 'zones'];
 const markTypes = new Set(['arrow', 'run', 'dribble', 'lob', 'shot', 'line', 'pen', 'zone', 'text', 'cone', 'highlight']);
 const pointMarkTypes = new Set(['text', 'cone', 'highlight']);
+const footballRoles = ['GK', 'DF', 'MF', 'FW'];
+export const ballMotionKinds = Object.freeze(['auto', 'pass', 'dribble', 'lob', 'shot']);
+const defaultTransitionDuration = 1350;
 
 export function makeId() {
   return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2);
@@ -88,7 +91,8 @@ function isScene(scene) {
   const validPlayers = scene.players.every(player =>
     isPoint(player) && isId(player.id) && ['home', 'away'].includes(player.team) &&
     Number.isInteger(player.number) && player.number >= 0 && player.number <= 999 &&
-    isString(player.name, 100) && isOptionalBoolean(player.benched));
+    isString(player.name, 100) && isOptionalBoolean(player.benched) &&
+    (player.footballRole === undefined || footballRoles.includes(player.footballRole)));
   const validMarks = scene.marks.every(mark =>
     mark && isId(mark.id) && markTypes.has(mark.type) && isColor(mark.color) &&
     (mark.text == null || isString(mark.text, 500)) &&
@@ -115,7 +119,8 @@ function isBoard(board) {
   }
   const validPhases = board.phases.every(phase =>
     phase && isId(phase.id) && isString(phase.title) && isString(phase.notes, 20_000) &&
-    isScene(phase.scene));
+    (phase.transition === undefined || ballMotionKinds.includes(phase.transition)) &&
+    (phase.duration === undefined || validDuration(phase.duration)) && isScene(phase.scene));
   return validPhases && hasDistinctIds(board.phases);
 }
 
@@ -303,6 +308,159 @@ export function interpolateScene(from, to, progress) {
       ...between(player, matched.get(player.id) ?? player, progress),
     })),
     ball: between(from.ball, to.ball, progress),
+    marks: from.marks,
+  };
+}
+
+function validDuration(duration) {
+  return Number.isInteger(duration) && duration >= 500 && duration <= 5000;
+}
+
+export function transitionDuration(phases, index) {
+  const duration = phases[index]?.duration;
+  return validDuration(duration) ? duration : defaultTransitionDuration;
+}
+
+function tangent(before, slope, beforeTime, time) {
+  if (!before || !slope || Math.sign(before) !== Math.sign(slope)) return 0;
+  // A weighted harmonic mean preserves direction through unevenly timed stages.
+  const beforeWeight = 2 * time + beforeTime;
+  const weight = time + 2 * beforeTime;
+  return (beforeWeight + weight) / (beforeWeight / before + weight / slope);
+}
+
+function curvedAxis(previous, start, end, next, timing, progress) {
+  const [previousTime, time, nextTime] = timing;
+  const slope = (end - start) / time;
+  if (slope === 0) return start;
+  const enter = previous === undefined ? 0 : tangent((start - previous) / previousTime, slope, previousTime, time);
+  const leave = next === undefined ? 0 : tangent(slope, (next - end) / nextTime, time, nextTime);
+  const square = progress ** 2;
+  const cube = square * progress;
+  const position = (2 * cube - 3 * square + 1) * start + (cube - 2 * square + progress) * time * enter +
+    (-2 * cube + 3 * square) * end + (cube - square) * time * leave;
+  return Math.max(Math.min(start, end), Math.min(position, Math.max(start, end)));
+}
+
+function onPitchById(phase) {
+  return new Map((phase?.scene.players ?? []).filter(player => !player.benched).map(player => [player.id, player]));
+}
+
+function distance(from, to) {
+  return Math.hypot(to.x - from.x, to.y - from.y);
+}
+
+function touches(start, end, players, targets) {
+  let nearest;
+  let shortest = Infinity;
+  for (const player of players.values()) {
+    const target = targets.get(player.id);
+    if (!target) continue;
+    const startDistance = distance(start, player);
+    const endDistance = distance(end, target);
+    const totalDistance = startDistance + endDistance;
+    if (startDistance > 46 || endDistance > 46 || totalDistance >= shortest) continue;
+    nearest = { player, target };
+    shortest = totalDistance;
+  }
+  return nearest;
+}
+
+const annotationMotions = new Map([['arrow', 'pass'], ['dribble', 'dribble'], ['lob', 'lob'], ['shot', 'shot']]);
+
+function matchBallAnnotation(marks, from, to, length) {
+  let closest;
+  let score = Infinity;
+  for (const mark of marks) {
+    const kind = annotationMotions.get(mark.type);
+    if (!kind) continue;
+    const start = mark.points[0];
+    const end = mark.points.at(-1);
+    const markLength = distance(start, end);
+    if (markLength < 8) continue;
+    const startDistance = distance(from, start);
+    const endDistance = distance(to, end);
+    const alignment = ((to.x - from.x) * (end.x - start.x) + (to.y - from.y) * (end.y - start.y)) /
+      (length * markLength);
+    const error = startDistance + endDistance;
+    if (alignment < .75 || startDistance > 50 || endDistance > Math.max(50, length * .4) || error >= score) continue;
+    closest = kind;
+    score = error;
+  }
+  return closest;
+}
+
+function smoothstep(progress) {
+  return progress * progress * (3 - 2 * progress);
+}
+
+function interval(progress, first, last) {
+  return Math.min(1, Math.max(0, (progress - first) / (last - first)));
+}
+
+function boundPoint(point) {
+  return { x: Math.min(1000, Math.max(0, point.x)), y: Math.min(625, Math.max(0, point.y)) };
+}
+
+function moveBall(from, to, marks, progress, kind, carrier, playerPositions) {
+  const length = distance(from, to);
+  if (length < .01) return from;
+  const motion = kind && kind !== 'auto' ? kind :
+    matchBallAnnotation(marks, from, to, length) ?? (carrier ? 'dribble' : 'pass');
+  if (motion === 'dribble') {
+    const moving = carrier && playerPositions.get(carrier.player.id);
+    const pace = smoothstep(progress);
+    if (!moving) return between(from, to, pace);
+    const offset = between(
+      { x: from.x - carrier.player.x, y: from.y - carrier.player.y },
+      { x: to.x - carrier.target.x, y: to.y - carrier.target.y }, pace,
+    );
+    const step = Math.sin(Math.PI * progress) ** 2 * Math.sin(4 * Math.PI * progress) * Math.min(7, length * .05);
+    return boundPoint({ x: moving.x + offset.x + (to.x - from.x) / length * step,
+      y: moving.y + offset.y + (to.y - from.y) / length * step });
+  }
+
+  const shot = motion === 'shot';
+  const lob = motion === 'lob';
+  const travel = shot ? interval(progress, .24, .75) : lob ? interval(progress, .12, .92) :
+    interval(progress, .1, .83);
+  const position = lob ? smoothstep(travel) : shot ? 1 - (1 - travel) ** 4 * (1 + 4 * travel) :
+    1 - (1 - travel) ** 3 * (1 + 3 * travel);
+  const ball = between(from, to, position);
+  if (travel <= 0 || travel >= 1 || (!shot && !lob)) return ball;
+  const peak = lob ? Math.min(40, length * .24) : Math.min(17, length * .075);
+  return { ...ball, lift: peak * 4 * travel * (1 - travel) };
+}
+
+export function interpolatePlayback(phases, index, progress) {
+  const phase = phases[index];
+  if (!phase) return phases[0]?.scene;
+  const from = phase.scene;
+  const to = phases[index + 1]?.scene;
+  if (!to || progress <= 0 || !Number.isFinite(progress)) return from;
+  if (progress >= 1) return to;
+
+  const previous = onPitchById(phases[index - 1]);
+  const current = onPitchById(phase);
+  const end = onPitchById(phases[index + 1]);
+  const next = onPitchById(phases[index + 2]);
+  const timing = [-1, 0, 1].map(offset => transitionDuration(phases, index + offset));
+  const players = from.players.map(player => {
+    const target = end.get(player.id);
+    if (player.benched || !target) return player;
+    const before = previous.get(player.id);
+    const after = next.get(player.id);
+    return {
+      ...player,
+      x: curvedAxis(before?.x, player.x, target.x, after?.x, timing, progress),
+      y: curvedAxis(before?.y, player.y, target.y, after?.y, timing, progress),
+    };
+  });
+  const carrier = touches(from.ball, to.ball, current, end);
+  const ballPositions = carrier ? new Map(players.map(player => [player.id, player])) : new Map();
+  return {
+    players,
+    ball: moveBall(from.ball, to.ball, from.marks, progress, phase.transition, carrier, ballPositions),
     marks: from.marks,
   };
 }

@@ -275,7 +275,7 @@ const underlayTools = new Set(['zone', 'highlight']);
 
 function playerMarkup(player, options, id) {
   const home = player.team === 'home';
-  const goalkeeper = player.id === `${player.team}-1`;
+  const goalkeeper = player.footballRole ? player.footballRole === 'GK' : player.id === `${player.team}-1`;
   const color = goalkeeper
     ? home ? '#14d8e8' : '#ca40da'
     : safeColor(home ? options.homeColor : options.awayColor, home ? '#253c84' : '#202020');
@@ -303,7 +303,7 @@ function playerMarkup(player, options, id) {
     <circle r="${edges + .7}" fill="none" stroke="${rim}" stroke-width="3"/>
     ${selection}
     <text y="1" dominant-baseline="middle" font-size="13.8" font-weight="800"
-      fill="#fff" stroke="#111" stroke-width="1.9" paint-order="stroke" pointer-events="none">${escapeMarkup(player.number)}</text>
+      fill="#fff" stroke="#111" stroke-width="1.9" paint-order="stroke" pointer-events="none">${escapeMarkup(player.number || '–')}</text>
     ${label}
   </g>`;
 }
@@ -315,7 +315,8 @@ function ballMarkup(ball, selected, id) {
   return `<g class="pitch-player" transform="translate(${pointString(ball)})" data-piece="ball"
     role="button" aria-label="Ball" tabindex="0">
     <circle r="17" fill="transparent"/>
-    <ellipse cx="2" cy="4" rx="16" ry="15" fill="url(#${id}-shadow)"/>
+    <ellipse data-ball-shadow cx="2" cy="4" rx="16" ry="15" fill="url(#${id}-shadow)"/>
+    <g data-ball-body>
     <circle r="12.7" fill="#f5f5ef" stroke="#101e16" stroke-width=".85"/>
     <path d="M 0 -3.9 3.8 -.9 2.6 4 -2.6 4 -3.8 -.9 Z
       M -2.6 -12.3 2.2 -12.4 5.1 -9.2 2.2 -7 -2.5 -7.2 -5 -9.5Z
@@ -328,6 +329,7 @@ function ballMarkup(ball, selected, id) {
       fill="none" stroke="#666a60" stroke-width=".55"/>
     <circle r="12.3" fill="url(#${id}-gloss)"/>
     ${selection}
+    </g>
   </g>`;
 }
 
@@ -367,9 +369,32 @@ export function renderBoard(container, scene, options = {}) {
     rendered.marksMarkup = marksMarkup;
   }
   const players = (scene.players ?? [])
-    .filter(player => !player.benched && (player.team === 'away' ? options.away !== false : options.home !== false))
-    .map(player => playerMarkup(player, options, rendered.id)).join('');
-  rendered.piecesNode.innerHTML = players + ballMarkup(scene.ball, options.selected === 'ball', rendered.id);
+    .filter(player => !player.benched && (player.team === 'away' ? options.away !== false : options.home !== false));
+  const appearance = JSON.stringify([options.homeColor, options.awayColor, options.labels, options.homeName,
+    options.awayName, options.selected, Boolean(scene.ball),
+    players.map(({id, team, name, number, footballRole}) => [id, team, name, number, footballRole])]);
+  if (rendered.appearance !== appearance) {
+    rendered.piecesNode.innerHTML = players.map(player => playerMarkup(player, options, rendered.id)).join('') +
+      ballMarkup(scene.ball, options.selected === 'ball', rendered.id);
+    rendered.positions = new Map([...rendered.piecesNode.children].map(piece => [piece.dataset.piece, piece]));
+    rendered.ballBody = rendered.piecesNode.querySelector('[data-ball-body]');
+    rendered.ballShadow = rendered.piecesNode.querySelector('[data-ball-shadow]');
+    rendered.appearance = appearance;
+  }
+  for (const player of players) movePiece(rendered.positions.get(player.id), player);
+  if (scene.ball) {
+    movePiece(rendered.positions.get('ball'), scene.ball);
+    const lift = Number.isFinite(scene.ball.lift) ? Math.max(0, Math.min(40, scene.ball.lift)) : 0;
+    rendered.ballBody.setAttribute('transform', `translate(0 ${-lift}) scale(${1 + lift / 210})`);
+    rendered.ballShadow.setAttribute('opacity', String(1 - lift / 60));
+    rendered.ballShadow.setAttribute('transform', `translate(${lift * .22} ${lift * .11})`);
+  }
+}
+
+function movePiece(node, point) {
+  if (!node) return;
+  const transform = `translate(${pointString(point)})`;
+  if (node.getAttribute('transform') !== transform) node.setAttribute('transform', transform);
 }
 
 function clamp(value, lower, upper) {

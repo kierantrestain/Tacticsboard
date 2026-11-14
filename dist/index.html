@@ -39,6 +39,11 @@
             <button class="icon-button" data-action="animation" title="Close animation creator" aria-label="Close animation creator"><span data-icon="close"></span></button>
           </div>
         </div>
+        <div class="playback-controls">
+          <label class="playhead-field"><span class="visually-hidden">Scrub animation</span><input id="playhead" type="range" min="0" max="0" step="10" value="0"><output id="playheadLabel" for="playhead">0.0 s</output></label>
+          <label class="speed-field"><span class="visually-hidden">Playback speed</span><select class="input" id="animationSpeed"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label>
+          <label class="loop-field"><input id="loopPlayback" type="checkbox">Loop</label>
+        </div>
         <div id="phases" class="phases"></div>
         <div class="timeline-note"><label for="notes">Coaching notes</label><textarea class="input note" id="notes" maxlength="2000" rows="2" placeholder="Add a coaching cue…"></textarea></div>
       </section>

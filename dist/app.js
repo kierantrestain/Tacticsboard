@@ -1,8 +1,10 @@
+import { mountTeamPicker } from './team-picker.js';
+import { shapeFromRoster } from './lineup.js';
 import { mountMedia } from './media.js';
 import { renderHome } from './home.js';
 import { formations, makeLineup, templates } from './data.js';
 import { bindBoard, canvasBoard, exportBoard, renderBoard } from './board.js';
-import { downloadBoard, initialBoard, interpolateScene, listSavedBoards, loadBoard, makeId, parseBoard, removeSavedBoard, saveBoard, sharedUrl, storeSavedBoard } from './model.js';
+import { ballMotionKinds, downloadBoard, initialBoard, interpolatePlayback, listSavedBoards, loadBoard, makeId, parseBoard, removeSavedBoard, saveBoard, sharedUrl, storeSavedBoard, transitionDuration } from './model.js';
 
 const icons = {
   brand:'<rect x="3" y="5" width="18" height="14" rx="1"/><path d="M12 5v14M3 9h4v6H3m18-6h-4v6h4"/><circle cx="12" cy="12" r="3"/>',
@@ -70,7 +72,8 @@ const mediaView = $('#mediaView');
 let media;
 const boardView = $('#boardView');
 const phases = $('#phases');
-const clipLength = 1350;
+const animatedArrows = {arrow:'pass',dribble:'dribble',lob:'lob',shot:'shot'};
+const motionLabels = {auto:'Auto',pass:'Ground pass',dribble:'Dribble',lob:'Lob',shot:'Shot'};
 const tools = [
   ['select', 'Move', 'V', 'Drag players or the ball to reposition them'],
   ['arrow', 'Pass arrow', 'A', 'Drag to draw a passing arrow'],
@@ -100,6 +103,10 @@ let playing = false;
 let exporting = false;
 let animationFrame = 0;
 let playbackIndex = 0;
+let playhead = null;
+let runningClock = null;
+let speed = 1;
+let loopPlayback = false;
 let presentation = false;
 
 const icon = name => `<span data-icon="${name}"></span>`;
@@ -207,12 +214,14 @@ function renderToolbar() {
 function renderTeams() {
   teams.innerHTML = ['home','away'].map(team => {
     const name = board.settings[team + 'Name'];
+    const club = board.settings[team + 'Club'];
+    const code = typeof club?.shortName === 'string' && club.name === name ? club.shortName.slice(0,4) : '';
     const color = board.settings[team + 'Color'];
     const bench = phase().scene.players.filter(player => player.team === team && player.benched).length;
     return `<div class="team-unit">
       <div class="team-badge" style="--team-color:${color}">
         <button class="team-visibility" data-action="visibility-${team}" aria-label="Show ${team}" title="Toggle ${team}" aria-pressed="${board.settings[team] !== false}">${icon('eye')}</button>
-        <button class="team-open" data-action="team-${team}" aria-label="${team} team settings"><span>${escape((name === 'Away' ? 'AWY' : name.slice(0,3)).toUpperCase())}</span>${icon('down')}</button>
+        <button class="team-open" data-action="team-${team}" aria-label="${team} team settings"><span>${escape((code || (name === 'Away' ? 'AWY' : name.slice(0,3))).toUpperCase())}</span>${icon('down')}</button>
       </div>
       <button class="bench-button" data-action="bench-${team}" aria-label="${team} bench">Bench${bench ? ' · ' + bench : ''}</button>
     </div>`;
@@ -247,8 +256,42 @@ function renderPanels() {
     : panelItem('highlight','Highlight','highlight',tool === 'highlight','data-tool') +
       panelItem('cone','Cone','cone',tool === 'cone','data-tool') +
       panelItem('erase','Eraser','erase',tool === 'erase','data-tool') +
-      panelItem('guides','Guides','grid',board.settings.grid)}</div>`;
+      panelItem('guides','Guides','grid',board.settings.grid)}</div>
+      ${arrows && latestBallArrow() ? '<div class="tool-animate"><button class="button button-muted" data-action="animate-arrow">Animate last ball arrow</button></div>' : ''}`;
   fillIcons(toolPanel);
+}
+
+function latestBallArrow() {
+  return phase().scene.marks.findLast(mark => animatedArrows[mark.type] && mark.points.length > 1);
+}
+
+function animateArrow() {
+  const mark = latestBallArrow();
+  if (!mark) return;
+  if (board.phases.length >= 100) return showToast('This board has reached 100 stages.');
+  mutate(() => {
+    const current = phase();
+    const kind = animatedArrows[mark.type];
+    const start = mark.points[0];
+    const end = mark.points.at(-1);
+    current.scene.ball = {...start};
+    current.transition = kind;
+    const scene = structuredClone(current.scene);
+    scene.ball = {...end};
+    if (kind === 'dribble') {
+      const closest = scene.players.filter(player => !player.benched).sort((first, second) =>
+        Math.hypot(first.x - start.x, first.y - start.y) - Math.hypot(second.x - start.x, second.y - start.y))[0];
+      if (closest && Math.hypot(closest.x - start.x, closest.y - start.y) < 42) {
+        closest.x = Math.min(975, Math.max(25, closest.x + end.x - start.x));
+        closest.y = Math.min(601, Math.max(24, closest.y + end.y - start.y));
+      }
+    }
+    board.phases.splice(board.active + 1,0,{id:makeId(),title:motionLabels[kind],notes:'',scene});
+    tool = 'select';
+    panel = 'animation';
+    selected = null;
+  });
+  play();
 }
 
 function renderHomeView() {
@@ -291,7 +334,52 @@ function toggle(setting, label) {
 
 function openTeam(team) {
   openDialog(`${team === 'home' ? 'Home' : 'Away'} team`, `${teamCard(team)}
-    <p>Change the team name, kit color or formation for this stage.</p>`);
+    ${option(`teams-find-${team}`,'Find a club or national team','Browse competitions and load available players.','pitch')}`);
+}
+
+function openTeamPicker(team) {
+  openDialog(`Choose ${team} team`, '<div data-team-picker></div>');
+  mountTeamPicker(dialog.querySelector('[data-team-picker]'), {side:team, onApply:applyTeam, onFixture:applyFixture});
+  function applyTeam(record, squad) {
+    dialog.close();
+    mutate(() => {
+      const oldClub = board.settings[team + 'Club'];
+      board.settings[team + 'Name'] = record.name.slice(0,100);
+      board.settings[team + 'Club'] = record;
+      if (squad?.players.length) {
+        for (const item of board.phases) replaceRoster(item,team,squad.players);
+        board.settings.labels = true;
+      } else if (oldClub && oldClub.id !== record.id) {
+        const placeholders = makeLineup(team,board.settings[team + 'Formation']);
+        for (const item of board.phases) replaceRoster(item,team,placeholders);
+      }
+      selected = null;
+    });
+    showToast(squad?.players.length ? `${record.name} squad loaded` : `${record.name} added to the board`);
+  }
+
+  function applyFixture(lineups) {
+    dialog.close();
+    mutate(() => {
+      for (const [index,side] of ['home','away'].entries()) {
+        const lineup = lineups[index];
+        board.settings[side + 'Name'] = lineup.team.name.slice(0,100);
+        board.settings[side + 'Club'] = lineup.team;
+        if (formations.includes(lineup.formation)) board.settings[side + 'Formation'] = lineup.formation;
+        for (const item of board.phases) replaceRoster(item,side,lineup.starter,lineup.bench,true);
+      }
+      board.settings.labels = true;
+      selected = null;
+    });
+    showToast('Both fixture lineups loaded');
+  }
+}
+
+function replaceRoster(item, team, starters, reserves = [], exact = false) {
+  const formation = board.settings[team + 'Formation'];
+  const roster = shapeFromRoster(team,formation,starters,reserves,exact,
+    exact ? [] : item.scene.players.filter(player => player.team === team));
+  item.scene.players = [...item.scene.players.filter(player => player.team !== team), ...roster];
 }
 
 function openGuidePicker() {
@@ -309,6 +397,8 @@ function openSettings() {
         `<button data-view="${view}" class="${view === board.settings.view ? 'selected' : ''}" aria-pressed="${view === board.settings.view}">${view === 'full' ? 'Full pitch' : 'Half pitch'}</button>`).join('')}</div>
       ${toggle('labels','Player labels')}${toggle('away','Show opposition')}${toggle('grid','Spacing guides')}${toggle('snap','Arrow snap')}
     </section>
+    ${option('teams-find-home','Find home team','Browse real clubs and squads.','pitch')}
+    ${option('teams-find-away','Find away team','Choose the opposition.','pitch')}
     ${option('rename','Rename board',board.title,'edit')}
     ${option('templates','Play templates','Start from a coached example.','grid')}
     ${option('media','Media Draw','Annotate a local clip or still image.','film')}
@@ -326,16 +416,24 @@ function openPlayer() {
 
 function openBench(team) {
   const players = phase().scene.players.filter(player => player.team === team);
-  openDialog(`${team === 'home' ? 'Home' : 'Away'} bench`, `<p>Choose a player to move them between the pitch and the bench.</p>
+  openDialog(`${team === 'home' ? 'Home' : 'Away'} bench`, `<p>Choose a player to move them between the pitch and the bench. If the XI is full, choose who they replace.</p>
     <div class="bench-list">${players.map(player =>
       `<button data-action="bench-player-${escape(player.id)}"><span>${player.number} · ${escape(player.name)}</span><small>${player.benched ? 'Put on pitch' : 'Send to bench'}</small></button>`
     ).join('')}</div>`);
 }
 
 function renderTimeline() {
-  const index = playing ? playbackIndex : board.active;
+  const index = playhead ? playbackIndex : board.active;
   $('#phaseCount').textContent = `· ${board.phases.length} ${board.phases.length === 1 ? 'phase' : 'phases'}`;
   $('#play').innerHTML = icon(playing ? 'pause' : 'play') + `<span>${playing ? 'Pause' : 'Play'}</span>`;
+  const markers = clock(board.phases);
+  const offset = playhead?.offset ?? markers[board.active];
+  $('#playhead').max = String(markers.at(-1));
+  $('#playhead').value = offset;
+  $('#playhead').disabled = board.phases.length < 2;
+  $('#playheadLabel').textContent = `${(offset / 1000).toFixed(1)} s`;
+  $('#animationSpeed').value = String(speed);
+  $('#loopPlayback').checked = loopPlayback;
   $('#play').disabled = board.phases.length < 2;
   $('[data-action=previous]').disabled = index === 0;
   $('[data-action=next]').disabled = index === board.phases.length - 1;
@@ -375,17 +473,57 @@ function setTool(name) {
 }
 
 function switchPhase(index) {
+  if (!board.phases[index]) return;
   stop();
-  if (index === board.active || !board.phases[index]) return;
   board.active = index;
   selected = null;
   persist(false);
   render();
 }
 
-function stop() {
+function clock(phases) {
+  const markers = [0];
+  for (let index = 0; index < phases.length - 1; index += 1) {
+    markers.push(markers[index] + transitionDuration(phases,index));
+  }
+  return markers;
+}
+
+function atTime(phases, markers, offset) {
+  let index = 0;
+  while (index + 1 < markers.length && offset >= markers[index + 1]) index++;
+  const duration = markers[index + 1] - markers[index];
+  return {
+    index,
+    scene: duration > 0 ? interpolatePlayback(phases,index,(offset - markers[index]) / duration)
+      : phases[index].scene,
+  };
+}
+
+function drawPlayhead(offset, markers) {
+  const {index, scene} = atTime(board.phases,markers,offset);
+  const moved = !playhead || index !== playbackIndex;
+  playhead = {offset};
+  playbackIndex = index;
+  if (moved) renderTimeline();
+  $('#playhead').value = offset;
+  $('#playheadLabel').textContent = `${(offset / 1000).toFixed(1)} s`;
+  renderPitch(scene);
+}
+
+function pause() {
   if (!playing) return;
   playing = false;
+  cancelAnimationFrame(animationFrame);
+  renderTimeline();
+  renderToolbar();
+}
+
+function stop() {
+  if (!playing && !playhead) return;
+  playing = false;
+  playhead = null;
+  runningClock = null;
   cancelAnimationFrame(animationFrame);
   renderPitch();
   renderTimeline();
@@ -393,36 +531,31 @@ function stop() {
 }
 
 function play() {
-  if (playing) {
-    const index = playbackIndex;
-    stop();
-    switchPhase(index);
-    return;
-  }
+  if (playing) return pause();
   if (board.phases.length < 2) return;
-  const origin = board.active === board.phases.length - 1 ? 0 : board.active;
+  const markers = clock(board.phases);
+  const end = markers.at(-1);
+  let offset = playhead?.offset ?? markers[board.active];
+  if (offset >= end) offset = 0;
   selected = null;
   playing = true;
+  runningClock = { start: performance.now(), offset };
+  drawPlayhead(offset,markers);
   renderPanels();
-  renderToolbar();
-  playbackIndex = origin;
-  const start = performance.now();
   renderTimeline();
+  renderToolbar();
   function frame(now) {
-    const offset = (now - start) / clipLength;
-    const index = origin + Math.floor(offset);
-    if (index >= board.phases.length - 1) {
+    const time = runningClock.offset + (now - runningClock.start) * speed;
+    if (time >= end && !loopPlayback) {
       playing = false;
+      playhead = null;
+      runningClock = null;
       board.active = board.phases.length - 1;
       persist(false);
       render();
       return;
     }
-    if (index !== playbackIndex) {
-      playbackIndex = index;
-      renderTimeline();
-    }
-    renderPitch(interpolateScene(board.phases[index].scene, board.phases[index + 1].scene, offset % 1));
+    drawPlayhead(time % end,markers);
     animationFrame = requestAnimationFrame(frame);
   }
   animationFrame = requestAnimationFrame(frame);
@@ -489,18 +622,70 @@ function createBoard(template) {
   showToast('Board created. Undo to return to the previous board.');
 }
 
+function loadMotionDemo() {
+  const example = initialBoard();
+  example.title = 'From build-up to finish';
+  const [start, receive, advance] = example.phases;
+  start.transition = 'pass';
+  receive.transition = 'dribble';
+  receive.duration = 1700;
+  receive.notes = 'The pivot carries the ball through the press before lifting it into the channel.';
+  const pivot = advance.scene.players.find(player => player.id === 'home-6');
+  Object.assign(pivot,{x:516,y:348});
+  advance.scene.ball = {x:542,y:345};
+  advance.title = 'Carry through midfield';
+  advance.notes = 'The striker runs behind the back line to receive the lob. Watch the ball rise and drop.';
+  advance.transition = 'lob';
+  advance.duration = 1600;
+  const receiving = structuredClone(advance.scene);
+  const striker = receiving.players.find(player => player.id === 'home-9');
+  Object.assign(striker,{x:790,y:286});
+  receiving.ball = {x:817,y:285};
+  const finish = structuredClone(receiving);
+  finish.ball = {x:989,y:301};
+  for (const item of example.phases) item.scene.marks = [];
+  receiving.marks = [];
+  finish.marks = [];
+  example.phases.push(
+    {id:makeId(),title:'Receive and shoot',notes:'The striker strikes early and the ball reaches the far side of the goal.',transition:'shot',duration:1150,scene:receiving},
+    {id:makeId(),title:'Finish',notes:'The runners continue after the ball has crossed the line.',scene:finish},
+  );
+  dialog.close();
+  mutate(() => {
+    board = example;
+    panel = 'animation';
+    tool = 'select';
+    selected = null;
+  });
+  setView('board');
+}
+
 function editPhase(index) {
-  openDialog('Edit phase', `<form><label>Phase name<input class="input" name="title" maxlength="80" value="${escape(board.phases[index].title)}" required autofocus></label>
+  const stage = board.phases[index];
+  const hasNext = index < board.phases.length - 1;
+  openDialog('Edit stage', `<form><label>Stage name<input class="input" name="title" maxlength="80" value="${escape(stage.title)}" required autofocus></label>
+    ${hasNext ? `<div class="stage-motion-settings">
+      <label>Ball movement to next stage<select class="input" name="transition">${ballMotionKinds.map(kind =>
+        `<option value="${kind}" ${kind === (stage.transition ?? 'auto') ? 'selected' : ''}>${motionLabels[kind]}</option>`).join('')}</select></label>
+      <label>Duration (seconds)<input class="input" type="number" name="duration" min=".5" max="5" step=".05" value="${transitionDuration(board.phases,index) / 1000}" required></label>
+    </div><p class="picker-credit">Move the ball in the next stage to set its destination.</p>` : ''}
     <div class="dialog-actions">
       ${board.phases.length > 1 ? '<button class="button button-muted" type="button" data-action="remove-phase">Delete phase</button>' : ''}
       <button class="button button-accent" type="submit">Save</button>
     </div></form>`);
   dialog.querySelector('form').addEventListener('submit', event => {
     event.preventDefault();
-    const title = event.currentTarget.elements.title.value.trim();
+    const fields = event.currentTarget.elements;
+    const title = fields.title.value.trim();
     if (!title) return;
+    const transition = fields.transition?.value;
+    const duration = fields.duration ? Math.round(Number(fields.duration.value) * 1000) : null;
     dialog.close();
-    mutate(() => { board.phases[index].title = title; });
+    mutate(() => {
+      stage.title = title;
+      if (transition) stage.transition = transition;
+      if (duration) stage.duration = duration;
+    });
   });
   dialog.querySelector('[data-action=remove-phase]')?.addEventListener('click', () => {
     dialog.close();
@@ -549,24 +734,22 @@ async function exportVideo() {
     ctx.drawImage(initial, 0, 0, output.width, output.height);
     const mime = ['video/mp4','video/webm;codecs=vp9','video/webm'].find(type => MediaRecorder.isTypeSupported(type));
     if (!mime) throw new Error('No supported format');
-    stream = output.captureStream(24);
+    stream = output.captureStream(60);
     recorder = new MediaRecorder(stream, {mimeType:mime});
     const chunks = [];
     recorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
     const finished = new Promise(resolve => { recorder.onstop = resolve; });
     showToast('Recording animation…');
     recorder.start();
-    const duration = clipLength * (copy.phases.length - 1) + 450;
+    const markers = clock(copy.phases);
+    const duration = markers.at(-1) + 450;
     const start = performance.now();
     let elapsed = 0;
     while (elapsed < duration) {
-      const offset = elapsed / clipLength;
-      const index = Math.min(copy.phases.length - 2, Math.floor(offset));
-      const scene = interpolateScene(copy.phases[index].scene, copy.phases[index + 1].scene, Math.min(1, offset - index));
-      renderBoard(exportPitch, scene, copy.settings);
+      renderBoard(exportPitch, atTime(copy.phases,markers,elapsed).scene, copy.settings);
       const frame = await canvasBoard(exportPitch, {scale:1});
       ctx.drawImage(frame, 0, 0, output.width, output.height);
-      await new Promise(resolve => setTimeout(resolve, 30));
+      await new Promise(requestAnimationFrame);
       elapsed = performance.now() - start;
     }
     recorder.stop();
@@ -577,7 +760,7 @@ async function exportVideo() {
   } catch {
     showToast('Video export failed. Try the PNG or board file.');
   } finally {
-    if (recorder?.state === 'recording') recorder.stop();
+    if (recorder?.state === 'recording' || recorder?.state === 'paused') recorder.stop();
     stream?.getTracks().forEach(track => track.stop());
     exporting = false;
   }
@@ -611,11 +794,29 @@ async function handleAction(action) {
     const team = action.slice(11);
     return mutate(() => { board.settings[team] = board.settings[team] === false; selected = null; });
   }
+  if (action.startsWith('teams-find-')) return openTeamPicker(action.slice(11));
   if (action.startsWith('team-')) return openTeam(action.slice(5));
   if (action.startsWith('bench-player-')) {
     const id = action.slice(13);
     const player = phase().scene.players.find(item => item.id === id);
     if (!player) return;
+    const starting = phase().scene.players.filter(item => item.team === player.team && !item.benched);
+    if (player.benched && starting.length >= 11) {
+      openDialog(`Bring on ${player.name}`, `<p>Choose the player to replace.</p><div class="bench-list">
+        ${starting.map(item => `<button data-sub-out="${escape(item.id)}"><span>${item.number} · ${escape(item.name)}</span><small>Replace</small></button>`).join('')}
+      </div>`);
+      dialog.querySelector('.bench-list').addEventListener('click',event => {
+        const outgoing = starting.find(item => item.id === event.target.closest('[data-sub-out]')?.dataset.subOut);
+        if (!outgoing) return;
+        mutate(() => {
+          Object.assign(player,{benched:false,x:outgoing.x,y:outgoing.y});
+          outgoing.benched = true;
+          selected = null;
+        });
+        openBench(player.team);
+      });
+      return;
+    }
     mutate(() => { player.benched = !player.benched; selected = null; });
     return openBench(player.team);
   }
@@ -651,6 +852,7 @@ async function handleAction(action) {
       renderToolbar();
       renderPitch();
       return renderPanels();
+    case 'animate-arrow': return animateArrow();
     case 'done-tool': return setTool('select');
     case 'guides': return openGuidePicker();
     case 'guides-off':
@@ -688,8 +890,11 @@ async function handleAction(action) {
       if (!player || phase().scene.marks.length >= 500) return;
       return mutate(() => { phase().scene.marks.push({id:makeId(),type:'highlight',color:drawingColor,points:[{x:player.x,y:player.y}]}); });
     }
+    case 'motion-demo': return loadMotionDemo();
     case 'templates':
-      return openDialog('Play templates', `<p>Start with a coached example and adapt it to your team.</p>${templates.map((item, index) =>
+      return openDialog('Play templates', `<p>Start with a coached example and adapt it to your team.</p>
+        ${option('motion-demo','From build-up to finish','Play a five-stage example with a pass, dribble, lob and shot.','play')}
+        ${templates.map((item, index) =>
         option(`template-${index}`, item.name, `${item.category} · ${item.description}`, 'pitch')).join('')}`);
     case 'new':
       return openDialog('New board', `<p>Start with a fresh lineup, browse a template, or open a saved board file.</p>
@@ -710,8 +915,8 @@ async function handleAction(action) {
       }
       return;
     case 'present': return togglePresentation();
-    case 'previous': return switchPhase((playing ? playbackIndex : board.active) - 1);
-    case 'next': return switchPhase((playing ? playbackIndex : board.active) + 1);
+    case 'previous': return switchPhase((playhead ? playbackIndex : board.active) - 1);
+    case 'next': return switchPhase((playhead ? playbackIndex : board.active) + 1);
     case 'play': return play();
     case 'add-phase':
       if (board.phases.length >= 100) return showToast('This board has reached 100 phases.');
@@ -779,8 +984,24 @@ document.addEventListener('click', event => {
   }
 });
 
+$('#playhead').addEventListener('input', event => {
+  pause();
+  selected = null;
+  drawPlayhead(Number(event.target.value),clock(board.phases));
+});
+
 document.addEventListener('change', async event => {
   const input = event.target;
+  if (input.id === 'animationSpeed') {
+    const previousSpeed = speed;
+    speed = Number(input.value);
+    if (playing && runningClock) {
+      const now = performance.now();
+      runningClock.offset += (now - runningClock.start) * previousSpeed;
+      runningClock.start = now;
+    }
+  }
+  if (input.id === 'loopPlayback') loopPlayback = input.checked;
   if (input.id === 'drawingColor') { drawingColor = input.value; renderToolbar(); }
   if (input.id === 'notes' && input.value !== phase().notes) {
     snapshot();
@@ -812,10 +1033,11 @@ document.addEventListener('change', async event => {
           if (previous) {
             player.number = previous.number;
             player.benched = previous.benched ?? false;
+            if (previous.footballRole) player.footballRole = previous.footballRole;
             if (previous.name !== roles.get(player.id)) player.name = previous.name;
           }
           return player;
-        }));
+        }), [...old.values()].filter(player => player.team === team && player.id.includes('-bench-')));
       selected = null;
     });
   }
@@ -863,7 +1085,7 @@ document.addEventListener('keydown', event => {
 });
 
 const boardBinding = bindBoard(pitch, {
-  getTool: () => presentation || playing ? 'inactive' : tool,
+  getTool: () => presentation || playing || playhead ? 'inactive' : tool,
   getColor: () => drawingColor,
   getSnap: () => board.settings.snap,
   onSelect(id) { selected = id; renderPitch(); renderPanels(); },
