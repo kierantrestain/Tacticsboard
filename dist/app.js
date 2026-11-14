@@ -1,10 +1,14 @@
+import { clampCamera, pitchStyles } from './camera.js';
+import { coreTemplateStages, extraTemplates } from './extra-templates.js';
+import { mountMatchMap } from './match-map.js';
+import { additionalTools } from './board-tools.js';
 import { suggestCrestKit } from './crest-color.js';
 import { getClubKit } from './kits.js';
 import { mountTeamPicker } from './team-picker.js';
 import { shapeFromRoster } from './lineup.js';
 import { mountMedia } from './media.js';
 import { renderHome } from './home.js';
-import { formations, makeLineup, templates } from './data.js';
+import { formations, makeLineup, templates as coreTemplates } from './data.js';
 import { bindBoard, canvasBoard, exportBoard, renderBoard } from './board.js';
 import { ballMotionKinds, downloadBoard, initialBoard, interpolatePlayback, listSavedBoards, loadBoard, makeId, parseBoard, removeSavedBoard, saveBoard, sharedUrl, storeSavedBoard, transitionDuration } from './model.js';
 
@@ -58,9 +62,20 @@ const icons = {
   highlight:'<path d="m12 2 2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"/>',
   ball:'<circle cx="12" cy="12" r="9"/><path d="m12 7 5 4-2 5H9l-2-5 5-4zm0 0V3m5 8 4-2m-6 7 2 4m-8-4-2 4m0-9L3 9"/>',
   list:'<path d="M4 6h16M4 12h16M4 18h16"/>',
+  target:'<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/>',
+  rectangle:'<rect x="4" y="5" width="16" height="14" rx="1.2"/>',
+  oval:'<ellipse cx="12" cy="12" rx="9" ry="6"/>',
+  vision:'<path d="M4 17 9 5q8 2 11 10L4 17z"/>',
+  cross:'<path d="m5 5 14 14m0-14L5 19"/>',
+  number:'<circle cx="12" cy="12" r="8"/><path d="m10 10 2-2v8"/>',
+  measure:'<rect x="3" y="8" width="18" height="8" rx="1"/><path d="M7 8v3m5-3v4m5-4v3"/>',
+  path:'<circle cx="4" cy="16" r="2"/><circle cx="20" cy="8" r="2"/><path d="M6 16c4 0 2-8 12-8"/>',
+  space:'<path d="m6 5 12-1 3 9-12 7-5-5Z" stroke-dasharray="3 3"/>',
+  pin:'<path d="m15 3 6 6-4 1-2 6-3-3-5 6 4-7-3-3 6-2z"/>',
   trash:'<path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/>',
 };
 
+const templates = [...coreTemplates,...extraTemplates];
 const $ = selector => document.querySelector(selector);
 const dialog = $('#dialog');
 const pitch = $('#pitch');
@@ -90,7 +105,17 @@ const tools = [
   ['lob', 'Lob', 'B', 'Drag or click each end to draw a lob'],
   ['shot', 'Shot', 'S', 'Drag or click each end to draw a shot'],
   ['highlight', 'Highlight', 'H', 'Click or drag to highlight a player or space'],
+  ...additionalTools,
 ];
+const flyoutTools = ['target','rectangle','oval','vision','cross','number','highlight','measure','path','space','cone','erase'];
+let pinnedTools = [];
+let showAllTools = false;
+let draggingTool = '';
+try {
+  const preferences = JSON.parse(localStorage.getItem('touchline-tools-v1') ?? '{}');
+  if (Array.isArray(preferences.pinned)) pinnedTools = [...new Set(preferences.pinned.filter(name => flyoutTools.includes(name)))];
+  showAllTools = preferences.showAll === true;
+} catch {}
 let board = await loadBoard() ?? initialBoard();
 let tool = 'select';
 let drawingColor = '#08e5f1';
@@ -190,6 +215,7 @@ function renderToolbar() {
       ${dockTool('pen','Pen','pen',tool === 'pen')}
       ${dockTool('text','Text box','text',tool === 'text')}
       ${dockTool('zone','Section','zone',tool === 'zone')}
+      ${(showAllTools ? flyoutTools : pinnedTools).map(name => dockTool(name,tools.find(item => item[0] === name)[1],name,tool === name)).join('')}
       ${dockTool('more','More tools','dots',panel === 'more','data-action')}
     </div>
     <div class="toolbar-divider"></div>
@@ -253,6 +279,24 @@ function renderPanels() {
     fillIcons(playerPanel);
   }
   if (toolPanel.hidden) return;
+  if (panel === 'more') {
+    toolPanel.classList.add('extended-tools');
+    const order = [...pinnedTools,...flyoutTools.filter(name => !pinnedTools.includes(name))];
+    toolPanel.innerHTML = `<div class="tool-panel-header"><span><strong>More tools</strong> · Pin the tools you use most.</span>
+      <button class="button button-accent" data-action="done-tool">Done</button></div>
+      <label class="toggle-row all-tools-toggle">Show all tools on the bar <input id="showAllTools" type="checkbox" ${showAllTools ? 'checked' : ''}></label>
+      <div class="extended-tools-list">${order.map(name => {
+        const [,label,key] = tools.find(item => item[0] === name);
+        return `<div class="extended-tool-row" data-pin-row="${name}" ${pinnedTools.includes(name) ? 'draggable="true"' : ''}>
+          <button class="extended-tool-pick" data-tool="${name}" aria-pressed="${tool === name}">${icon(name)}<span>${label}</span><kbd>${key}</kbd></button>
+          ${pinnedTools.includes(name) ? '<span class="pin-grip" title="Drag to reorder" aria-hidden="true">⠿</span>' : ''}
+          <button class="icon-button pin-tool" data-pin="${name}" aria-label="${pinnedTools.includes(name) ? 'Unpin' : 'Pin'} ${label}" aria-pressed="${pinnedTools.includes(name)}" title="Pin to drawing bar. Alt + Up or Down reorders pins.">${icon('pin')}</button>
+        </div>`;
+      }).join('')}</div>`;
+    fillIcons(toolPanel);
+    return;
+  }
+  toolPanel.classList.remove('extended-tools');
   const arrows = panel === 'arrows';
   toolPanel.innerHTML = `<div class="tool-panel-header">
     <span><strong>${arrows ? 'Arrow' : 'More tools'}</strong>${arrows ? ' · Drag to draw, or click each end.' : ' · Mark a player or a space.'}</span>
@@ -418,6 +462,44 @@ function replaceRoster(item, team, starters, reserves = [], exact = false) {
   item.scene.players = [...item.scene.players.filter(player => player.team !== team), ...roster];
 }
 
+function openStageCamera() {
+  const scene = phase().scene;
+  const camera = clampCamera(scene.camera);
+  openDialog('Stage camera',`<form><p>Frame this stage. Playback moves smoothly between saved frames.</p>
+    <label>Zoom<select name="zoom" class="input">${[1,1.25,1.5,2,2.5,3].map(zoom =>
+      `<option value="${zoom}" ${camera.zoom === zoom ? 'selected' : ''}>${zoom}×</option>`).join('')}</select></label>
+    <label>Focus horizontally<input type="range" name="x" min="0" max="1000" value="${camera.x}" class="camera-range"></label>
+    <label>Focus vertically<input type="range" name="y" min="0" max="625" value="${camera.y}" class="camera-range"></label>
+    <div class="map-preview camera-preview" aria-label="Camera preview"></div>
+    <div class="dialog-actions"><button type="submit" class="button button-accent">Save framing</button></div></form>`);
+  const form = dialog.querySelector('form');
+  const preview = form.querySelector('.camera-preview');
+  const read = () => ({x:Number(form.elements.x.value),y:Number(form.elements.y.value),zoom:Number(form.elements.zoom.value)});
+  function show() {
+    renderBoard(preview,{...scene,camera:read()},board.settings);
+    preview.querySelectorAll('[tabindex]').forEach(element => element.setAttribute('tabindex','-1'));
+  }
+  form.addEventListener('input',show);
+  form.addEventListener('submit',event => {
+    event.preventDefault();
+    const framing = read();
+    dialog.close();
+    mutate(() => { if (framing.zoom === 1) delete scene.camera; else scene.camera = framing; });
+  });
+  show();
+}
+
+function openMatchMaps() {
+  openDialog('Match maps', `<p>Explore recorded shots, action locations and average positions. Import event data for another match.</p>
+    <div data-match-map></div>${phase().scene.matchLayer ? '<button class="button button-muted" data-action="clear-map">Remove current map layer</button>' : ''}`);
+  mountMatchMap(dialog.querySelector('[data-match-map]'), {renderBoard,onApply(layer) {
+    dialog.close();
+    mutate(() => { phase().scene.matchLayer = layer; });
+    setView('board');
+    showToast(`${layer.match} · Map added`);
+  }});
+}
+
 function openGuidePicker() {
   openDialog('Spacing guides', `
     ${option('guides-lanes','Five lanes','Show five channels across the width of the pitch.','grid')}
@@ -431,8 +513,11 @@ function openSettings() {
     <section class="setup-section"><h3 class="section-label">Pitch view</h3>
       <div class="segment" aria-label="Pitch view">${['full','half'].map(view =>
         `<button data-view="${view}" class="${view === board.settings.view ? 'selected' : ''}" aria-pressed="${view === board.settings.view}">${view === 'full' ? 'Full pitch' : 'Half pitch'}</button>`).join('')}</div>
+      <label>Pitch surface<select class="input" data-setting="pitchStyle">${pitchStyles.map(style =>
+        `<option value="${style.id}" ${(board.settings.pitchStyle ?? 'natural') === style.id ? 'selected' : ''}>${style.name}</option>`).join('')}</select></label>
       ${toggle('labels','Player labels')}${toggle('away','Show opposition')}${toggle('grid','Spacing guides')}${toggle('snap','Arrow snap')}
     </section>
+    ${option('stage-camera','Stage camera','Zoom or frame one part of the pitch for this stage.','camera')}
     ${option('teams-find-home','Find home team','Browse real clubs and squads.','pitch')}
     ${option('teams-find-away','Find away team','Choose the opposition.','pitch')}
     ${option('rename','Rename board',board.title,'edit')}
@@ -501,7 +586,7 @@ function setTool(name) {
   stop();
   tool = name;
   if (arrowTools.includes(name)) panel = 'arrows';
-  else if (['highlight','cone','erase'].includes(name)) panel = 'more';
+  else if (flyoutTools.includes(name)) panel = null;
   else panel = null;
   if (name !== 'select' && selected) {
     selected = null;
@@ -528,19 +613,19 @@ function clock(phases) {
   return markers;
 }
 
-function atTime(phases, markers, offset) {
+function atTime(phases, markers, offset, view) {
   let index = 0;
   while (index + 1 < markers.length && offset >= markers[index + 1]) index++;
   const duration = markers[index + 1] - markers[index];
   return {
     index,
-    scene: duration > 0 ? interpolatePlayback(phases,index,(offset - markers[index]) / duration)
+    scene: duration > 0 ? interpolatePlayback(phases,index,(offset - markers[index]) / duration,view)
       : phases[index].scene,
   };
 }
 
 function drawPlayhead(offset, markers) {
-  const {index, scene} = atTime(board.phases,markers,offset);
+  const {index, scene} = atTime(board.phases,markers,offset,board.settings.view);
   const moved = !playhead || index !== playbackIndex;
   playhead = {offset};
   playbackIndex = index;
@@ -637,14 +722,22 @@ function option(action, title, detail, iconName) {
   return `<button data-action="${action}" class="option">${icon(iconName)}<span><strong>${escape(title)}</strong><small>${escape(detail)}</small></span></button>`;
 }
 
-function createBoard(template) {
+function createBoard(template, { preview = false } = {}) {
   mutate(() => {
     const defaults = initialBoard();
     if (template) {
       defaults.title = template.name;
       defaults.settings.homeFormation = template.homeFormation;
       defaults.settings.awayFormation = template.awayFormation;
-      defaults.phases = [{ id: makeId(), title: 'Starting shape', notes: template.description, scene: structuredClone(template.scene) }];
+      const stages = template.stages ?? coreTemplateStages(template);
+      if (stages?.length) {
+        defaults.phases = stages.map(stage => ({id:makeId(),...structuredClone(stage)}));
+        Object.assign(defaults.settings,template.settings);
+      } else if (template === coreTemplates[0]) {
+        // The built-in build-up starts from the same drawing and has a three-stage play.
+      } else {
+        defaults.phases = [{ id: makeId(), title: 'Starting shape', notes: template.description, scene: structuredClone(template.scene) }];
+      }
     } else {
       defaults.title = 'Untitled board';
       defaults.phases = [{ id: makeId(), title: 'Starting shape', notes: '', scene: {
@@ -654,11 +747,12 @@ function createBoard(template) {
     }
     board = defaults;
     selected = null;
-    panel = null;
+    panel = board.phases.length > 1 ? 'animation' : null;
     tool = 'select';
   });
   setView('board');
-  showToast('Board created. Undo to return to the previous board.');
+  if (preview && board.phases.length > 1) play();
+  else showToast('Board created. Undo to return to the previous board.');
 }
 
 function loadMotionDemo() {
@@ -785,7 +879,7 @@ async function exportVideo() {
     const start = performance.now();
     let elapsed = 0;
     while (elapsed < duration) {
-      renderBoard(exportPitch, atTime(copy.phases,markers,elapsed).scene, copy.settings);
+      renderBoard(exportPitch, atTime(copy.phases,markers,elapsed,copy.settings.view).scene, copy.settings);
       const frame = await canvasBoard(exportPitch, {scale:1});
       ctx.drawImage(frame, 0, 0, output.width, output.height);
       await new Promise(requestAnimationFrame);
@@ -861,6 +955,10 @@ async function handleAction(action) {
   }
   if (action.startsWith('bench-')) return openBench(action.slice(6));
   if (action.startsWith('phase-edit-')) return editPhase(Number(action.slice(11)));
+  if (action.startsWith('preview-template-')) {
+    dialog.close();
+    return createBoard(templates[Number(action.slice(17))], {preview:true});
+  }
   if (action.startsWith('template-')) {
     dialog.close();
     return createBoard(templates[Number(action.slice(9))]);
@@ -870,6 +968,11 @@ async function handleAction(action) {
     case 'board': case 'open-board': return setView('board');
     case 'home': panel = null; return setView('home');
     case 'settings': return openSettings();
+    case 'stage-camera': return openStageCamera();
+    case 'match-maps': return openMatchMaps();
+    case 'clear-map':
+      dialog.close();
+      return mutate(() => { delete phase().scene.matchLayer; });
     case 'media': return setView('media');
     case 'media-import': setView('media'); return media.openFile();
     case 'save': {
@@ -930,11 +1033,20 @@ async function handleAction(action) {
       return mutate(() => { phase().scene.marks.push({id:makeId(),type:'highlight',color:drawingColor,points:[{x:player.x,y:player.y}]}); });
     }
     case 'motion-demo': return loadMotionDemo();
-    case 'templates':
-      return openDialog('Play templates', `<p>Start with a coached example and adapt it to your team.</p>
+    case 'templates': {
+      const groups = new Map();
+      templates.forEach((item,index) => {
+        if (!groups.has(item.category)) groups.set(item.category,[]);
+        groups.get(item.category).push({item,index});
+      });
+      return openDialog('Play templates', `<div class="play-template-list">
         ${option('motion-demo','From build-up to finish','Play a five-stage example with a pass, dribble, lob and shot.','play')}
-        ${templates.map((item, index) =>
-        option(`template-${index}`, item.name, `${item.category} · ${item.description}`, 'pitch')).join('')}`);
+        ${[...groups].map(([category,items]) => `<section><h3>${escape(category)}</h3>${items.map(({item,index}) => {
+          const count = (item.stages ?? coreTemplateStages(item))?.length ?? (index === 0 ? 3 : 1);
+          return `<div class="play-template">${option(`template-${index}`,item.name,`${count} ${count === 1 ? 'stage' : 'stages'} · ${item.description}`,'pitch')}
+          ${count > 1 ? button(`preview-template-${index}`,`Play ${item.name}`,'play') : ''}</div>`;
+        }).join('')}</section>`).join('')}</div>`);
+    }
     case 'new':
       return openDialog('New board', `<p>Start with a fresh lineup, browse a template, or open a saved board file.</p>
         ${option('blank', 'Blank board', 'Two editable XIs with no annotations.', 'plus')}
@@ -1008,8 +1120,13 @@ async function handleAction(action) {
 }
 
 document.addEventListener('click', event => {
-  const control = event.target.closest('[data-action], [data-tool], [data-phase], [data-view], [data-color]');
+  const control = event.target.closest('[data-action], [data-tool], [data-phase], [data-view], [data-color], [data-pin]');
   if (!control || control.disabled) return;
+  if (control.dataset.pin) {
+    const name = control.dataset.pin;
+    pinnedTools = pinnedTools.includes(name) ? pinnedTools.filter(item => item !== name) : [...pinnedTools,name];
+    saveToolPreferences();
+  }
   if (control.dataset.action) void handleAction(control.dataset.action);
   if (control.dataset.tool) setTool(control.dataset.tool);
   if (control.dataset.phase != null) switchPhase(Number(control.dataset.phase));
@@ -1029,8 +1146,51 @@ $('#playhead').addEventListener('input', event => {
   drawPlayhead(Number(event.target.value),clock(board.phases));
 });
 
+toolPanel.addEventListener('dragstart',event => {
+  const row = event.target.closest('[data-pin-row][draggable=true]');
+  if (!row) return;
+  draggingTool = row.dataset.pinRow;
+  event.dataTransfer.setData('text/plain',draggingTool);
+  event.dataTransfer.effectAllowed = 'move';
+});
+toolPanel.addEventListener('dragend',() => { draggingTool = ''; });
+toolPanel.addEventListener('dragover',event => {
+  if (draggingTool && event.target.closest('[data-pin-row][draggable=true]')) event.preventDefault();
+});
+toolPanel.addEventListener('drop',event => {
+  const target = event.target.closest('[data-pin-row][draggable=true]')?.dataset.pinRow;
+  const index = pinnedTools.indexOf(target);
+  if (!draggingTool || index < 0 || target === draggingTool) return;
+  event.preventDefault();
+  pinnedTools = pinnedTools.filter(name => name !== draggingTool);
+  pinnedTools.splice(index,0,draggingTool);
+  draggingTool = '';
+  saveToolPreferences();
+});
+toolPanel.addEventListener('keydown',event => {
+  const name = event.target.closest('[data-pin]')?.dataset.pin;
+  const index = pinnedTools.indexOf(name);
+  if (index < 0 || !event.altKey || !['ArrowUp','ArrowDown'].includes(event.key)) return;
+  const indexTo = index + (event.key === 'ArrowUp' ? -1 : 1);
+  if (indexTo < 0 || indexTo >= pinnedTools.length) return;
+  event.preventDefault();
+  [pinnedTools[index],pinnedTools[indexTo]] = [pinnedTools[indexTo],pinnedTools[index]];
+  saveToolPreferences();
+  toolPanel.querySelector(`[data-pin="${name}"]`)?.focus();
+});
+
+function saveToolPreferences() {
+  try { localStorage.setItem('touchline-tools-v1', JSON.stringify({pinned:pinnedTools,showAll:showAllTools})); } catch {}
+  renderToolbar();
+  renderPanels();
+}
+
 document.addEventListener('change', async event => {
   const input = event.target;
+  if (input.id === 'showAllTools') {
+    showAllTools = input.checked;
+    return saveToolPreferences();
+  }
   if (input.id === 'animationSpeed') {
     const previousSpeed = speed;
     speed = Number(input.value);
@@ -1137,6 +1297,12 @@ const boardBinding = bindBoard(pitch, {
   },
   onCommit() { persist(); renderToolbar(); renderPanels(); },
   onMark(mark) {
+    if (mark.type === 'number') {
+      const used = new Set(phase().scene.marks.filter(item => item.type === 'number').map(item => Number(item.text)));
+      let number = 1;
+      while (used.has(number)) number++;
+      mark.text = String(number);
+    }
     if (phase().scene.marks.length >= 500) return showToast('This phase has reached 500 annotations.');
     mutate(() => { phase().scene.marks.push({ ...mark, id:mark.id || makeId() }); });
   },
@@ -1167,5 +1333,5 @@ window.addEventListener('hashchange', async () => {
 });
 
 fillIcons();
-setView(new URLSearchParams(location.search).get('view') === 'home' && !location.hash ? 'home' : 'board');
+setView(new URLSearchParams(location.search).get('view') === 'board' || location.hash.startsWith('#board=') ? 'board' : 'home');
 persist(false);

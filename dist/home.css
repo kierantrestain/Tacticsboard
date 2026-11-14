@@ -207,3 +207,5 @@
 @media (prefers-reduced-motion: reduce) {
   .home-shell * { scroll-behavior: auto; }
 }
+
+.home-match-maps {grid-column:1/-1;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px}

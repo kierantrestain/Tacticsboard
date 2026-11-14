@@ -1,5 +1,5 @@
-const FULL = { x: 0, y: 0, width: 1000, height: 625 };
-const HALF = { x: 482, y: 0, width: 518, height: 625 };
+import { cameraBounds, fullPitchBounds as FULL, getPitchStyle, halfPitchBounds as HALF } from './camera.js';
+import { matchLayerArtwork } from './match-layer.js';
 const FIELD = { left: 25, right: 975, top: 24, bottom: 601 };
 const SVG = 'http://www.w3.org/2000/svg';
 const renderedBoards = new WeakMap();
@@ -49,14 +49,14 @@ function pointString(point) {
   return `${Number(point.x)} ${Number(point.y)}`;
 }
 
-function turfMarkup(id) {
+function turfMarkup(id,style) {
   const stripe = 950 / 18;
   const bands = Array.from({ length: 18 }, (_, index) =>
     `<rect x="${25 + index * stripe}" y="24" width="${stripe + .12}" height="577"
-      fill="${index % 2 ? '#21731a' : '#196613'}"/>`).join('');
+      fill="${index % 2 ? style.light : style.dark}"/>`).join('');
   return `<g clip-path="url(#${id}-field)">
-    ${bands}
-    <rect x="25" y="24" width="950" height="577" fill="url(#${id}-mow)"/>
+    ${style.stripes ? bands : `<rect x="25" y="24" width="950" height="577" fill="${style.light}"/>`}
+    ${style.stripes ? `<rect x="25" y="24" width="950" height="577" fill="url(#${id}-mow)"/>` : ''}
   </g>`;
 }
 
@@ -94,12 +94,12 @@ function guides(mode) {
     stroke-width="1.5" stroke-dasharray="6 8" fill="none"/>`;
 }
 
-function fieldMarkup(id, grid, guideMode) {
+function fieldMarkup(id, grid, guideMode, style) {
   return `
     <defs>
       <pattern id="${id}-mow" width="106" height="96.2" x="25" y="24" patternUnits="userSpaceOnUse">
-        <rect width="106" height="48.1" fill="#d2e89f" fill-opacity=".016"/>
-        <rect y="48.1" width="106" height="48.1" fill="#183314" fill-opacity=".037"/>
+        <rect width="106" height="48.1" fill="${style.shine}" fill-opacity=".016"/>
+        <rect y="48.1" width="106" height="48.1" fill="${style.shade}" fill-opacity=".037"/>
       </pattern>
       <pattern id="${id}-grass" width="108" height="108" patternUnits="userSpaceOnUse">
         <image width="108" height="108" href="${grassTexture()}"/>
@@ -130,15 +130,15 @@ function fieldMarkup(id, grid, guideMode) {
       </linearGradient>
       <clipPath id="${id}-field"><rect x="25" y="24" width="950" height="577"/></clipPath>
     </defs>
-    <rect width="1000" height="625" fill="#0e4909"/>
-    ${turfMarkup(id)}
-    <rect width="1000" height="625" fill="url(#${id}-grass)" opacity=".58"/>
+    <rect width="1000" height="625" fill="${style.base}"/>
+    ${turfMarkup(id,style)}
+    <rect width="1000" height="625" fill="url(#${id}-grass)" opacity="${style.stripes ? '.58' : '.22'}"/>
     <rect width="1000" height="625" fill="url(#${id}-light)"/>
     ${centerStamp()}
     ${goal(true, id)}${goal(false, id)}
     ${grid ? guides(guideMode) : ''}
     <path d="M 25 25 H975 V601 H25Z" fill="none" stroke="#173815" stroke-opacity=".18" stroke-width="3.6"/>
-    <g fill="none" stroke="#f2f6ea" stroke-opacity=".94" stroke-width="1.65">
+    <g fill="none" stroke="${style.white}" stroke-opacity=".94" stroke-width="1.65">
       <rect x="25" y="24" width="950" height="577"/>
       <path d="M 500 24 V 601
         M 25 141 H 175 V 484 H 25 M 25 234 H 75 V 391 H 25
@@ -230,6 +230,49 @@ function markArtwork(mark) {
   const from = points[0];
   const to = points.at(-1);
   const color = safeColor(mark.color);
+  const x = Number(from.x);
+  const y = Number(from.y);
+  const endX = Number(to.x);
+  const endY = Number(to.y);
+  const dx = endX - x;
+  const dy = endY - y;
+  const distance = Math.hypot(dx, dy);
+  const bounds = `x="${Math.min(x,endX)}" y="${Math.min(y,endY)}" width="${Math.abs(dx)}" height="${Math.abs(dy)}"`;
+  const stroke = `stroke="${color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"`;
+  if (type === 'rectangle' || type === 'oval') {
+    const shape = type === 'rectangle' ? `<rect ${bounds}` :
+      `<ellipse cx="${x + dx / 2}" cy="${y + dy / 2}" rx="${Math.abs(dx) / 2}" ry="${Math.abs(dy) / 2}"`;
+    return `${shape} fill="${color}" fill-opacity=".05" ${stroke}/>`;
+  }
+  if (type === 'target') {
+    return `<g transform="translate(${x} ${y})" fill="none" ${stroke}>
+      <circle r="15" fill="#16291c" fill-opacity=".35"/><circle r="6"/><path d="M-22 0h6m32 0h6M0 -22v6m0 32v6"/></g>`;
+  }
+  if (type === 'cross') return `<path d="M${x - 11} ${y - 11}l22 22m0 -22-22 22" ${stroke}/>`;
+  if (type === 'number') {
+    return `<circle cx="${x}" cy="${y}" r="14" fill="${color}" stroke="#193521" stroke-width="2"/>
+      <text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="#111f17" font-family="Arial,sans-serif" font-size="15" font-weight="800">${escapeMarkup(mark.text || '1')}</text>`;
+  }
+  if (type === 'vision' && distance > 1) {
+    const theta = Math.atan2(dy,dx);
+    const radius = Math.min(distance,320);
+    const a = {x:x + radius * Math.cos(theta - .47),y:y + radius * Math.sin(theta - .47)};
+    const z = {x:x + radius * Math.cos(theta + .47),y:y + radius * Math.sin(theta + .47)};
+    return `<path d="M${x} ${y} L${pointString(a)} A${radius} ${radius} 0 0 1 ${pointString(z)}Z"
+      fill="${color}" fill-opacity=".20" ${stroke} stroke-opacity=".65"/>`;
+  }
+  if (type === 'measure' && distance > 1) {
+    const metres = Math.hypot(dx * (105 / 950),dy * (68 / 577)).toFixed(1);
+    const tickX = 8 * dy / distance, tickY = 8 * -dx / distance;
+    return `<path d="M${x} ${y}L${endX} ${endY} M${x-tickX} ${y-tickY}l${2*tickX} ${2*tickY}
+      M${endX-tickX} ${endY-tickY}l${2*tickX} ${2*tickY}" fill="none" ${stroke}/>
+      <text x="${x + dx / 2}" y="${y + dy / 2 - 13}" text-anchor="middle" fill="${color}" stroke="#18321d" stroke-width="5" paint-order="stroke" font-family="Arial,sans-serif" font-size="17" font-weight="800">${metres} m</text>`;
+  }
+  if ((type === 'path' || type === 'space') && points.length >= 2) {
+    const trace = penPath(points) + (type === 'space' ? ' Z' : '');
+    return `<path d="${trace}" fill="none" stroke="transparent" stroke-width="18" pointer-events="stroke"/>
+      <path d="${trace}" fill="${type === 'space' ? color : 'none'}" fill-opacity=".18" ${stroke} stroke-dasharray="9 5"/>`;
+  }
   if (type === 'zone') {
     const x = Math.min(from.x, to.x);
     const y = Math.min(from.y, to.y);
@@ -271,7 +314,7 @@ function markMarkup(mark) {
   return `<g data-mark="${escapeMarkup(mark.id)}">${markArtwork(mark)}</g>`;
 }
 
-const underlayTools = new Set(['zone', 'highlight']);
+const underlayTools = new Set(['zone', 'highlight', 'vision', 'space']);
 
 function playerMarkup(player, options, id) {
   const home = player.team === 'home';
@@ -340,7 +383,8 @@ export function renderBoard(container, scene, options = {}) {
   const view = options.view === 'half' ? HALF : FULL;
   const grid = Boolean(options.grid);
   const guideMode = options.guideMode ?? 'zones';
-  if (!rendered || rendered.view !== view || rendered.grid !== grid || (grid && rendered.guideMode !== guideMode) || rendered.svg.parentNode !== container) {
+  const style = getPitchStyle(options.pitchStyle);
+  if (!rendered || rendered.view !== view || rendered.style !== style || rendered.grid !== grid || (grid && rendered.guideMode !== guideMode) || rendered.svg.parentNode !== container) {
     const id = rendered?.id ?? `pitch-${++nextBoardId}`;
     const { x, y, width, height } = view;
     container.innerHTML = `<svg xmlns="${SVG}" viewBox="${x} ${y} ${width} ${height}"
@@ -351,17 +395,28 @@ export function renderBoard(container, scene, options = {}) {
         .pitch-player:active { cursor: grabbing; }
         .pitch-player:focus-visible { outline: 2px solid #effccf; }
       </style>
-      ${fieldMarkup(id, grid, guideMode)}
+      ${fieldMarkup(id, grid, guideMode, style)}
+      <g data-match-layer="" clip-path="url(#${id}-field)"></g>
       <g data-board-marks="" clip-path="url(#${id}-field)"></g>
       <g data-board-pieces=""></g>
       <g data-drawing-preview="" pointer-events="none" clip-path="url(#${id}-field)"></g>
     </svg>`;
     const svg = container.querySelector('svg');
-    rendered = { id, view, grid, guideMode, svg, marksNode: svg.querySelector('[data-board-marks]'),
+    rendered = { id, view, style, grid, guideMode, svg, marksNode: svg.querySelector('[data-board-marks]'), mapNode:svg.querySelector('[data-match-layer]'),
       piecesNode: svg.querySelector('[data-board-pieces]') };
     renderedBoards.set(container, rendered);
   }
   rendered.snap = Boolean(options.snap);
+  const frame = cameraBounds(scene.camera,view);
+  const crop = `${frame.x} ${frame.y} ${frame.width} ${frame.height}`;
+  if (crop !== rendered.crop) {
+    rendered.svg.setAttribute('viewBox',crop);
+    rendered.crop = crop;
+  }
+  if (rendered.matchLayer !== scene.matchLayer) {
+    rendered.mapNode.innerHTML = matchLayerArtwork(scene.matchLayer,rendered.id);
+    rendered.matchLayer = scene.matchLayer;
+  }
   const marks = scene.marks ?? [];
   const zones = marks.filter(mark => underlayTools.has(mark.type)).map(markMarkup).join('');
   const drawings = marks.filter(mark => !underlayTools.has(mark.type)).map(markMarkup).join('');
@@ -432,7 +487,7 @@ function showPreview(container, mark) {
   if (preview) preview.innerHTML = mark ? markArtwork(mark) : '';
 }
 
-const dragTools = new Set([...arrowTools, 'line', 'pen', 'zone', 'highlight']);
+const dragTools = new Set([...arrowTools, 'line', 'pen', 'zone', 'highlight', 'rectangle', 'oval', 'vision', 'measure', 'path', 'space']);
 const landmarks = [{ x: 500, y: 312.5 }, { x: 127, y: 312.5 }, { x: 873, y: 312.5 },
   { x: 25, y: 24 }, { x: 975, y: 24 }, { x: 25, y: 601 }, { x: 975, y: 601 }];
 const keyboardMoves = {
@@ -492,7 +547,7 @@ export function bindBoard(container, callbacks) {
       if (mark) callbacks.onErase?.(mark.dataset.mark);
     } else if (tool === 'text') {
       callbacks.onText?.(point, safeColor(getColor()));
-    } else if (tool === 'cone') {
+    } else if (['cone','target','cross','number'].includes(tool)) {
       callbacks.onMark?.(makeMark(tool, [point], getColor()));
     } else if (dragTools.has(tool)) {
       const isArrow = arrowTools.has(tool);
@@ -532,7 +587,7 @@ export function bindBoard(container, callbacks) {
       callbacks.onMove?.(drag.id, x, y);
     } else {
       const { mark } = drag;
-      if (mark.type === 'pen') {
+      if (['pen','path','space'].includes(mark.type)) {
         const last = mark.points.at(-1);
         if (mark.points.length < 4000 && Math.hypot(point.x - last.x, point.y - last.y) >= 2) mark.points.push(point);
       } else {
@@ -636,7 +691,8 @@ export async function canvasBoard(container, { scale = 2 } = {}) {
   const source = container.querySelector('svg');
   if (!source) throw new Error('The pitch is not ready to export.');
   const copy = source.cloneNode(true);
-  const { width, height } = source.viewBox.baseVal;
+  const width = source.width.baseVal.value;
+  const height = source.height.baseVal.value;
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(width * scale);
   canvas.height = Math.round(height * scale);

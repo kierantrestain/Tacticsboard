@@ -76,6 +76,7 @@ export function renderHome(container, { board, saved = [], templates = [], rende
         <button type="button" class="home-nav-current" aria-current="page" data-home-top>${icon('home')}<span>Home</span></button>
         <button type="button" data-action="open-board">${icon('board')}<span>Board</span></button>
         <button type="button" data-action="templates">${icon('templates')}<span>Templates</span></button>
+        <button type="button" data-action="match-maps">${icon('board')}<span>Match maps</span></button>
       </nav>
       <button type="button" class="home-button home-button-accent home-header-new" data-action="new">${icon('plus')} New board</button>
       <label class="home-search home-header-search">${icon('search')}<input type="search" data-home-search aria-label="Search saved tactics" placeholder="Search your tactics…"></label>
@@ -108,6 +109,11 @@ export function renderHome(container, { board, saved = [], templates = [], rende
           <button class="home-button home-button-accent" type="button" data-action="media">Open Media Draw ${icon('arrow')}</button>
           <button class="home-button home-button-outline home-button-icon" type="button" aria-label="Upload footage or an image" title="Upload footage or an image" data-action="media-import">${icon('upload')}</button>
         </div>
+      </section>
+
+      <section class="home-panel home-match-maps">
+        <div class="home-panel-head">${icon('board')}<div><h2>Match maps</h2><p>Explore real shots, xG and ball-action locations, or import your own event data.</p></div></div>
+        <button type="button" class="home-button home-button-accent" data-action="match-maps">Explore match maps ${icon('arrow')}</button>
       </section>
 
       <section class="home-panel home-saved">

@@ -23,3 +23,15 @@ Catalog sources include [OpenFootball](https://github.com/openfootball) (CC0) an
 ## Motion
 
 Open **Animation creator** to scrub, loop, or adjust playback speed. Edit a stage to choose its outgoing ball movement and duration. The arrow palette can turn a drawn pass, dribble, lob or shot into a new stage. The **From build-up to finish** play template demonstrates all four.
+
+## Match maps
+
+Open **Match maps** on Home or on the board. The seven bundled Bundesliga and 2. Bundesliga fixtures use event coordinates and xG supplied in the DFL dataset by Bassek, Rein, Weber and Memmert ([data source](https://doi.org/10.6084/m9.figshare.28196177), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)). Positions and event names were adapted to the Touchline pitch. The heat map and average positions in the bundled samples represent recorded on-ball actions.
+
+Import a single [Hudl StatsBomb event JSON](https://github.com/hudl/open-data/tree/master/data/events) file, or wrap the event array as `{ "home": "...", "away": "...", "date": "...", "competition": "...", "title": "...", "events": [...] }`. The browser reads the file locally. The map is saved with the board when you add the layer.
+
+The API-Football connection supplies competitions, squads and fixture lineups. Live location overlays use BALLDONTLIE when the deployment has a server-side `SPATIAL_FOOTBALL_KEY` with access to its match-map endpoints. Coverage depends on the competition and the provider. Live data remains optional when using samples or imports.
+
+## Drawing and presets
+
+Use **More tools** to open shapes, paths, field of view, target and number markers, distance measurement, and training cones. Pin individual tools to the toolbar or show them all. The library starts on Home. To jump straight to the editor use `?view=board`. Play multi-stage presets directly from the Templates panel, then edit any stage after playback.
