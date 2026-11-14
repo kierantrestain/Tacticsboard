@@ -10,42 +10,77 @@
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./home.css">
   <link rel="stylesheet" href="./media.css">
+  <link rel="stylesheet" href="./workspace.css">
+  <link rel="stylesheet" href="./team-picker.css">
   <script type="module" src="./app.js"></script>
 </head>
 <body>
   <div id="homeView" hidden></div>
   <div id="mediaView" hidden></div>
   <main class="board-workspace" id="boardView" aria-label="Touchline tactics board">
-    <div class="board-content">
-      <aside class="sideline" aria-label="Teams and panels">
-        <div id="teams" class="teams"></div>
-        <div class="side-cards">
-          <button class="side-card" data-action="animation"><span data-icon="stages"></span><span><strong>Animation creator</strong><small>Capture the board as a stage, move the players and capture again.</small></span></button>
-          <button class="side-card" data-action="export"><span data-icon="camera"></span><span><strong>Export &amp; publish</strong><small>Save a pitch image or animation, or share your board with a link.</small></span></button>
-          <button class="side-card" data-action="guides"><span data-icon="guides"></span><span><strong>Spacing guides</strong><small>Show the lanes and thirds to plan your team's shape.</small></span></button>
-          <button class="side-settings" data-action="settings">All panels and settings</button>
-        </div>
-      </aside>
-      <div class="pitch-area">
-        <div id="pitch" class="pitch" aria-label="Interactive football pitch"></div>
+    <header class="workspace-header" aria-label="Board actions">
+      <button type="button" class="workspace-brand" data-action="home" aria-label="Open board library" title="Open board library">
+        <span class="workspace-brand-icon" data-icon="brand"></span><span class="workspace-wordmark">touchline</span>
+      </button>
+      <button type="button" class="workspace-library" data-action="home"><span data-icon="layers"></span> Library</button>
+      <div class="workspace-heading">
+        <button type="button" class="workspace-rename" data-action="rename" title="Rename board">
+          <strong id="workspaceTitle">Tactics board</strong><span data-icon="edit"></span>
+        </button>
+        <small id="workspaceStatus"></small>
       </div>
-      <section class="timeline floating" id="timelinePanel" aria-label="Animation creator" hidden>
-        <div class="timeline-header">
-          <div class="timeline-title"><span data-icon="stages"></span><h2>Animation creator</h2><span id="phaseCount" class="phase-count"></span></div>
-          <div class="timeline-actions">
-            <button class="icon-button" data-action="previous" title="Previous stage" aria-label="Previous stage"><span data-icon="skipBack"></span></button>
-            <button id="play" class="button button-accent play-button" data-action="play"><span data-icon="play"></span><span>Play</span></button>
-            <button class="icon-button" data-action="next" title="Next stage" aria-label="Next stage"><span data-icon="skipForward"></span></button>
-            <button class="icon-button" data-action="animation" title="Close animation creator" aria-label="Close animation creator"><span data-icon="close"></span></button>
+      <div class="workspace-actions">
+        <button type="button" class="button workspace-present" data-action="present" aria-label="Present full screen" title="Present full screen"><span data-icon="expand"></span><span>Present</span></button>
+        <button type="button" class="button workspace-share" data-action="share" aria-label="Share" title="Share"><span data-icon="link"></span><span>Share</span></button>
+        <button type="button" class="button workspace-export" data-action="export"><span data-icon="download"></span><span>Export</span></button>
+      </div>
+    </header>
+    <div class="board-content">
+      <aside class="sideline" aria-label="Board setup">
+        <section class="workspace-section workspace-teams">
+          <div class="workspace-section-head"><span data-icon="pitch"></span><h2>Teams</h2></div>
+          <div class="workspace-team-labels"><span>Home</span><span>Away</span></div>
+          <div id="teams" class="teams"></div>
+          <div class="workspace-team-pickers">
+            <button type="button" class="workspace-team-picker" data-action="teams-find-home" aria-label="Choose home club"><span data-icon="plus"></span> Pick club</button>
+            <button type="button" class="workspace-team-picker" data-action="teams-find-away" aria-label="Choose away club"><span data-icon="plus"></span> Pick club</button>
           </div>
+        </section>
+        <section class="workspace-section workspace-play">
+          <div class="workspace-section-head"><span data-icon="stages"></span><h2>Animation</h2></div>
+          <p>Capture positions, build a move, and preview it.</p>
+          <button type="button" class="button workspace-stage-button" data-action="animation" aria-controls="timelinePanel"><span data-icon="list"></span> Open stages<span class="workspace-stage-chevron" data-icon="chevronRight"></span></button>
+        </section>
+        <section class="workspace-section workspace-view">
+          <div class="workspace-section-head"><span data-icon="sliders"></span><h2>Pitch setup</h2></div>
+          <div class="workspace-view-actions">
+            <button type="button" class="workspace-link" data-action="guides"><span data-icon="guides"></span> Spacing guides<span data-icon="chevronRight"></span></button>
+            <button type="button" class="workspace-link" data-action="settings"><span data-icon="sliders"></span> Board settings<span data-icon="chevronRight"></span></button>
+          </div>
+        </section>
+      </aside>
+      <section class="workspace-field" aria-label="Pitch and playback">
+        <div class="pitch-area">
+          <div id="pitch" class="pitch" aria-label="Interactive football pitch"></div>
         </div>
-        <div class="playback-controls">
-          <label class="playhead-field"><span class="visually-hidden">Scrub animation</span><input id="playhead" type="range" min="0" max="0" step="10" value="0"><output id="playheadLabel" for="playhead">0.0 s</output></label>
-          <label class="speed-field"><span class="visually-hidden">Playback speed</span><select class="input" id="animationSpeed"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label>
-          <label class="loop-field"><input id="loopPlayback" type="checkbox">Loop</label>
-        </div>
-        <div id="phases" class="phases"></div>
-        <div class="timeline-note"><label for="notes">Coaching notes</label><textarea class="input note" id="notes" maxlength="2000" rows="2" placeholder="Add a coaching cue…"></textarea></div>
+        <section class="timeline" id="timelinePanel" aria-label="Animation creator" hidden>
+          <div class="timeline-header">
+            <div class="timeline-title"><span data-icon="stages"></span><h2>Animation creator</h2><span id="phaseCount" class="phase-count"></span></div>
+            <div class="timeline-actions">
+              <button class="icon-button" data-action="previous" title="Previous stage" aria-label="Previous stage"><span data-icon="skipBack"></span></button>
+              <button id="play" class="button button-accent play-button" data-action="play"><span data-icon="play"></span><span>Play</span></button>
+              <button class="icon-button" data-action="next" title="Next stage" aria-label="Next stage"><span data-icon="skipForward"></span></button>
+              <button class="icon-button" data-action="animation" title="Close animation creator" aria-label="Close animation creator"><span data-icon="close"></span></button>
+            </div>
+          </div>
+          <div class="playback-controls">
+            <label class="playhead-field"><span class="visually-hidden">Scrub animation</span><input id="playhead" type="range" min="0" max="0" step="10" value="0"><output id="playheadLabel" for="playhead">0.0 s</output></label>
+            <label class="speed-field"><span class="visually-hidden">Playback speed</span><select class="input" id="animationSpeed"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label>
+            <label class="loop-field"><input id="loopPlayback" type="checkbox">Loop</label>
+          </div>
+          <div id="phases" class="phases"></div>
+          <div class="timeline-note"><label for="notes">Coaching notes</label><textarea class="input note" id="notes" maxlength="2000" rows="2" placeholder="Add a coaching cue…"></textarea></div>
+        </section>
       </section>
       <div id="toolPanel" class="floating" hidden></div>
       <div id="playerPanel" class="floating" hidden></div>

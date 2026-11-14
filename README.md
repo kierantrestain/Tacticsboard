@@ -16,7 +16,7 @@ The JLA Tactics Board editor and home screen supplied the design reference. The 
 
 Open either team menu, then **Find a club or national team**. The bundled catalog contains dated league memberships and the 2026 World Cup national squads. Some club names appear under more than one competition. A national squad is assigned to formation slots to make an editable starting shape.
 
-The **API-Football** tab accepts your own API-Football key for the current browser tab. The key is sent directly to the provider and is never saved with a board. A provider account and a plan with the required seasons are needed for current club coverage. Available fixture lineups can populate both sides, including substitutes.
+The team picker uses the live API-Football feed when the deployment has a server-side `API_FOOTBALL_KEY`. It falls back to the bundled open catalog when the feed is unavailable. The browser never receives the key. Production setup uses a Sensitive environment variable named `API_FOOTBALL_KEY` in Vercel. The free plan limits available seasons. Fixture lineups can populate both sides, including substitutes and match-specific shirt and goalkeeper colours when supplied. Major clubs have editable identity palettes, with crest-derived suggestions for other clubs when available.
 
 Catalog sources include [OpenFootball](https://github.com/openfootball) (CC0) and [Damir Devetak / Football Charts match results](https://doi.org/10.5281/zenodo.23348754) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)). Fixture team names and season memberships were extracted and normalised for search. Source and licence links are also in the team picker.
 

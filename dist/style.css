@@ -235,3 +235,7 @@ kbd {border:1px solid #517367;padding:1px 4px;border-radius:3px;font:inherit;col
 .tool-animate .button {min-height:25px;font-size:10px}
 details.picker-credit {color:var(--muted);font-size:11px;line-height:1.5}
 details.picker-credit summary {cursor:pointer}
+.kit-fields {display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.kit-fields label {display:flex;align-items:center;justify-content:space-between;gap:3px;font-size:10px}
+.board-crest {width:17px;height:17px;object-fit:contain;flex:0 0 auto}
+.team-open > span:not([data-icon]) {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

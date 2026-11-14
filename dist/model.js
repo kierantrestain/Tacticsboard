@@ -108,7 +108,9 @@ function isSettings(settings) {
     ['full', 'half'].includes(settings.view) && isBoolean(settings.labels) &&
     isBoolean(settings.away) && isBoolean(settings.grid) &&
     (settings.guideMode === undefined || guideModes.includes(settings.guideMode)) &&
-    isOptionalBoolean(settings.home) && isOptionalBoolean(settings.snap);
+    isOptionalBoolean(settings.home) && isOptionalBoolean(settings.snap) &&
+    ['home','away'].every(team => ['Trim','Number','Keeper','KeeperNumber'].every(suffix =>
+      settings[team + suffix] === undefined || isColor(settings[team + suffix])));
 }
 
 function isBoard(board) {

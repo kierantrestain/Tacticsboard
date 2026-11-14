@@ -276,11 +276,13 @@ const underlayTools = new Set(['zone', 'highlight']);
 function playerMarkup(player, options, id) {
   const home = player.team === 'home';
   const goalkeeper = player.footballRole ? player.footballRole === 'GK' : player.id === `${player.team}-1`;
-  const color = goalkeeper
-    ? home ? '#14d8e8' : '#ca40da'
-    : safeColor(home ? options.homeColor : options.awayColor, home ? '#253c84' : '#202020');
-  const band = home ? goalkeeper ? '#132d7d' : '#d12a2d' : '#e1e1e1';
-  const rim = goalkeeper && home ? '#0bdced' : '#fcfcf8';
+  const side = home ? 'home' : 'away';
+  const color = goalkeeper ? safeColor(options[side + 'Keeper'],home ? '#14d8e8' : '#ca40da')
+    : safeColor(options[side + 'Color'],home ? '#253c84' : '#202020');
+  const band = goalkeeper && home && !options.homeKeeper ? '#132d7d' :
+    safeColor(options[side + 'Trim'],home ? '#d12a2d' : '#e1e1e1');
+  const numberColor = safeColor(options[side + (goalkeeper ? 'KeeperNumber' : 'Number')],'#ffffff');
+  const rim = goalkeeper && home && !options.homeKeeper ? '#0bdced' : '#fcfcf8';
   const edges = goalkeeper && home ? 24 : 27;
   const bandShape = `M -${edges - 1.8} 9 A ${edges} ${edges} 0 0 0 ${edges - 1.8} 9 Z`;
   const label = options.labels && player.name ? `<text y="-37" dominant-baseline="middle"
@@ -303,7 +305,7 @@ function playerMarkup(player, options, id) {
     <circle r="${edges + .7}" fill="none" stroke="${rim}" stroke-width="3"/>
     ${selection}
     <text y="1" dominant-baseline="middle" font-size="13.8" font-weight="800"
-      fill="#fff" stroke="#111" stroke-width="1.9" paint-order="stroke" pointer-events="none">${escapeMarkup(player.number || '–')}</text>
+      fill="${numberColor}" stroke="${numberColor === '#ffffff' ? '#111' : '#ffffff'}" stroke-width="1.5" paint-order="stroke" pointer-events="none">${escapeMarkup(player.number || '–')}</text>
     ${label}
   </g>`;
 }
@@ -370,8 +372,9 @@ export function renderBoard(container, scene, options = {}) {
   }
   const players = (scene.players ?? [])
     .filter(player => !player.benched && (player.team === 'away' ? options.away !== false : options.home !== false));
-  const appearance = JSON.stringify([options.homeColor, options.awayColor, options.labels, options.homeName,
-    options.awayName, options.selected, Boolean(scene.ball),
+  const appearance = JSON.stringify([options.homeColor, options.awayColor,options.homeTrim,options.awayTrim,
+    options.homeNumber,options.awayNumber,options.homeKeeper,options.awayKeeper,options.homeKeeperNumber,options.awayKeeperNumber,
+    options.labels,options.homeName,options.awayName,options.selected,Boolean(scene.ball),
     players.map(({id, team, name, number, footballRole}) => [id, team, name, number, footballRole])]);
   if (rendered.appearance !== appearance) {
     rendered.piecesNode.innerHTML = players.map(player => playerMarkup(player, options, rendered.id)).join('') +

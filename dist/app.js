@@ -1,3 +1,5 @@
+import { suggestCrestKit } from './crest-color.js';
+import { getClubKit } from './kits.js';
 import { mountTeamPicker } from './team-picker.js';
 import { shapeFromRoster } from './lineup.js';
 import { mountMedia } from './media.js';
@@ -147,10 +149,12 @@ function persist(edit = true) {
   if (location.hash.startsWith('#board=')) {
     saveMessage = 'Shared board';
     if ($('#saveStatus')) $('#saveStatus').textContent = saveMessage;
+    if ($('#workspaceStatus')) $('#workspaceStatus').textContent = saveMessage;
     return;
   }
   saveMessage = saveBoard(board) ? 'Saved on this device' : 'Device storage unavailable';
   if ($('#saveStatus')) $('#saveStatus').textContent = saveMessage;
+  if ($('#workspaceStatus')) $('#workspaceStatus').textContent = saveMessage;
 }
 
 function mutate(edit) {
@@ -217,11 +221,12 @@ function renderTeams() {
     const club = board.settings[team + 'Club'];
     const code = typeof club?.shortName === 'string' && club.name === name ? club.shortName.slice(0,4) : '';
     const color = board.settings[team + 'Color'];
+    const crest = typeof club?.logo === 'string' && /^https:\/\/media\.api-sports\.io\/football\/teams\/[1-9]\d*\.png$/.test(club.logo) && club.name === name ? club.logo : '';
     const bench = phase().scene.players.filter(player => player.team === team && player.benched).length;
     return `<div class="team-unit">
       <div class="team-badge" style="--team-color:${color}">
         <button class="team-visibility" data-action="visibility-${team}" aria-label="Show ${team}" title="Toggle ${team}" aria-pressed="${board.settings[team] !== false}">${icon('eye')}</button>
-        <button class="team-open" data-action="team-${team}" aria-label="${team} team settings"><span>${escape((code || (name === 'Away' ? 'AWY' : name.slice(0,3))).toUpperCase())}</span>${icon('down')}</button>
+        <button class="team-open" data-action="team-${team}" aria-label="${team} team settings">${crest ? `<img class="board-crest" src="${crest}" alt="" referrerpolicy="no-referrer">` : ''}<span>${escape((code || (name === 'Away' ? 'AWY' : name.slice(0,3))).toUpperCase())}</span>${icon('down')}</button>
       </div>
       <button class="bench-button" data-action="bench-${team}" aria-label="${team} bench">Bench${bench ? ' · ' + bench : ''}</button>
     </div>`;
@@ -235,6 +240,8 @@ function panelItem(name,label,iconName,active,attr='data-action') {
 
 function renderPanels() {
   timelinePanel.hidden = panel !== 'animation';
+  const stagesButton = $('.workspace-stage-button');
+  stagesButton?.setAttribute('aria-expanded',String(panel === 'animation'));
   toolPanel.hidden = !['arrows','more'].includes(panel);
   const player = phase().scene.players.find(item => item.id === selected);
   playerPanel.hidden = Boolean(panel || tool !== 'select' || !player || presentation);
@@ -315,14 +322,19 @@ function setView(next) {
 }
 
 function teamCard(team) {
+  const label = team === 'home' ? 'Home' : 'Away';
+  const primary = board.settings[team + 'Color'];
+  const trim = board.settings[team + 'Trim'] ?? (team === 'home' ? '#d12a2d' : '#e1e1e1');
+  const keeper = board.settings[team + 'Keeper'] ?? (team === 'home' ? '#14d8e8' : '#ca40da');
+  const number = board.settings[team + 'Number'] ?? '#ffffff';
   const name = escape(board.settings[team + 'Name']);
-  const color = board.settings[team + 'Color'];
   const formation = board.settings[team + 'Formation'];
   return `<div class="team-card">
     <div class="team-card-head">
-      <label class="team-color" title="${team} kit color"><i style="background:${color}"></i><input data-setting="${team}Color" aria-label="${team} kit color" type="color" value="${color}"></label>
-      <input type="text" maxlength="40" aria-label="${team} team name" data-setting="${team}Name" value="${name}" spellcheck="false">
+      <input type="text" maxlength="100" aria-label="${label} team name" data-setting="${team}Name" value="${name}" spellcheck="false">
     </div>
+    <div class="kit-fields">${[['Color','Shirt',primary],['Trim','Trim',trim],['Number','Number',number],['Keeper','Keeper',keeper]].map(([suffix,caption,value]) =>
+      `<label>${caption}<span class="team-color"><i style="background:${value}"></i><input data-setting="${team + suffix}" aria-label="${label} ${caption.toLowerCase()} color" type="color" value="${value}"></span></label>`).join('')}</div>
     <select data-formation="${team}" aria-label="${team} formation">${formations.map(value =>
       `<option value="${value}"${value === formation ? ' selected' : ''}>${value}</option>`).join('')}</select>
   </div>`;
@@ -337,15 +349,33 @@ function openTeam(team) {
     ${option(`teams-find-${team}`,'Find a club or national team','Browse competitions and load available players.','pitch')}`);
 }
 
+function setTeamKit(team, colors) {
+  if (!colors?.primary) {
+    board.settings[team + 'Color'] = team === 'home' ? '#253c84' : '#202020';
+  }
+  for (const [suffix, value] of [['Color',colors?.primary],['Trim',colors?.secondary],['Number',colors?.number],
+      ['Keeper',colors?.goalkeeper],['KeeperNumber',colors?.goalkeeperNumber]]) {
+    if (typeof value === 'string' && /^#[\da-f]{6}$/i.test(value)) board.settings[team + suffix] = value;
+    else if (suffix !== 'Color') delete board.settings[team + suffix];
+  }
+}
+
 function openTeamPicker(team) {
   openDialog(`Choose ${team} team`, '<div data-team-picker></div>');
   mountTeamPicker(dialog.querySelector('[data-team-picker]'), {side:team, onApply:applyTeam, onFixture:applyFixture});
-  function applyTeam(record, squad) {
+  const picker = dialog.querySelector('[data-team-picker]');
+  let applying = false;
+  async function applyTeam(record, squad) {
+    if (applying) return;
+    applying = true;
+    const palette = record.colors ?? getClubKit(record) ?? await suggestCrestKit(record.logo);
+    if (!dialog.open || !picker.isConnected) return;
     dialog.close();
     mutate(() => {
       const oldClub = board.settings[team + 'Club'];
       board.settings[team + 'Name'] = record.name.slice(0,100);
-      board.settings[team + 'Club'] = record;
+      board.settings[team + 'Club'] = {...record,colors:palette};
+      setTeamKit(team,palette);
       if (squad?.players.length) {
         for (const item of board.phases) replaceRoster(item,team,squad.players);
         board.settings.labels = true;
@@ -358,13 +388,19 @@ function openTeamPicker(team) {
     showToast(squad?.players.length ? `${record.name} squad loaded` : `${record.name} added to the board`);
   }
 
-  function applyFixture(lineups) {
+  async function applyFixture(lineups) {
+    if (applying) return;
+    applying = true;
+    const palettes = await Promise.all(lineups.map(({team}) =>
+      team.colors ?? getClubKit(team) ?? suggestCrestKit(team.logo)));
+    if (!dialog.open || !picker.isConnected) return;
     dialog.close();
     mutate(() => {
       for (const [index,side] of ['home','away'].entries()) {
         const lineup = lineups[index];
         board.settings[side + 'Name'] = lineup.team.name.slice(0,100);
-        board.settings[side + 'Club'] = lineup.team;
+        board.settings[side + 'Club'] = {...lineup.team,colors:palettes[index]};
+        setTeamKit(side,palettes[index]);
         if (formations.includes(lineup.formation)) board.settings[side + 'Formation'] = lineup.formation;
         for (const item of board.phases) replaceRoster(item,side,lineup.starter,lineup.bench,true);
       }
@@ -450,6 +486,9 @@ function renderTimeline() {
 
 function render() {
   document.title = board.title + ' • Touchline';
+  $('#workspaceTitle')?.replaceChildren(board.title);
+  const status = $('#workspaceStatus');
+  if (status) status.textContent = saveMessage;
   renderToolbar();
   renderTeams();
   renderPitch();
