@@ -1,5 +1,10 @@
+import { applyMediaKeyframe, openMediaKeyframeEditor } from './media-keyframes.js';
+import { deleteMediaProject, getMediaProject, listMediaProjects, saveMediaProject } from './media-projects.js';
+
 const iconPaths = {
   back: '<path d="m13 5-7 7 7 7m-7-7h13"/>',
+  projects: '<path d="M3 6a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 10h18"/>',
+  animate: '<path d="m12 3 6 9-6 9-6-9z"/><path d="M3 7v10m18-10v10"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   download: '<path d="M12 3v12m-4-4 4 4 4-4M4 16v4h16v-4"/>',
   arrow: '<path d="M5 19 19 5m-9 0h9v9"/>',
@@ -260,13 +265,17 @@ export function mountMedia(container, {goHome} = {}) {
   let mediaEvents;
   let videoFrame = null;
   let recording = null;
+  let project = null;
+  let projectBusy = false;
+  let dirty = false;
+  let pickingMotion = false;
   let mounted = true;
   container.classList.add('media-screen');
   container.innerHTML = `
     <header class="media-top">
       <div class="media-title">${action('home','Back to home','back')}<h1>Media Draw</h1></div>
       <p id="mediaFileTitle">Local footage</p>
-      <div class="media-top-actions">${action('add','Add media','plus')}${action('export','Export frame','download')}${action('export-video','Export video','media')}</div>
+      <div class="media-top-actions">${action('projects','Projects')}${action('add','Add media','plus')}${action('export','Export frame','download')}${action('export-video','Export video','media')}</div>
     </header>
     <div class="media-body">
       <aside class="media-rail" aria-label="Media clips">
@@ -306,7 +315,7 @@ export function mountMedia(container, {goHome} = {}) {
         <label class="media-width" title="Stroke width"><span class="media-sr">Stroke width</span><select aria-label="Stroke width"><option value="2">Fine</option><option value="4" selected>Medium</option><option value="7">Bold</option><option value="11">Heavy</option></select></label>
         <button type="button" class="media-button media-dash" data-media-action="dash" aria-label="Dashed stroke" title="Dashed stroke" aria-pressed="false"><span aria-hidden="true">╌</span></button>
       </div>
-      <div class="media-edit-tools">${action('timing','New annotation timing','clock')}${action('visibility','Hide annotations','eye')}${action('undo','Undo')}${action('redo','Redo')}${action('clear','Clear annotations','trash')}</div>
+      <div class="media-edit-tools">${action('timing','New annotation timing','clock')}${action('animate','Animate annotation')}${action('visibility','Hide annotations','eye')}${action('undo','Undo')}${action('redo','Redo')}${action('clear','Clear annotations','trash')}</div>
       <p class="media-tool-hint">Drag to show a pass.</p>
       <div class="media-more-menu" aria-label="More annotation tools" hidden></div>
       <form class="media-timing" hidden>
@@ -325,6 +334,18 @@ export function mountMedia(container, {goHome} = {}) {
     </footer>
     <p class="media-status" role="status" hidden></p>
     <input class="media-files" type="file" accept="image/*,video/*" multiple hidden>
+    <dialog class="media-project-dialog" aria-labelledby="mediaProjectsHeading">
+      <div class="media-project-head"><div><h2 id="mediaProjectsHeading">Media projects</h2><p>Clips and annotations are saved in this browser.</p></div>
+        <button type="button" class="media-button" data-media-action="close-projects">Close</button></div>
+      <form class="media-project-save">
+        <label>Project name<input name="title" maxlength="80" required></label>
+        <button type="submit" class="media-button media-primary" value="save">Save project</button>
+        <button type="submit" class="media-button" value="copy" hidden>Save a copy</button>
+      </form>
+      <p class="media-project-feedback" aria-live="polite"></p>
+      <h3>Saved on this device</h3>
+      <div class="media-project-list"></div>
+    </dialog>
     <dialog class="media-text-dialog">
       <form method="dialog">
         <h2>Add a text label</h2>
@@ -350,6 +371,10 @@ export function mountMedia(container, {goHome} = {}) {
   const morePanel = $('.media-more-menu');
   const timingPanel = $('.media-timing');
   const textDialog = $('.media-text-dialog');
+  const projectDialog = $('.media-project-dialog');
+  const projectForm = $('.media-project-save');
+  const projectFeedback = $('.media-project-feedback');
+  const projectList = $('.media-project-list');
   const item = () => items[activeIndex];
   let textMark = null;
 
@@ -381,6 +406,11 @@ export function mountMedia(container, {goHome} = {}) {
       button.setAttribute('aria-pressed', button.dataset.mediaColor === color);
     }
     $('[data-media-action=export]').disabled = !hasMedia;
+    $('[data-media-action=projects]').disabled = Boolean(recording);
+    const motionButton = $('[data-media-action=animate]');
+    motionButton.disabled = !hasMedia || current.kind !== 'video' || !current.marks.length || !Number.isFinite(element?.duration);
+    motionButton.setAttribute('aria-pressed',String(pickingMotion));
+    canvas.classList.toggle('media-pick-motion', pickingMotion);
     const videoExport = $('[data-media-action=export-video]');
     videoExport.hidden = current?.kind !== 'video' && !recording;
     videoExport.disabled = !recording && (!hasMedia || !Number.isFinite(element?.duration));
@@ -407,7 +437,7 @@ export function mountMedia(container, {goHome} = {}) {
     $('[data-media-action=visibility]').title = visibilityText;
     const timing = timed && timingForNewMark && current?.kind === 'video'
       ? ` · New marks ${showTimestamp(timingForNewMark.start,true)}–${showTimestamp(timingForNewMark.end,true)}` : '';
-    $('.media-tool-hint').textContent = drawTools[tool][1] + timing;
+    $('.media-tool-hint').textContent = pickingMotion ? 'Click a visible annotation to add movement keyframes.' : drawTools[tool][1] + timing;
   }
 
   function renderCues() {
@@ -416,15 +446,20 @@ export function mountMedia(container, {goHome} = {}) {
     const duration = element?.duration;
     if (item()?.kind !== 'video' || !Number.isFinite(duration) || duration <= 0) return;
     item().marks.forEach((mark,index) => {
-      if (!mark.timing) return;
+      const firstFrame = mark.keyframes?.[0]?.time;
+      if (!mark.timing && !Number.isFinite(firstFrame)) return;
       const cue = document.createElement('button');
       cue.type = 'button';
       cue.className = 'media-cue';
       cue.dataset.mediaCue = index;
-      cue.setAttribute('aria-label', `Edit ${drawTools[mark.type][0]} timing at ${showTimestamp(mark.timing.start,true)}`);
-      cue.title = `${drawTools[mark.type][0]} · ${showTimestamp(mark.timing.start,true)}–${showTimestamp(mark.timing.end,true)}`;
-      cue.style.left = `${Math.min(100,mark.timing.start/duration*100)}%`;
-      cue.style.width = `${Math.min(100,(mark.timing.end-mark.timing.start)/duration*100)}%`;
+      const start = mark.timing?.start ?? firstFrame;
+      const end = mark.timing?.end ?? mark.keyframes.at(-1).time;
+      const motion = !mark.timing;
+      cue.dataset.mediaCueMode = motion ? 'motion' : 'timing';
+      cue.setAttribute('aria-label', `Edit ${drawTools[mark.type][0]} ${motion ? 'keyframes' : 'timing'} at ${showTimestamp(start,true)}`);
+      cue.title = `${drawTools[mark.type][0]} · ${showTimestamp(start,true)}–${showTimestamp(end,true)}`;
+      cue.style.left = `${Math.min(100,start/duration*100)}%`;
+      cue.style.width = `${Math.min(100,(end-start)/duration*100)}%`;
       cue.style.setProperty('--media-cue-color',mark.color);
       rail.append(cue);
     });
@@ -437,7 +472,8 @@ export function mountMedia(container, {goHome} = {}) {
   }
 
   function drawOverlay(output, marks, time) {
-    const visible = marks.filter(mark => visibleAt(mark,time));
+    const visible = marks.filter(mark => visibleAt(mark,time)).map(mark =>
+      applyMediaKeyframe(mark,time,output.canvas.width,output.canvas.height));
     for (const mark of visible) if (mark.type === 'spotlight') drawMark(output,mark);
     for (const mark of visible) if (mark.type !== 'spotlight') drawMark(output,mark);
   }
@@ -532,7 +568,7 @@ export function mountMedia(container, {goHome} = {}) {
   }
 
   function scheduleVideoFrame() {
-    if (videoFrame !== null || !item()?.marks.some(mark => mark.timing) || !isPlaying) return;
+    if (videoFrame !== null || !item()?.marks.some(mark => mark.timing || mark.keyframes?.length) || !isPlaying) return;
     const frame = () => {
       videoFrame = null;
       redraw();
@@ -575,6 +611,7 @@ export function mountMedia(container, {goHome} = {}) {
     activePointer = null;
     isPlaying = false;
     annotationsVisible = true;
+    pickingMotion = false;
     morePanel.hidden = true;
     timingPanel.hidden = true;
     timed = false;
@@ -585,7 +622,7 @@ export function mountMedia(container, {goHome} = {}) {
     surface.hidden = true;
     playback.hidden = true;
     $('.media-empty').hidden = Boolean(current);
-    $('#mediaFileTitle').textContent = current?.name ?? 'Local footage';
+    $('#mediaFileTitle').textContent = project ? `${project.title}${current ? ' · ' + current.name : ''}` : current?.name ?? 'Local footage';
     renderRail();
     renderControls();
     renderCues();
@@ -601,7 +638,7 @@ export function mountMedia(container, {goHome} = {}) {
       surface.hidden = false;
       playback.hidden = current.kind !== 'video';
       if (current.kind === 'video') {
-        element.currentTime = current.time;
+        element.currentTime = Math.max(0,Math.min(current.time,Number.isFinite(element.duration) ? element.duration : current.time));
         syncTime();
       }
       fitSurface();
@@ -639,16 +676,138 @@ export function mountMedia(container, {goHome} = {}) {
   function addFiles(files) {
     const next = items.length;
     for (const file of files) {
+      if (items.length >= 250) break;
+      if (!file.size || !file.name.trim()) continue;
       let kind;
       if (file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(file.name)) kind = 'image';
       else if (file.type.startsWith('video/') || /\.(mp4|webm|m4v|mov)$/i.test(file.name)) kind = 'video';
       else continue;
       const url = URL.createObjectURL(file);
       urls.add(url);
-      items.push({ url, kind, name:file.name, time:0, marks:[], undo:[], redo:[] });
+      items.push({ url, file, kind, name:file.name.slice(0,255), time:0, marks:[], undo:[], redo:[] });
     }
-    if (items.length > next) setActive(next);
+    if (items.length > next) {
+      dirty = true;
+      setActive(next);
+    }
     else if (files.length) report('Choose a supported image or video file.');
+  }
+
+  function setProjectBusy(value) {
+    projectBusy = value;
+    projectForm.querySelectorAll('input,button').forEach(control => { control.disabled = value; });
+    projectList.querySelectorAll('button').forEach(control => { control.disabled = value; });
+  }
+
+  function projectError(error) {
+    return error?.name === 'QuotaExceededError' ? 'Storage is full. Remove a saved project or save a smaller clip.' :
+      error?.message || 'The media project could not be opened or saved.';
+  }
+
+  async function refreshProjectList() {
+    const rows = await listMediaProjects();
+    if (!mounted) return;
+    projectList.replaceChildren();
+    if (!rows.length) {
+      const empty = document.createElement('p');
+      empty.textContent = 'No media projects saved yet.';
+      projectList.append(empty);
+    }
+    for (const entry of rows) {
+      const row = document.createElement('div');
+      row.className = 'media-project-row';
+      const open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'media-project-open';
+      open.dataset.mediaProject = entry.id;
+      const title = document.createElement('strong');
+      title.textContent = entry.title;
+      const meta = document.createElement('small');
+      meta.textContent = `${entry.clipCount} ${entry.clipCount === 1 ? 'clip' : 'clips'} · ${new Intl.DateTimeFormat(undefined,{dateStyle:'medium'}).format(entry.updatedAt)}`;
+      open.append(title,meta);
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'media-button';
+      remove.dataset.mediaProjectDelete = entry.id;
+      remove.setAttribute('aria-label',`Remove ${entry.title}`);
+      remove.textContent = 'Remove';
+      row.append(open,remove);
+      projectList.append(row);
+    }
+  }
+
+  function syncProjectForm() {
+    projectForm.hidden = !items.length;
+    projectForm.elements.title.value = project?.title ?? item()?.name?.replace(/\.[^.]+$/,'').slice(0,80) ?? '';
+    projectForm.querySelector('[value=copy]').hidden = !project;
+    projectForm.querySelector('[value=save]').textContent = project ? 'Update project' : 'Save project';
+  }
+
+  async function showProjects() {
+    if (projectDialog.open) return;
+    if (element?.tagName === 'VIDEO') element.pause();
+    syncProjectForm();
+    projectFeedback.textContent = 'Loading projects…';
+    projectDialog.showModal();
+    setProjectBusy(true);
+    try {
+      await refreshProjectList();
+      projectFeedback.textContent = '';
+    } catch (error) {
+      projectFeedback.textContent = projectError(error);
+    } finally { setProjectBusy(false); }
+  }
+
+  async function runProjectOperation(callback) {
+    if (projectBusy) return;
+    setProjectBusy(true);
+    try { await callback(); }
+    catch (error) { projectFeedback.textContent = projectError(error); }
+    finally { setProjectBusy(false); }
+  }
+
+  async function loadProject(id) {
+    if (dirty && !window.confirm('Open the saved project and discard the unsaved changes in Media Draw?')) return;
+    return runProjectOperation(async () => {
+      const saved = await getMediaProject(id);
+      if (!mounted) return;
+      setActive(-1);
+      for (const clip of items) {
+        URL.revokeObjectURL(clip.url);
+        urls.delete(clip.url);
+      }
+      items.length = 0;
+      for (const clip of saved.clips) {
+        const url = URL.createObjectURL(clip.file);
+        urls.add(url);
+        items.push({...clip,url,undo:[],redo:[]});
+      }
+      project = {id:saved.id,title:saved.title};
+      dirty = false;
+      setActive(saved.activeIndex);
+      projectDialog.close();
+      report(`Opened ${saved.title}`);
+    });
+  }
+
+  function showMotion(index) {
+    const current = item();
+    const mark = current?.marks[index];
+    if (!mark || element?.tagName !== 'VIDEO' || !Number.isFinite(element.duration)) return;
+    element.pause();
+    if (mark.timing && !visibleAt(mark,element.currentTime)) element.currentTime = mark.timing.start;
+    pickingMotion = false;
+    renderControls();
+    const video = element;
+    openMediaKeyframeEditor({
+      container,mark,time:video.currentTime,duration:video.duration,width:canvas.width,height:canvas.height,
+      onSave(keyframes) { if (item() === current) updateMarks(marks => marks.map((entry,at) => at === index ? {...entry,keyframes} : entry)); },
+      onSeek(time) { if (element === video) video.currentTime = time; },
+      paintPreview(context, transformedMark) {
+        if (video.readyState >= 2) context.drawImage(video,0,0,context.canvas.width,context.canvas.height);
+        if (transformedMark) drawMark(context,transformedMark);
+      },
+    });
   }
 
   function openFile() {
@@ -666,6 +825,7 @@ export function mountMedia(container, {goHome} = {}) {
   }
 
   function marksChanged() {
+    dirty = true;
     redraw();
     renderControls();
     renderCues();
@@ -686,6 +846,7 @@ export function mountMedia(container, {goHome} = {}) {
     const url = current.url;
     setActive(-1);
     items.splice(removeIndex,1);
+    dirty = true;
     URL.revokeObjectURL(url);
     urls.delete(url);
     setActive(items.length ? Math.min(removeIndex, items.length - 1) : -1);
@@ -858,8 +1019,24 @@ export function mountMedia(container, {goHome} = {}) {
   container.addEventListener('click',event => {
     const button = event.target.closest('button');
     if (!button || button.disabled) return;
-    const {mediaTool,mediaColor,mediaAction,mediaIndex,mediaCue} = button.dataset;
+    const {mediaTool,mediaColor,mediaAction,mediaIndex,mediaCue,mediaCueMode,mediaProject,mediaProjectDelete} = button.dataset;
+    if (mediaProject) return void loadProject(mediaProject);
+    if (mediaProjectDelete && !projectBusy) {
+      if (!window.confirm('Remove this saved media project from this device?')) return;
+      return void runProjectOperation(async () => {
+        await deleteMediaProject(mediaProjectDelete);
+        if (!mounted) return;
+        if (project?.id === mediaProjectDelete) {
+          project = null;
+          dirty = Boolean(items.length);
+          syncProjectForm();
+        }
+        await refreshProjectList();
+        projectFeedback.textContent = 'Project removed.';
+      });
+    }
     if (mediaTool) {
+      pickingMotion = false;
       tool = mediaTool;
       morePanel.hidden = true;
       renderControls();
@@ -867,9 +1044,14 @@ export function mountMedia(container, {goHome} = {}) {
     if (mediaCue != null) {
       const index = Number(mediaCue);
       const mark = item()?.marks[index];
-      if (!mark?.timing || element?.tagName !== 'VIDEO') return;
-      element.currentTime = mark.timing.start;
-      showTiming(index);
+      if (!mark || element?.tagName !== 'VIDEO') return;
+      if (mediaCueMode === 'motion') {
+        element.currentTime = mark.keyframes[0].time;
+        showMotion(index);
+      } else {
+        element.currentTime = mark.timing.start;
+        showTiming(index);
+      }
     }
     if (mediaColor) {
       color = mediaColor;
@@ -879,7 +1061,24 @@ export function mountMedia(container, {goHome} = {}) {
     if (mediaIndex != null) setActive(Number(mediaIndex));
     switch (mediaAction) {
       case 'home':
-        goHome?.();
+        if (!dirty || window.confirm('Return home and discard unsaved changes to this media project?')) goHome?.();
+        break;
+      case 'projects':
+        void showProjects();
+        break;
+      case 'close-projects':
+        if (!projectBusy) projectDialog.close();
+        break;
+      case 'animate':
+        pickingMotion = !pickingMotion;
+        if (pickingMotion) {
+          element?.pause?.();
+          if (!annotationsVisible) {
+            annotationsVisible = true;
+            redraw();
+          }
+        }
+        renderControls();
         break;
       case 'add':
         openFile();
@@ -951,6 +1150,27 @@ export function mountMedia(container, {goHome} = {}) {
         break;
     }
   },{signal});
+  projectDialog.addEventListener('cancel',event => { if (projectBusy) event.preventDefault(); },{signal});
+  projectForm.addEventListener('submit',event => {
+    event.preventDefault();
+    const title = projectForm.elements.title.value.trim();
+    const id = event.submitter?.value === 'copy' ? undefined : project?.id;
+    if (!title || !items.length) return;
+    void runProjectOperation(async () => {
+      projectFeedback.textContent = 'Saving clips and annotations…';
+      const clips = items.map(({file,kind,name,time,marks},index) => ({
+        file,kind,name,marks,time:index === activeIndex && element?.tagName === 'VIDEO' ? element.currentTime : time,
+      }));
+      const saved = await saveMediaProject({id,title,clips,activeIndex});
+      if (!mounted) return;
+      project = saved;
+      dirty = false;
+      syncProjectForm();
+      $('#mediaFileTitle').textContent = saved.title + ' · ' + item().name;
+      await refreshProjectList();
+      projectFeedback.textContent = 'Project saved on this device.';
+    });
+  },{signal});
   timingPanel.addEventListener('submit',event => {
     event.preventDefault();
     const start = Number($('.media-time-start').value);
@@ -974,7 +1194,8 @@ export function mountMedia(container, {goHome} = {}) {
   $('.media-picker input').addEventListener('input',event => { color = event.target.value; renderControls(); },{signal});
   container.addEventListener('keydown',event => {
     if (event.key !== 'Escape' || textDialog.open) return;
-    if (!timingPanel.hidden) timingPanel.hidden = true;
+    if (pickingMotion) { pickingMotion = false; renderControls(); }
+    else if (!timingPanel.hidden) timingPanel.hidden = true;
     else if (!morePanel.hidden) { morePanel.hidden = true; renderControls(); }
   },{signal});
   filePicker.addEventListener('change',() => {
@@ -994,12 +1215,17 @@ export function mountMedia(container, {goHome} = {}) {
     if (!event.isPrimary || event.button !== 0 || !item()) return;
     const start = point(event);
     if (isPlaying) element.pause();
-    if (tool === 'erase') {
+    if (tool === 'erase' || pickingMotion) {
       if (!annotationsVisible) return;
-      const index = item().marks.findLastIndex(mark => visibleAt(mark,element.currentTime ?? 0) && hitsMark(mark,start));
-      if (index >= 0) updateMarks(marks => marks.filter((_,position) => position !== index));
+      const time = element.currentTime ?? 0;
+      const index = item().marks.findLastIndex(mark => visibleAt(mark,time) &&
+        hitsMark(applyMediaKeyframe(mark,time,canvas.width,canvas.height),start));
+      if (index >= 0 && pickingMotion) showMotion(index);
+      else if (index >= 0) updateMarks(marks => marks.filter((_,position) => position !== index));
+      else if (pickingMotion) report('Choose a visible annotation on the frame.');
       return;
     }
+    if (item().marks.length >= 3000) return report('This clip has reached 3,000 annotations.');
     const current = item();
     const scale = Math.max(1,Math.min(canvas.width,canvas.height)/520);
     const timing = timed && timingForNewMark ? {...timingForNewMark} : null;
@@ -1029,8 +1255,9 @@ export function mountMedia(container, {goHome} = {}) {
     const next = point(event);
     const last = draft.points.at(-1);
     if (Math.hypot(next.x-last.x,next.y-last.y) < 2) return;
-    if (continuousTools.has(draft.type)) draft.points.push(next);
-    else draft.points[1] = next;
+    if (continuousTools.has(draft.type)) {
+      if (draft.points.length < 12000) draft.points.push(next);
+    } else draft.points[1] = next;
     redraw();
   },{signal});
   function finish(event) {
@@ -1050,6 +1277,7 @@ export function mountMedia(container, {goHome} = {}) {
 
   return {
     openFile,
+    openProjects:showProjects,
     cleanup() {
       mounted = false;
       recording?.(true);

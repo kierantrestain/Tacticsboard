@@ -5,6 +5,8 @@ const allowed = new Map([
   ['search', {endpoint:'teams',ttl:21600,params:{search:'search'}}],
   ['squad', {endpoint:'players/squads',ttl:10800,params:{team:'id'}}],
   ['fixtures', {endpoint:'fixtures',ttl:900,params:{team:'id'},optional:{league:'id',season:'season'},extra:{last:'12'}}],
+  ['events', {endpoint:'fixtures/events',ttl:120,params:{fixture:'id'}}],
+  ['statistics', {endpoint:'fixtures/statistics',ttl:180,params:{fixture:'id'}}],
   ['lineups', {endpoint:'fixtures/lineups',ttl:1800,params:{fixture:'id'}}],
 ]);
 const validation = {

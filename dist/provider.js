@@ -104,3 +104,12 @@ export async function getProviderLineups(fixture) {
     bench:(item.substitutes ?? []).map(playerRecord).filter(player => player.name),
   }));
 }
+
+export async function getProviderMatchDetails(fixture) {
+  const [events,statistics] = await Promise.allSettled([
+    fetchProvider('events',{fixture}),fetchProvider('statistics',{fixture}),
+  ]);
+  if (events.status === 'rejected' && statistics.status === 'rejected') throw events.reason;
+  return {events:events.status === 'fulfilled' ? events.value : null,
+    statistics:statistics.status === 'fulfilled' ? statistics.value : null};
+}

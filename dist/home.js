@@ -1,3 +1,5 @@
+import { createLibraryFolder, deleteLibraryFolder, moveLibraryTactic, readLibraryFolders, renameLibraryFolder } from './library-folders.js';
+
 const iconPaths = {
   home: '<path d="m3 10 9-7 9 7v10h-6v-6H9v6H3z"/>',
   board: '<rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M12 5v14M3 9h3v6H3m18-6h-3v6h3"/><circle cx="12" cy="12" r="2.7"/>',
@@ -9,6 +11,8 @@ const iconPaths = {
   arrow: '<path d="M4 12h15m-6-6 6 6-6 6"/>',
   upload: '<path d="M12 15V4m-4 4 4-4 4 4M4 15v5h16v-5"/>',
   folder: '<path d="M3 6a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/>',
+  edit: '<path d="m4 16 11-11 4 4L8 20H4zm9-9 4 4"/>',
+  move: '<path d="M4 20h16a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1h-8l-2-3H4a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1Zm4-6h8m-3-3 3 3-3 3"/>',
   dots: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
   trash: '<path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15m-7-12V9m4 0v8"/>',
 };
@@ -41,17 +45,17 @@ function recentCard({ id, title, board, current }) {
   </button>`;
 }
 
-function tacticRow(item) {
+function tacticRow(item,folder) {
   const actionId = escape(item.id);
   const title = escape(item.title);
   const count = item.board.phases.length;
-  return `<div class="home-tactic" data-search-row>
+  return `<div class="home-tactic" data-search-row="${actionId}">
     <button class="home-tactic-open" data-action="saved-open-${actionId}" type="button">
       <div class="home-row-preview home-preview" data-preview="saved-${actionId}"></div>
-      <span><strong>${title}</strong><small>${escape(opponents(item.board))} · ${count} ${count === 1 ? 'stage' : 'stages'}</small></span>
+      <span><strong>${title}</strong><small>${escape(opponents(item.board))} · ${count} ${count === 1 ? 'stage' : 'stages'}${folder ? ' · ' + escape(folder.name) : ''}</small></span>
       <span class="home-tactic-date">${escape(elapsedLabel(item.modified))}</span>
     </button>
-    <button class="home-tactic-remove" data-action="saved-delete-${actionId}" aria-label="Remove ${title} from saved tactics" title="Remove saved tactic" type="button">${icon('trash')}</button>
+    <button class="home-tactic-remove" data-tactic-options="${actionId}" aria-label="Options for ${title}" title="Tactic options" type="button">${icon('dots')}</button>
   </div>`;
 }
 
@@ -62,8 +66,23 @@ function drawPreview(node, scene, settings, renderPreview) {
   node.querySelectorAll('[tabindex]').forEach(element => element.removeAttribute('tabindex'));
 }
 
-export function renderHome(container, { board, saved = [], templates = [], renderPreview }) {
+const homeViewState = new WeakMap();
+
+export function renderHome(container, { board, saved = [], templates = [], renderPreview, onRenameSaved }) {
   const items = [...saved].sort((first, second) => second.modified - first.modified);
+  const {folders,locations} = readLibraryFolders();
+  const foldersById = new Map(folders.map(folder => [folder.id,folder]));
+  const folderOf = id => foldersById.get(locations.get(id));
+  const selected = homeViewState.get(container) ?? {folder:'all',query:''};
+  if (selected.folder !== 'all' && selected.folder !== 'unfiled' && !foldersById.has(selected.folder)) selected.folder = 'all';
+  homeViewState.set(container,selected);
+  const counts = new Map([['all',items.length],['unfiled',0]]);
+  for (const item of items) {
+    const id = folderOf(item.id)?.id ?? 'unfiled';
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  const folderOption = (id,name) =>
+    `<option value="${escape(id)}"${selected.folder === id ? ' selected' : ''}>${escape(name)} (${counts.get(id) ?? 0})</option>`;
   const current = { title:'Current board', board, current:true };
   const recent = items.slice(0, 1);
   const training = templates.slice(0, 3);
@@ -107,6 +126,7 @@ export function renderHome(container, { board, saved = [], templates = [], rende
         </button>
         <div class="home-training-actions">
           <button class="home-button home-button-accent" type="button" data-action="media">Open Media Draw ${icon('arrow')}</button>
+          <button class="home-button home-button-outline" type="button" data-action="media-projects">Saved projects</button>
           <button class="home-button home-button-outline home-button-icon" type="button" aria-label="Upload footage or an image" title="Upload footage or an image" data-action="media-import">${icon('upload')}</button>
         </div>
       </section>
@@ -124,8 +144,21 @@ export function renderHome(container, { board, saved = [], templates = [], rende
             <button class="home-button home-button-outline home-button-icon" type="button" aria-label="Open a board file" title="Open a board file" data-action="import">${icon('upload')}</button>
           </div>
         </div>
-        <div class="home-saved-items">${items.map(tacticRow).join('')}</div>
-        <p class="home-empty" data-home-empty${items.length ? ' hidden' : ''}>Save a board to add it here.</p>
+        <div class="home-folders">
+          <label class="home-folder-filter">${icon('folder')}<span class="visually-hidden">Folder</span>
+            <select aria-label="Folder" data-home-folder-filter>
+              ${folderOption('all','All tactics')}${folderOption('unfiled','Unfiled')}${folders.map(folder => folderOption(folder.id,folder.name)).join('')}
+            </select>
+          </label>
+          <button class="home-button home-button-outline" type="button" data-folder-new>${icon('plus')} New folder</button>
+          <button class="home-button home-button-outline" type="button" data-folder-options hidden>${icon('dots')} Folder options</button>
+        </div>
+        <div class="home-saved-items">${items.map(item => tacticRow(item,folderOf(item.id))).join('')}</div>
+        <p class="home-empty" data-home-empty>Save a board to add it here.</p>
+        <dialog class="home-library-dialog" aria-labelledby="home-library-dialog-title">
+          <div class="dialog-head"><h2 id="home-library-dialog-title"></h2></div>
+          <div class="dialog-body" data-library-body></div>
+        </dialog>
       </section>
 
       ${training.length ? `<section class="home-panel home-starters">
@@ -157,18 +190,135 @@ export function renderHome(container, { board, saved = [], templates = [], rende
   const searchFields = [...container.querySelectorAll('[data-home-search]')];
   const rows = [...container.querySelectorAll('[data-search-row]')];
   const empty = container.querySelector('[data-home-empty]');
-  for (const field of searchFields) {
-    field.addEventListener('input', () => {
-      const query = field.value.trim().toLowerCase();
-      searchFields.filter(input => input !== field).forEach(input => { input.value = field.value; });
-      rows.forEach((row, index) => {
-        row.hidden = !`${items[index].title} ${opponents(items[index].board)}`.toLowerCase().includes(query);
+  const folderFilter = container.querySelector('[data-home-folder-filter]');
+  folderFilter.value = selected.folder;
+  const folderOptions = container.querySelector('[data-folder-options]');
+  const libraryDialog = container.querySelector('.home-library-dialog');
+  const modalHeading = libraryDialog.querySelector('h2');
+  const modalBody = libraryDialog.querySelector('[data-library-body]');
+  const byId = new Map(items.map(item => [item.id,item]));
+
+  function filter() {
+    const query = selected.query.trim().toLowerCase();
+    folderOptions.hidden = !foldersById.has(selected.folder);
+    rows.forEach(row => {
+      const item = byId.get(row.dataset.searchRow);
+      const folder = folderOf(item.id);
+      const correctFolder = selected.folder === 'all' || selected.folder === (folder?.id ?? 'unfiled');
+      row.hidden = !correctFolder || !`${item.title} ${opponents(item.board)} ${folder?.name ?? ''}`.toLowerCase().includes(query);
+    });
+    empty.hidden = rows.some(row => !row.hidden);
+    empty.textContent = query ? 'No saved tactics match this search.' :
+      selected.folder === 'all' ? 'Save a board to add it here.' :
+        selected.folder === 'unfiled' ? 'No unfiled tactics.' : 'Move a saved tactic to this folder from its options.';
+  }
+
+  function refresh(records = items) {
+    libraryDialog.close();
+    renderHome(container,{board,saved:records,templates,renderPreview,onRenameSaved});
+    container.querySelector('[data-home-folder-filter]')?.focus({preventScroll:true});
+  }
+
+  function openLibraryDialog(title,body) {
+    modalHeading.textContent = title;
+    modalBody.innerHTML = body;
+    modalBody.querySelectorAll('[data-library-cancel]').forEach(control =>
+      control.addEventListener('click',() => libraryDialog.close()));
+    if (!libraryDialog.open) libraryDialog.showModal();
+    modalBody.querySelector('input, select, button')?.focus();
+    return modalBody;
+  }
+
+  const cancel = '<button class="button button-muted" type="button" data-library-cancel>Cancel</button>';
+  const apply = caption => `<button class="button button-accent" type="submit">${escape(caption)}</button>`;
+
+  function showForm(title,fields,caption,onSubmit) {
+    const content = openLibraryDialog(title,`<form>${fields}<p class="home-library-error" role="alert"></p>
+      <div class="dialog-actions">${cancel}${apply(caption)}</div></form>`);
+    const form = content.querySelector('form');
+    form.addEventListener('submit',event => {
+      event.preventDefault();
+      try { onSubmit(new FormData(form)); }
+      catch (error) { form.querySelector('[role=alert]').textContent = error.message; }
+    });
+  }
+
+  folderFilter.addEventListener('change',() => {
+    selected.folder = folderFilter.value;
+    filter();
+  });
+  container.querySelector('[data-folder-new]').addEventListener('click',() => {
+    showForm('New folder','<label>Folder name<input name="name" class="input" maxlength="60" required></label>','Create',values => {
+      selected.folder = createLibraryFolder(values.get('name'));
+      refresh();
+    });
+  });
+  folderOptions.addEventListener('click',() => {
+    const folder = foldersById.get(selected.folder);
+    if (!folder) return;
+    const content = openLibraryDialog(folder.name,
+      `<button class="option" type="button" data-library-rename>${icon('edit')} Rename folder</button>
+        <button class="option" type="button" data-library-delete>${icon('trash')} Remove folder</button>
+        <div class="dialog-actions">${cancel}</div>`);
+    content.querySelector('[data-library-rename]').addEventListener('click',() => {
+      showForm('Rename folder',`<label>Folder name<input name="name" class="input" maxlength="60" value="${escape(folder.name)}" required></label>`,'Rename',values => {
+        renameLibraryFolder(folder.id,values.get('name'));
+        refresh();
       });
-      empty.hidden = rows.some(row => !row.hidden);
-      empty.textContent = query ? 'No saved tactics match this search.' : 'Save a board to add it here.';
+    });
+    content.querySelector('[data-library-delete]').addEventListener('click',() => {
+      showForm('Remove folder','<p>Its boards will move to Unfiled.</p>','Remove folder',() => {
+        deleteLibraryFolder(folder.id);
+        selected.folder = 'unfiled';
+        refresh();
+      });
+    });
+  });
+
+  for (const control of container.querySelectorAll('[data-tactic-options]')) {
+    control.addEventListener('click',() => {
+      const item = byId.get(control.dataset.tacticOptions);
+      if (!item) return;
+      const content = openLibraryDialog(item.title,
+        `${onRenameSaved ? `<button class="option" type="button" data-library-rename>${icon('edit')} Rename tactic</button>` : ''}
+        ${folders.length ? `<button class="option" type="button" data-library-move>${icon('move')} Move to folder</button>` : ''}
+        <button class="option" type="button" data-action="saved-delete-${escape(item.id)}" data-library-cancel>${icon('trash')} Remove tactic</button>
+        <div class="dialog-actions">${cancel}</div>`);
+      content.querySelector('[data-library-rename]')?.addEventListener('click',() => {
+        showForm('Rename tactic',`<label>Tactic name<input name="title" class="input" maxlength="100" value="${escape(item.title)}" required></label>`,'Rename',values => {
+          const title = values.get('title').trim();
+          if (!title) throw new Error('Enter a tactic name.');
+          if (items.some(record => record.id !== item.id && record.title.toLowerCase() === title.toLowerCase())) {
+            throw new Error('A saved tactic already has that name.');
+          }
+          const records = onRenameSaved(item.id,title);
+          if (!Array.isArray(records)) throw new Error('Could not save the new name.');
+          refresh(records);
+        });
+      });
+      content.querySelector('[data-library-move]')?.addEventListener('click',() => {
+        const current = locations.get(item.id) ?? '';
+        const moveOption = (id,name) =>
+          `<option value="${escape(id)}"${current === id ? ' selected' : ''}>${escape(name)}</option>`;
+        showForm('Move tactic',`<label>Folder<select name="folder" class="input">
+          ${moveOption('','Unfiled')}${folders.map(folder => moveOption(folder.id,folder.name)).join('')}</select></label>`,'Move',values => {
+          moveLibraryTactic(item.id,values.get('folder'),items.map(record => record.id));
+          refresh();
+        });
+      });
+    });
+  }
+
+  for (const field of searchFields) {
+    field.value = selected.query;
+    field.addEventListener('input', () => {
+      selected.query = field.value;
+      searchFields.filter(input => input !== field).forEach(input => { input.value = field.value; });
+      filter();
     });
     field.addEventListener('keydown', event => {
       if (event.key === 'Enter') container.querySelector('.home-saved').scrollIntoView({ block:'nearest', behavior:'smooth' });
     });
   }
+  filter();
 }

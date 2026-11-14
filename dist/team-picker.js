@@ -414,7 +414,7 @@ export function mountTeamPicker(root, { side, onApply, onFixture }) {
         showError('Starting XIs are unavailable for this fixture.');
         return;
       }
-      onFixture(sides);
+      onFixture(sides,match);
     } catch (error) {
       if (connected(token)) showError(error?.message || 'Could not load lineups.');
     }

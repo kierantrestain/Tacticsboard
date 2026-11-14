@@ -170,7 +170,7 @@
 .home-tactic-date { margin-left: auto; white-space: nowrap; color: var(--home-muted); font-size: 11px; }
 .home-tactic-remove { display: grid; place-items: center; align-self: center; width: 27px; height: 28px; padding: 0; border-radius: 6px; color: var(--home-muted); }
 .home-tactic-remove svg { width: 15px; height: 15px; }
-.home-tactic-remove:hover { background: #45362f; color: #f7b8a5; }
+.home-tactic-remove:hover { background:#294538; color:var(--home-text); }
 .home-empty { color: var(--home-muted); font-size: 12px; }
 .home-starter-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 13px; }
 .home-starter { min-width: 0; border: 1px solid #3b5c4d; border-radius: 8px; padding: 6px; background: #15271f; color: var(--home-text); display: flex; align-items: center; gap: 9px; text-align: left; }
@@ -209,3 +209,42 @@
 }
 
 .home-match-maps {grid-column:1/-1;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px}
+
+.home-folders {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:7px;
+  margin:12px 0;
+}
+.home-folder-filter {
+  display:inline-flex;
+  align-items:center;
+  min-width:154px;
+  max-width:100%;
+  gap:7px;
+  padding:0 6px 0 9px;
+  border:1px solid #3e6454;
+  background:#172b23;
+  border-radius:8px;
+}
+.home-folder-filter svg,.home-folders button svg {width:15px;height:15px;flex:none}
+.home-folder-filter select {
+  min-width:0;
+  max-width:min(220px,64vw);
+  padding:7px 4px 7px 0;
+  border:0;
+  background:transparent;
+  color:var(--home-text);
+  cursor:pointer;
+}
+.home-folder-filter option {background:#172b23;color:var(--home-text)}
+.home-folders .home-button {min-height:33px;border-radius:8px}
+.home-folders .home-button[hidden],.home-saved-items [hidden],.home-empty[hidden] {display:none}
+.home-library-dialog {max-width:min(95vw,430px)}
+.home-library-dialog h2 {overflow-wrap:anywhere}
+.home-library-dialog .option {display:flex;gap:8px;align-items:center;text-align:left}
+.home-library-dialog .option svg {width:17px;height:17px;flex:none}
+.home-library-dialog .button-accent {cursor:pointer}
+.home-library-dialog .home-library-error {color:#ffbca8}
+.home-library-dialog .home-library-error:empty {display:none}

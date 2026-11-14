@@ -1,3 +1,4 @@
+import { resolveMark } from './mark-anchors.js';
 import { cameraBounds, fullPitchBounds as FULL, getPitchStyle, halfPitchBounds as HALF } from './camera.js';
 import { matchLayerArtwork } from './match-layer.js';
 const FIELD = { left: 25, right: 975, top: 24, bottom: 601 };
@@ -310,8 +311,8 @@ function markArtwork(mark) {
       stroke-linecap="round" stroke-linejoin="round"/>`;
 }
 
-function markMarkup(mark) {
-  return `<g data-mark="${escapeMarkup(mark.id)}">${markArtwork(mark)}</g>`;
+function markMarkup(mark, selected) {
+  return `<g data-mark="${escapeMarkup(mark.id)}"${selected === mark.id ? ' data-selected-mark=""' : ''}>${markArtwork(mark)}</g>`;
 }
 
 const underlayTools = new Set(['zone', 'highlight', 'vision', 'space']);
@@ -327,6 +328,8 @@ function playerMarkup(player, options, id) {
   const numberColor = safeColor(options[side + (goalkeeper ? 'KeeperNumber' : 'Number')],'#ffffff');
   const rim = goalkeeper && home && !options.homeKeeper ? '#0bdced' : '#fcfcf8';
   const edges = goalkeeper && home ? 24 : 27;
+  const outline = options.markerStyle === 'outline';
+  const striped = !options.markerStyle || options.markerStyle === 'kit';
   const bandShape = `M -${edges - 1.8} 9 A ${edges} ${edges} 0 0 0 ${edges - 1.8} 9 Z`;
   const label = options.labels && player.name ? `<text y="-37" dominant-baseline="middle"
     stroke="#142912" stroke-width="3" stroke-linejoin="round" paint-order="stroke"
@@ -340,10 +343,9 @@ function playerMarkup(player, options, id) {
     font-family="Arial, sans-serif" text-anchor="middle">
     <circle r="31" fill="transparent"/>
     <ellipse pointer-events="none" cx="4.2" cy="6.2" rx="35.7" ry="36.7" fill="url(#${id}-shadow)" transform="rotate(-25 4.2 6.2)"/>
-    <circle r="${edges + 1.4}" fill="${color}"/>
-    <circle r="${edges + .2}" fill="url(#${id}-gloss)"/>
-    <path d="${bandShape}" fill="${band}"/>
-    <path d="${bandShape}" fill="url(#${id}-band)"/>
+    <circle r="${edges + 1.4}" fill="${outline ? '#132c22' : color}" fill-opacity="${outline ? '.65' : '1'}"/>
+    ${outline ? `<circle r="${edges - 3}" fill="none" stroke="${color}" stroke-width="5"/>` : `<circle r="${edges + .2}" fill="url(#${id}-gloss)"/>`}
+    ${striped ? `<path d="${bandShape}" fill="${band}"/><path d="${bandShape}" fill="url(#${id}-band)"/>` : ''}
     <circle r="${edges - 3.1}" fill="none" stroke="#fff" stroke-opacity=".12" stroke-width="1.6"/>
     <circle r="${edges + .7}" fill="none" stroke="${rim}" stroke-width="3"/>
     ${selection}
@@ -394,6 +396,7 @@ export function renderBoard(container, scene, options = {}) {
         .pitch-player { cursor: grab; outline: none; }
         .pitch-player:active { cursor: grabbing; }
         .pitch-player:focus-visible { outline: 2px solid #effccf; }
+        [data-selected-mark] { filter:drop-shadow(0 0 5px #f1ffcd); }
       </style>
       ${fieldMarkup(id, grid, guideMode, style)}
       <g data-match-layer="" clip-path="url(#${id}-field)"></g>
@@ -417,19 +420,25 @@ export function renderBoard(container, scene, options = {}) {
     rendered.mapNode.innerHTML = matchLayerArtwork(scene.matchLayer,rendered.id);
     rendered.matchLayer = scene.matchLayer;
   }
-  const marks = scene.marks ?? [];
-  const zones = marks.filter(mark => underlayTools.has(mark.type)).map(markMarkup).join('');
-  const drawings = marks.filter(mark => !underlayTools.has(mark.type)).map(markMarkup).join('');
-  const marksMarkup = zones + drawings;
+  const players = (scene.players ?? [])
+    .filter(player => !player.benched && (player.team === 'away' ? options.away !== false : options.home !== false));
+  const playerPositions = new Map(players.map(player => [player.id,player]));
+  const marks = (scene.marks ?? []).map(mark => resolveMark(mark,playerPositions));
+  const zones = marks.filter(mark => underlayTools.has(mark.type)).map(mark => markMarkup(mark,options.selectedMark)).join('');
+  const drawings = marks.filter(mark => !underlayTools.has(mark.type)).map(mark => markMarkup(mark,options.selectedMark)).join('');
+  const trails = options.trails ?? [];
+  const paths = trails.map(trail => `<g pointer-events="none" fill="none" stroke="${safeColor(trail.color)}" opacity=".55">
+      <path d="M ${pointString(trail.from)} L ${pointString(trail.to)}" stroke-width="3" stroke-dasharray="7 6"/>
+      <circle cx="${Number(trail.to.x)}" cy="${Number(trail.to.y)}" r="19" stroke-width="2" stroke-dasharray="4 4"/>
+    </g>`).join('');
+  const marksMarkup = paths + zones + drawings;
   if (marksMarkup !== rendered.marksMarkup) {
     rendered.marksNode.innerHTML = marksMarkup;
     rendered.marksMarkup = marksMarkup;
   }
-  const players = (scene.players ?? [])
-    .filter(player => !player.benched && (player.team === 'away' ? options.away !== false : options.home !== false));
   const appearance = JSON.stringify([options.homeColor, options.awayColor,options.homeTrim,options.awayTrim,
     options.homeNumber,options.awayNumber,options.homeKeeper,options.awayKeeper,options.homeKeeperNumber,options.awayKeeperNumber,
-    options.labels,options.homeName,options.awayName,options.selected,Boolean(scene.ball),
+    options.labels,options.markerStyle,options.homeName,options.awayName,options.selected,Boolean(scene.ball),
     players.map(({id, team, name, number, footballRole}) => [id, team, name, number, footballRole])]);
   if (rendered.appearance !== appearance) {
     rendered.piecesNode.innerHTML = players.map(player => playerMarkup(player, options, rendered.id)).join('') +
@@ -536,6 +545,7 @@ export function bindBoard(container, callbacks) {
       const piece = target.closest('[data-piece]');
       if (!piece) {
         callbacks.onSelect?.(null);
+        callbacks.onSelectMark?.(target.closest('[data-mark]')?.dataset.mark ?? null);
         return;
       }
       const position = piecePoint(piece);
@@ -551,12 +561,22 @@ export function bindBoard(container, callbacks) {
       callbacks.onMark?.(makeMark(tool, [point], getColor()));
     } else if (dragTools.has(tool)) {
       const isArrow = arrowTools.has(tool);
-      const start = isArrow ? arrowPoint(point, target) : point;
+      const startPlayer = target.closest('[data-piece]');
+      const playerId = startPlayer?.dataset.piece;
+      const attachablePlayer = playerId && playerId !== 'ball' ? playerId : null;
+      const start = isArrow ? arrowPoint(point,target) :
+        tool === 'highlight' && attachablePlayer && callbacks.getAttach?.() ? piecePoint(startPlayer) : point;
       const fromPending = isArrow && Boolean(arrowStart);
       const mark = fromPending ? arrowStart : makeMark(tool, [start], getColor());
       if (fromPending) {
         mark.points[1] = start;
+        if (attachablePlayer && callbacks.getAttach?.()) {
+          mark.anchors = [...(mark.anchors ?? []),{index:1,playerId:attachablePlayer,dx:0,dy:0}];
+        }
         arrowStart = null;
+      } else if ((isArrow || tool === 'highlight' || tool === 'vision') && attachablePlayer && callbacks.getAttach?.()) {
+        const center = piecePoint(startPlayer);
+        mark.anchors = [{index:0,playerId:attachablePlayer,dx:start.x-center.x,dy:start.y-center.y}];
       }
       drag = { pointer: event.pointerId, origin: point, mark, fromPending };
       container.setPointerCapture(event.pointerId);
@@ -678,10 +698,11 @@ export function bindBoard(container, callbacks) {
     document.removeEventListener('click', clearAfterToolChange);
   }
 
-  unbind.startArrow = (x, y) => {
+  unbind.startArrow = (x,y,playerId) => {
     const type = getTool();
     if (!arrowTools.has(type)) return;
-    arrowStart = makeMark(type, [{ x, y }], getColor());
+    arrowStart = makeMark(type,[{x,y}],getColor());
+    if (playerId && callbacks.getAttach?.()) arrowStart.anchors = [{index:0,playerId,dx:0,dy:0}];
     showPreview(container, { ...arrowStart, type: 'highlight', points: [{ x, y }, { x: x + 16, y }] });
   };
   return unbind;
@@ -699,7 +720,8 @@ export async function canvasBoard(container, { scale = 2 } = {}) {
   copy.removeAttribute('style');
   copy.setAttribute('width', canvas.width);
   copy.setAttribute('height', canvas.height);
-  copy.querySelectorAll('[data-selection], [data-drawing-preview]').forEach((element) => element.remove());
+  copy.querySelectorAll('[data-selection], [data-drawing-preview]').forEach(element => element.remove());
+  copy.querySelectorAll('[data-selected-mark]').forEach(element => element.removeAttribute('data-selected-mark'));
 
   const svg = new XMLSerializer().serializeToString(copy);
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));

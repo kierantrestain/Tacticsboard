@@ -1,3 +1,6 @@
+import { applyLook, deleteLook, savedLooks, storeLook } from './saved-looks.js';
+import { mountMatchStory, substitutionStages } from './match-story.js';
+import { resolveMark, setAnchor } from './mark-anchors.js';
 import { clampCamera, pitchStyles } from './camera.js';
 import { coreTemplateStages, extraTemplates } from './extra-templates.js';
 import { mountMatchMap } from './match-map.js';
@@ -10,7 +13,7 @@ import { mountMedia } from './media.js';
 import { renderHome } from './home.js';
 import { formations, makeLineup, templates as coreTemplates } from './data.js';
 import { bindBoard, canvasBoard, exportBoard, renderBoard } from './board.js';
-import { ballMotionKinds, downloadBoard, initialBoard, interpolatePlayback, listSavedBoards, loadBoard, makeId, parseBoard, removeSavedBoard, saveBoard, sharedUrl, storeSavedBoard, transitionDuration } from './model.js';
+import { ballMotionKinds, downloadBoard, initialBoard, interpolatePlayback, listSavedBoards, loadBoard, makeId, parseBoard, removeSavedBoard, renameSavedBoard, saveBoard, sharedUrl, storeSavedBoard, transitionDuration } from './model.js';
 
 const icons = {
   brand:'<rect x="3" y="5" width="18" height="14" rx="1"/><path d="M12 5v14M3 9h4v6H3m18-6h-4v6h4"/><circle cx="12" cy="12" r="3"/>',
@@ -122,6 +125,8 @@ let drawingColor = '#08e5f1';
 let panel = null;
 let view = 'board';
 let selected = null;
+let selectedMark = null;
+let attachDrawings = true;
 let saveMessage = 'Saved on this device';
 let undoStack = [];
 let redoStack = [];
@@ -190,8 +195,23 @@ function mutate(edit) {
   render();
 }
 
+function movementTrails() {
+  if (!board.settings.ghostRuns) return [];
+  const next = board.phases[board.active + 1];
+  if (!next) return [];
+  const destinations = new Map(next.scene.players.filter(player => !player.benched).map(player => [player.id,player]));
+  return phase().scene.players.flatMap(player => {
+    const to = destinations.get(player.id);
+    if (player.benched || board.settings[player.team] === false || !to || Math.hypot(to.x-player.x,to.y-player.y) < 10) return [];
+    return [{from:player,to,color:player.team === 'home' ? '#66dcf8' : '#ffb07b'}];
+  });
+}
+
 function renderPitch(scene = phase().scene, container = pitch) {
-  renderBoard(container, scene, { ...board.settings, selected: container === pitch ? selected : null });
+  renderBoard(container, scene, {...board.settings,selected:container === pitch ? selected : null,
+    selectedMark:container === pitch && !playing && scene.marks.some(mark => mark.id === selectedMark) ? selectedMark : null,
+    trails:container === pitch && !playing && !playhead && !presentation ? movementTrails() : [],
+  });
 }
 
 function renderToolbar() {
@@ -271,7 +291,13 @@ function renderPanels() {
   toolPanel.hidden = !['arrows','more'].includes(panel);
   const player = phase().scene.players.find(item => item.id === selected);
   playerPanel.hidden = Boolean(panel || tool !== 'select' || !player || presentation);
-  if (!playerPanel.hidden) {
+  const drawing = phase().scene.marks.find(item => item.id === selectedMark);
+  if (!panel && tool === 'select' && drawing && !presentation && !playing && !playhead) {
+    playerPanel.hidden = false;
+    playerPanel.innerHTML = `<button data-action="edit-drawing">${icon('edit')} Edit drawing</button>
+      <button data-action="delete-drawing">${icon('trash')} Delete drawing</button>`;
+    fillIcons(playerPanel);
+  } else if (!playerPanel.hidden) {
     playerPanel.innerHTML = `<button data-action="highlight-player">${icon('highlight')} Highlight</button>
       <button data-action="give-ball">${icon('ball')} Give ball</button>
       <button data-action="player-arrow">${icon('arrow')} Arrow</button>
@@ -308,6 +334,7 @@ function renderPanels() {
       panelItem('cone','Cone','cone',tool === 'cone','data-tool') +
       panelItem('erase','Eraser','erase',tool === 'erase','data-tool') +
       panelItem('guides','Guides','grid',board.settings.grid)}</div>
+      ${arrows ? `<label class="toggle-row attach-drawings">Link arrows to players <input id="attachDrawings" type="checkbox" ${attachDrawings ? 'checked' : ''}></label>` : ''}
       ${arrows && latestBallArrow() ? '<div class="tool-animate"><button class="button button-muted" data-action="animate-arrow">Animate last ball arrow</button></div>' : ''}`;
   fillIcons(toolPanel);
 }
@@ -317,14 +344,16 @@ function latestBallArrow() {
 }
 
 function animateArrow() {
-  const mark = latestBallArrow();
-  if (!mark) return;
+  const stored = latestBallArrow();
+  if (!stored) return;
+  const mark = resolveMark(stored,new Map(phase().scene.players.filter(player => !player.benched).map(player => [player.id,player])));
   if (board.phases.length >= 100) return showToast('This board has reached 100 stages.');
   mutate(() => {
     const current = phase();
     const kind = animatedArrows[mark.type];
-    const start = mark.points[0];
-    const end = mark.points.at(-1);
+    const onPitch = ({x,y}) => ({x:Math.max(0,Math.min(1000,x)),y:Math.max(0,Math.min(625,y))});
+    const start = onPitch(mark.points[0]);
+    const end = onPitch(mark.points.at(-1));
     current.scene.ball = {...start};
     current.transition = kind;
     const scene = structuredClone(current.scene);
@@ -346,7 +375,7 @@ function animateArrow() {
 }
 
 function renderHomeView() {
-  renderHome(homeView, { board, saved:listSavedBoards(), templates, renderPreview:renderBoard });
+  renderHome(homeView, {board,saved:listSavedBoards(),templates,renderPreview:renderBoard,onRenameSaved:renameSavedBoard});
   fillIcons(homeView);
 }
 
@@ -417,6 +446,7 @@ function openTeamPicker(team) {
     dialog.close();
     mutate(() => {
       const oldClub = board.settings[team + 'Club'];
+      if (oldClub?.id !== record.id) delete board.fixture;
       board.settings[team + 'Name'] = record.name.slice(0,100);
       board.settings[team + 'Club'] = {...record,colors:palette};
       setTeamKit(team,palette);
@@ -432,7 +462,7 @@ function openTeamPicker(team) {
     showToast(squad?.players.length ? `${record.name} squad loaded` : `${record.name} added to the board`);
   }
 
-  async function applyFixture(lineups) {
+  async function applyFixture(lineups, match) {
     if (applying) return;
     applying = true;
     const palettes = await Promise.all(lineups.map(({team}) =>
@@ -448,6 +478,8 @@ function openTeamPicker(team) {
         if (formations.includes(lineup.formation)) board.settings[side + 'Formation'] = lineup.formation;
         for (const item of board.phases) replaceRoster(item,side,lineup.starter,lineup.bench,true);
       }
+      if (match?.id) board.fixture = {id:String(match.id),home:{id:String(match.home.id),name:match.home.name},
+        away:{id:String(match.away.id),name:match.away.name}};
       board.settings.labels = true;
       selected = null;
     });
@@ -460,6 +492,46 @@ function replaceRoster(item, team, starters, reserves = [], exact = false) {
   const roster = shapeFromRoster(team,formation,starters,reserves,exact,
     exact ? [] : item.scene.players.filter(player => player.team === team));
   item.scene.players = [...item.scene.players.filter(player => player.team !== team), ...roster];
+}
+
+function openLooks() {
+  const list = savedLooks();
+  openDialog('Saved looks',`<p>Reuse a pitch surface, markings, player marker style and kit colours across boards.</p>
+    ${option('capture-look','Save current look','Give these appearance settings a name.','save')}
+    ${list.map((item,index) => `<div class="play-template">
+      ${option(`apply-look-${index}`,item.title,'Apply to this board.','pitch')}
+      ${button(`delete-look-${index}`,`Delete look ${item.title}`,'trash')}</div>`).join('')}`);
+}
+
+function editDrawing() {
+  const mark = phase().scene.marks.find(item => item.id === selectedMark);
+  if (!mark) return;
+  const players = phase().scene.players.filter(player => !player.benched);
+  const links = mark.points.length > 1 && !['highlight','vision'].includes(mark.type) ? [0,mark.points.length - 1] : [0];
+  const allowed = ['arrow','run','dribble','lob','shot','line','measure','highlight','vision'].includes(mark.type);
+  openDialog('Edit drawing',`<form>
+    <label>Colour<input type="color" name="color" class="input" value="${escape(mark.color)}"></label>
+    ${mark.type === 'text' || mark.type === 'number' ? `<label>Label<input class="input" name="text" maxlength="120" value="${escape(mark.text)}"></label>` : ''}
+    ${allowed ? links.map(index => `<label>${index === 0 ? 'Start follows' : 'End follows'}
+      <select class="input" name="point-${index}"><option value="">Fixed on pitch</option>
+        ${players.map(player => `<option value="${escape(player.id)}" ${mark.anchors?.find(anchor => anchor.index === index)?.playerId === player.id ? 'selected' : ''}>
+          ${escape(player.team)} · ${player.number || '–'} ${escape(player.name)}</option>`).join('')}
+      </select></label>`).join('') : ''}
+    <div class="dialog-actions"><button class="button button-accent" type="submit">Save drawing</button></div></form>`);
+  dialog.querySelector('form').addEventListener('submit',event => {
+    event.preventDefault();
+    const {elements} = event.currentTarget;
+    const resolved = resolveMark(mark,new Map(players.map(player => [player.id,player])));
+    dialog.close();
+    mutate(() => {
+      mark.color = elements.color.value;
+      if (elements.text) mark.text = elements.text.value.trim();
+      if (allowed) {
+        mark.points = resolved.points.map(point => ({x:Math.max(0,Math.min(1000,point.x)),y:Math.max(0,Math.min(625,point.y))}));
+        for (const index of links) setAnchor(mark,index,players.find(player => player.id === elements.namedItem(`point-${index}`).value));
+      }
+    });
+  });
 }
 
 function openStageCamera() {
@@ -489,6 +561,33 @@ function openStageCamera() {
   show();
 }
 
+function openMatchStory() {
+  if (!board.fixture) {
+    openDialog('Match story',`<p>Load a fixture from either team picker to see its events, match statistics and substitutions.</p>
+      ${option('teams-find-home','Browse fixtures','Choose a club and open Recent fixtures.','pitch')}`);
+    return;
+  }
+  const fixture = board.fixture;
+  openDialog('Match story','<div data-match-story></div>');
+  mountMatchStory(dialog.querySelector('[data-match-story]'),fixture,{onReplay(events) {
+    const stages = substitutionStages(board.phases[0].scene,fixture,events);
+    if (!stages.length) return showToast('Recorded substitutes could not be matched to this board.');
+    if (stages.length >= 100) return showToast('These stages would exceed the 100-stage board limit.');
+    dialog.close();
+    mutate(() => {
+      const kickoff = structuredClone(board.phases[0].scene);
+      board.title = `${fixture.home.name} v ${fixture.away.name} · substitutions`.slice(0,200);
+      board.phases = [{id:makeId(),title:'Starting XIs',notes:'Starting lineups from API-Football.',scene:kickoff},
+        ...stages.map(({time,...stage}) => ({...stage,id:makeId()}))];
+      board.active = 0;
+      selected = null;
+      selectedMark = null;
+      panel = 'animation';
+    });
+    showToast(`Added ${stages.length} substitution stages. Undo to return to the previous board.`);
+  }});
+}
+
 function openMatchMaps() {
   openDialog('Match maps', `<p>Explore recorded shots, action locations and average positions. Import event data for another match.</p>
     <div data-match-map></div>${phase().scene.matchLayer ? '<button class="button button-muted" data-action="clear-map">Remove current map layer</button>' : ''}`);
@@ -513,10 +612,14 @@ function openSettings() {
     <section class="setup-section"><h3 class="section-label">Pitch view</h3>
       <div class="segment" aria-label="Pitch view">${['full','half'].map(view =>
         `<button data-view="${view}" class="${view === board.settings.view ? 'selected' : ''}" aria-pressed="${view === board.settings.view}">${view === 'full' ? 'Full pitch' : 'Half pitch'}</button>`).join('')}</div>
+      <label>Player marker<select class="input" data-setting="markerStyle">${[['kit','Two-tone kit'],['solid','Solid circle'],['outline','Outline ring']].map(([value,label]) =>
+        `<option value="${value}" ${(board.settings.markerStyle ?? 'kit') === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
       <label>Pitch surface<select class="input" data-setting="pitchStyle">${pitchStyles.map(style =>
         `<option value="${style.id}" ${(board.settings.pitchStyle ?? 'natural') === style.id ? 'selected' : ''}>${style.name}</option>`).join('')}</select></label>
+      ${toggle('ghostRuns','Show runs to next stage')}
       ${toggle('labels','Player labels')}${toggle('away','Show opposition')}${toggle('grid','Spacing guides')}${toggle('snap','Arrow snap')}
     </section>
+    ${option('saved-looks','Saved looks','Save and reuse the pitch and kit appearance.','camera')}
     ${option('stage-camera','Stage camera','Zoom or frame one part of the pitch for this stage.','camera')}
     ${option('teams-find-home','Find home team','Browse real clubs and squads.','pitch')}
     ${option('teams-find-away','Find away team','Choose the opposition.','pitch')}
@@ -584,6 +687,7 @@ function render() {
 function setTool(name) {
   if (presentation) return;
   stop();
+  selectedMark = null;
   tool = name;
   if (arrowTools.includes(name)) panel = 'arrows';
   else if (flyoutTools.includes(name)) panel = null;
@@ -601,6 +705,7 @@ function switchPhase(index) {
   stop();
   board.active = index;
   selected = null;
+  selectedMark = null;
   persist(false);
   render();
 }
@@ -900,6 +1005,17 @@ async function exportVideo() {
 }
 
 async function handleAction(action) {
+  if (action.startsWith('apply-look-')) {
+    const item = savedLooks()[Number(action.slice(11))];
+    if (!item) return;
+    dialog.close();
+    return mutate(() => { applyLook(board.settings,item.settings); });
+  }
+  if (action.startsWith('delete-look-')) {
+    const item = savedLooks()[Number(action.slice(12))];
+    if (item && deleteLook(item.id)) openLooks();
+    return;
+  }
   if (action.startsWith('saved-open-')) {
     const saved = listSavedBoards().find(item => item.id === action.slice(11));
     if (saved) {
@@ -969,11 +1085,23 @@ async function handleAction(action) {
     case 'home': panel = null; return setView('home');
     case 'settings': return openSettings();
     case 'stage-camera': return openStageCamera();
+    case 'saved-looks': return openLooks();
+    case 'capture-look': return inputDialog('Save look','Look name','',title => {
+      showToast(storeLook(title,board.settings) ? 'Look saved' : 'The look could not be saved.');
+      openLooks();
+    });
+    case 'edit-drawing': return editDrawing();
+    case 'delete-drawing': return mutate(() => {
+      phase().scene.marks = phase().scene.marks.filter(mark => mark.id !== selectedMark);
+      selectedMark = null;
+    });
     case 'match-maps': return openMatchMaps();
+    case 'match-story': return openMatchStory();
     case 'clear-map':
       dialog.close();
       return mutate(() => { delete phase().scene.matchLayer; });
     case 'media': return setView('media');
+    case 'media-projects': setView('media'); return media.openProjects();
     case 'media-import': setView('media'); return media.openFile();
     case 'save': {
       if (dialog.open) dialog.close();
@@ -1019,7 +1147,7 @@ async function handleAction(action) {
     case 'player-arrow': {
       const player = phase().scene.players.find(item => item.id === selected);
       setTool('arrow');
-      if (player) boardBinding.startArrow?.(player.x, player.y);
+      if (player) boardBinding.startArrow?.(player.x,player.y,player.id);
       return;
     }
     case 'give-ball': {
@@ -1187,6 +1315,7 @@ function saveToolPreferences() {
 
 document.addEventListener('change', async event => {
   const input = event.target;
+  if (input.id === 'attachDrawings') { attachDrawings = input.checked; return; }
   if (input.id === 'showAllTools') {
     showAllTools = input.checked;
     return saveToolPreferences();
@@ -1287,7 +1416,9 @@ const boardBinding = bindBoard(pitch, {
   getTool: () => presentation || playing || playhead ? 'inactive' : tool,
   getColor: () => drawingColor,
   getSnap: () => board.settings.snap,
-  onSelect(id) { selected = id; renderPitch(); renderPanels(); },
+  getAttach: () => attachDrawings,
+  onSelect(id) { selected = id; selectedMark = null; renderPitch(); renderPanels(); },
+  onSelectMark(id) { selectedMark = id; renderPitch(); renderPanels(); },
   onStart() { snapshot(); },
   onMove(id, x, y) {
     const target = id === 'ball' ? phase().scene.ball : phase().scene.players.find(player => player.id === id);

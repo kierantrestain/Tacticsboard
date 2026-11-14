@@ -39,6 +39,7 @@ export function shapeFromRoster(team, formation, starters, bench = [], ordered =
       name:player.name.slice(0,100),
       number:player.number ?? 0,
       footballRole:playerRole(player) || roleFor(slot.name),
+      ...(typeof player.id === 'string' && /^[1-9]\d{0,11}$/.test(player.id) ? {providerPlayerId:player.id} : {}),
     };
   }
 

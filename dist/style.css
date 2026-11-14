@@ -276,3 +276,15 @@ dialog:has([data-match-map]) {width:min(760px,calc(100vw - 32px))}
 .map-live form {grid-template-columns:1fr 1fr auto;align-items:end;margin-top:7px}
 .map-live-status {margin-top:4px;font-size:11px}
 .pin-grip {cursor:grab;color:#8bb09d;font-size:12px;padding:0 3px}
+.attach-drawings {margin-top:6px;border-top:1px solid #45675b75;padding:4px 1px 0}
+[data-match-story] {display:grid;gap:8px}
+[data-match-story] p {font-size:12px;color:var(--muted)}
+.match-story-header {display:flex;justify-content:space-between;gap:8px;align-items:center}
+.match-story-header span {color:var(--muted)}
+.match-story-stats {width:100%;border-collapse:collapse;font-size:11px;text-align:center}
+.match-story-stats th,.match-story-stats td {padding:5px 3px;border-bottom:1px solid #45675b72}
+.match-story-stats tbody th {font-weight:500;color:var(--muted)}
+.match-story-events {margin:0;max-height:165px;overflow:auto;padding:0;list-style:none}
+.match-story-events li {display:flex;gap:10px;padding:4px 0;border-bottom:1px solid #45675b72;font-size:11px}
+.match-story-events time {color:#9edbb0;min-width:30px}
+.match-story-events small {display:block;color:var(--muted)}

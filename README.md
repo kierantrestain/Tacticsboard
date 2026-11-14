@@ -35,3 +35,13 @@ The API-Football connection supplies competitions, squads and fixture lineups. L
 ## Drawing and presets
 
 Use **More tools** to open shapes, paths, field of view, target and number markers, distance measurement, and training cones. Pin individual tools to the toolbar or show them all. The library starts on Home. To jump straight to the editor use `?view=board`. Play multi-stage presets directly from the Templates panel, then edit any stage after playback.
+
+### Match stories and moving drawings
+
+Load a fixture through a team picker, then open **Match story** for recorded events and team statistics. Build an editable substitution board from the starting lineups and matching substitution events. The replay changes who is on the pitch and uses their previous formation slots. Coordinates for live runs and passes are not part of this feed.
+
+Draw an arrow between two players with **Link arrows to players** enabled to set its endpoints. Switch to **Select**, click a drawing, and choose **Edit drawing** to change its colour or what the endpoints follow. **Show runs to next stage** previews where players are going. Pitch style, kit colours and marker style can be reused through **Saved looks**.
+
+### Projects and folders
+
+Media Draw's **Projects** button saves clips, drawings, visibility ranges and motion keyframes in the current browser. Use **Animate annotation** to set the position and scale of a drawing at different times. Tactics folders in Home organize your saved boards. Both libraries are stored on the current device.

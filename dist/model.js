@@ -1,3 +1,4 @@
+import { resolveMark, validAnchors } from './mark-anchors.js';
 import { fullPitchBounds, halfPitchBounds, interpolateCamera, pitchStyles, validCamera } from './camera.js';
 import { sampleBallMotion } from './ball-motion.js';
 import { validMatchLayer } from './match-layer.js';
@@ -94,13 +95,13 @@ function isScene(scene) {
   const validPlayers = scene.players.every(player =>
     isPoint(player) && isId(player.id) && ['home', 'away'].includes(player.team) &&
     Number.isInteger(player.number) && player.number >= 0 && player.number <= 999 &&
-    isString(player.name, 100) && isOptionalBoolean(player.benched) &&
+    isString(player.name, 100) && isOptionalBoolean(player.benched) && (player.providerPlayerId === undefined || /^[1-9]\d{0,11}$/.test(player.providerPlayerId)) &&
     (player.footballRole === undefined || footballRoles.includes(player.footballRole)));
   const validMarks = scene.marks.every(mark =>
     mark && isId(mark.id) && markTypes.has(mark.type) && isColor(mark.color) &&
     (mark.text == null || isString(mark.text, 500)) &&
     Array.isArray(mark.points) && mark.points.length >= (pointMarkTypes.has(mark.type) ? 1 : 2) &&
-    mark.points.length <= 4000 && mark.points.every(isPoint));
+    mark.points.length <= 4000 && mark.points.every(isPoint) && validAnchors(mark.anchors,mark.points.length));
   return validPlayers && validMarks && hasDistinctIds(scene.players) && hasDistinctIds(scene.marks);
 }
 
@@ -111,7 +112,8 @@ function isSettings(settings) {
     ['full', 'half'].includes(settings.view) && isBoolean(settings.labels) &&
     isBoolean(settings.away) && isBoolean(settings.grid) &&
     (settings.guideMode === undefined || guideModes.includes(settings.guideMode)) &&
-    isOptionalBoolean(settings.home) && isOptionalBoolean(settings.snap) &&
+    isOptionalBoolean(settings.home) && isOptionalBoolean(settings.snap) && isOptionalBoolean(settings.ghostRuns) &&
+    (settings.markerStyle === undefined || ['kit','solid','outline'].includes(settings.markerStyle)) &&
     (settings.pitchStyle === undefined || pitchStyles.some(style => style.id === settings.pitchStyle)) &&
     ['home','away'].every(team => ['Trim','Number','Keeper','KeeperNumber'].every(suffix =>
       settings[team + suffix] === undefined || isColor(settings[team + suffix])));
@@ -123,6 +125,9 @@ function isBoard(board) {
       !Number.isInteger(board.active) || board.active < 0 || board.active >= board.phases.length) {
     return false;
   }
+  if (board.fixture !== undefined && (!board.fixture || !/^[1-9]\d{0,8}$/.test(board.fixture.id) ||
+      !['home','away'].every(side => board.fixture[side] && /^[1-9]\d{0,8}$/.test(board.fixture[side].id) &&
+        isString(board.fixture[side].name,120)))) return false;
   const validPhases = board.phases.every(phase =>
     phase && isId(phase.id) && isString(phase.title) && isString(phase.notes, 20_000) &&
     (phase.transition === undefined || ballMotionKinds.includes(phase.transition)) &&
@@ -246,6 +251,20 @@ export function storeSavedBoard(board) {
   } catch {
     return null;
   }
+}
+
+export function renameSavedBoard(id,title) {
+  try {
+    const name = typeof title === 'string' ? title.trim() : '';
+    if (!name || name.length > 100) return null;
+    const items = listSavedBoards();
+    const record = items.find(item => item.id === id);
+    if (!record || items.some(item => item.id !== id && item.title.toLowerCase() === name.toLowerCase())) return null;
+    record.title = name;
+    record.board.title = name;
+    window.localStorage.setItem(libraryKey,JSON.stringify(items));
+    return items;
+  } catch { return null; }
 }
 
 export function removeSavedBoard(id) {
@@ -425,7 +444,7 @@ export function interpolatePlayback(phases, index, progress, view) {
   const length = distance(from.ball,to.ball);
   const carrier = touches(from.ball,to.ball,current,end);
   const kind = phase.transition && phase.transition !== 'auto' ? phase.transition :
-    (length > .01 ? matchBallAnnotation(from.marks,from.ball,to.ball,length) : null) ?? (carrier ? 'dribble' : 'pass');
+    (length > .01 ? matchBallAnnotation(from.marks.map(mark => resolveMark(mark,current)),from.ball,to.ball,length) : null) ?? (carrier ? 'dribble' : 'pass');
   return {
     players,
     camera:interpolateCamera(from.camera,to.camera,progress,view === 'half' ? halfPitchBounds : fullPitchBounds),
