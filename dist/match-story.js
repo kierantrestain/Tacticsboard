@@ -1,6 +1,7 @@
 import { getProviderMatchDetails } from './provider.js';
 
-const display = new Map([['Goal','Goal'],['Card','Card'],['Subst','Substitution'],['Var','VAR']]);
+const display = new Map([['goal','Goal'],['card','Card'],['subst','Substitution'],['var','VAR']]);
+const typeOf = event => String(event.type ?? '').toLowerCase();
 const relevantStats = ['Ball Possession','Total Shots','Shots on Goal','Corner Kicks','Fouls','Yellow Cards','Red Cards','Total passes','Passes %','expected_goals'];
 const escape = value => String(value ?? '').replace(/[&<>"']/g, character =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[character]);
@@ -18,8 +19,8 @@ export function mountMatchStory(root, fixture, {onReplay}) {
   root.innerHTML = '<p role="status">Loading events and match statistics…</p>';
   getProviderMatchDetails(fixture.id).then(({events,statistics}) => {
     if (!root.isConnected) return;
-    const supported = (events ?? []).filter(event => display.has(event.type));
-    const substitutions = supported.filter(event => event.type === 'Subst');
+    const supported = (events ?? []).filter(event => display.has(typeOf(event)));
+    const substitutions = supported.filter(event => typeOf(event) === 'subst');
     const teams = [fixture.home,fixture.away];
     const rows = teams.map(team => new Map((statistics ?? []).find(value => String(value.team?.id) === team.id)
       ?.statistics?.map(item => [item.type,item.value]) ?? []));
@@ -30,8 +31,8 @@ export function mountMatchStory(root, fixture, {onReplay}) {
       : '<p>No match statistics are available.</p>'}
       <h3>Match events</h3>
       ${supported.length ? `<ol class="match-story-events">${supported.map(event => `<li>
-          <time>${timeLabel(event.time)}</time><div><strong>${escape(display.get(event.type))} · ${escape(event.team?.name)}</strong>
-           <small>${escape(event.player?.name)}${event.type === 'Subst' && event.assist?.name ? ' → ' + escape(event.assist.name) : ''} · ${escape(event.detail)}</small></div></li>`).join('')}</ol>`
+          <time>${timeLabel(event.time)}</time><div><strong>${escape(display.get(typeOf(event)))} · ${escape(event.team?.name)}</strong>
+           <small>${escape(event.player?.name)}${typeOf(event) === 'subst' && event.assist?.name ? ' → ' + escape(event.assist.name) : ''} · ${escape(event.detail)}</small></div></li>`).join('')}</ol>`
        : '<p>No recorded match events are available.</p>'}
       ${substitutions.length ? '<button class="button button-accent" type="button" data-replay>Build substitution board</button>' : ''}
       <p class="map-source">Match events and team totals by API-Football.</p>`;
